@@ -1,0 +1,6 @@
+##fileformat=VCFv4.2
+##INFO=<ID=.,Number=0,Type=Flag,Description="synthetic">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+chr1	5700	snp1	A	G	100	PASS	.
+chr1	6000	snp2	C	T	100	PASS	.
+chr1	6385	snp3	G	A	100	PASS	.

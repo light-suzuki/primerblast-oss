@@ -1,0 +1,423 @@
+"""Command-line interface for primerblast-oss.
+
+Subcommands:
+  design   region + product size  ->  primer pairs, checked for specificity
+  check    primer sequences        ->  all predicted PCR products (in-silico PCR)
+  tile     region + amplicon size  ->  overlapping amplicons covering the whole region
+  makedb   FASTA                    ->  BLAST nucleotide database
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from typing import Dict, List, Tuple
+
+from . import __version__
+from .design import DesignParams, read_fasta
+from .specificity import SpecParams, in_silico_pcr
+from .pipeline import run_pipeline
+from .tiling import design_tiling
+from .tools import make_blastdb
+from . import report as R
+from . import outputs as OUT
+
+
+# --------------------------------------------------------------------------- #
+# shared helpers
+# --------------------------------------------------------------------------- #
+def _parse_size_ranges(text: str) -> List[Tuple[int, int]]:
+    ranges = []
+    for chunk in text.replace(",", " ").split():
+        lo, hi = chunk.split("-")
+        ranges.append((int(lo), int(hi)))
+    return ranges
+
+
+def _spec_from_args(a) -> SpecParams:
+    return SpecParams(
+        max_total_mismatch=a.max_total_mismatch,
+        max_3prime_mismatch=a.max_3prime_mismatch,
+        three_prime_window=a.three_prime_window,
+        require_3prime_terminal_match=not a.no_3prime_terminal,
+        min_product=a.min_product, max_product=a.max_product,
+        gel_min_gap_bp=a.gel_min_gap,
+        word_size=a.word_size,
+    )
+
+
+def _add_spec_args(ap: argparse.ArgumentParser) -> None:
+    s = ap.add_argument_group("specificity (blast)")
+    s.add_argument("--db", action="append", required=True,
+                   help="BLAST nucleotide db path (repeatable for multi-db screening)")
+    s.add_argument("--max-total-mismatch", type=int, default=4)
+    s.add_argument("--max-3prime-mismatch", type=int, default=1)
+    s.add_argument("--three-prime-window", type=int, default=5)
+    s.add_argument("--min-product", type=int, default=40)
+    s.add_argument("--max-product", type=int, default=4000)
+    s.add_argument("--gel-min-gap", type=int, default=50,
+                   help="size gap (bp) needed to resolve two products on a gel")
+    s.add_argument("--word-size", type=int, default=7)
+    s.add_argument("--no-3prime-terminal", action="store_true",
+                   help="do not require the 3'-terminal base to match")
+    s.add_argument("--blastn-bin")
+
+
+def _add_out_args(ap: argparse.ArgumentParser, formats=("text", "json", "tsv")) -> None:
+    o = ap.add_argument_group("output")
+    o.add_argument("--format", choices=list(formats), default="text")
+    o.add_argument("--out", help="write to file instead of stdout")
+
+
+def _emit(text: str, out: str) -> None:
+    if out:
+        with open(out, "w") as fh:
+            fh.write(text + "\n")
+        print(f"wrote {out}", file=sys.stderr)
+    else:
+        print(text)
+
+
+def _templates(a) -> List[Tuple[str, str]]:
+    if getattr(a, "template_fasta", None):
+        return read_fasta(a.template_fasta)
+    return [(a.template_id, a.template)]
+
+
+# --------------------------------------------------------------------------- #
+# design
+# --------------------------------------------------------------------------- #
+def _cmd_design(a) -> int:
+    target = None
+    if a.target:
+        x, y = a.target.split(",")
+        target = (int(x), int(y))
+    dp = DesignParams(
+        product_size_ranges=_parse_size_ranges(a.product_size),
+        opt_size=a.opt_size, min_size=a.min_size, max_size=a.max_size,
+        opt_tm=a.opt_tm, min_tm=a.min_tm, max_tm=a.max_tm,
+        min_gc=a.min_gc, max_gc=a.max_gc, num_return=a.num_return, target=target,
+    )
+    sp = _spec_from_args(a)
+    outs = []
+    for tid, seq in _templates(a):
+        res = run_pipeline(tid, seq, a.db, design_params=dp, spec_params=sp,
+                           primer3_bin=a.primer3_bin, blastn_bin=a.blastn_bin,
+                           size_tolerance=a.size_tolerance)
+        outs.append(R.to_json(res) if a.format == "json"
+                    else R.to_tsv(res) if a.format == "tsv"
+                    else R.to_text(res))
+    _emit(("\n" if a.format == "json" else "\n\n").join(outs), a.out)
+    return 0
+
+
+# --------------------------------------------------------------------------- #
+# check (in-silico PCR)
+# --------------------------------------------------------------------------- #
+def _collect_primers(a) -> Dict[str, str]:
+    primers: Dict[str, str] = {}
+    if a.primers_fasta:
+        for name, seq in read_fasta(a.primers_fasta):
+            primers[name] = seq.upper()
+    if a.forward:
+        primers["F"] = a.forward.upper()
+    if a.reverse:
+        primers["R"] = a.reverse.upper()
+    for i, spec in enumerate(a.primer or [], 1):
+        if "=" in spec:
+            name, seq = spec.split("=", 1)
+        else:
+            name, seq = f"P{i}", spec
+        primers[name] = seq.upper()
+    if not primers:
+        raise SystemExit("check: provide primers via --forward/--reverse, "
+                         "--primer, or --primers-fasta")
+    return primers
+
+
+def _cmd_check(a) -> int:
+    primers = _collect_primers(a)
+    sp = _spec_from_args(a)
+    results = [in_silico_pcr(primers, db, sp=sp, blastn_bin=a.blastn_bin) for db in a.db]
+    if a.format == "json":
+        text = json.dumps(R.insilico_to_dict(results, primers), indent=2, default=str)
+    else:
+        text = R.insilico_to_text(results, primers)
+    _emit(text, a.out)
+    return 0
+
+
+# --------------------------------------------------------------------------- #
+# tile
+# --------------------------------------------------------------------------- #
+def _cmd_tile(a) -> int:
+    region = None
+    if a.region:
+        x, y = a.region.split(",")
+        region = (int(x), int(y))
+    dp = DesignParams(
+        opt_size=a.opt_size, min_size=a.min_size, max_size=a.max_size,
+        opt_tm=a.opt_tm, min_tm=a.min_tm, max_tm=a.max_tm,
+        min_gc=a.min_gc, max_gc=a.max_gc,
+    )
+    sp = _spec_from_args(a)
+    outs = []
+    for tid, seq in _templates(a):
+        tiles = design_tiling(
+            tid, seq, a.db, region=region,
+            amplicon_min=a.amplicon_min, amplicon_max=a.amplicon_max,
+            overlap=a.overlap, design_params=dp, spec_params=sp,
+            primer3_bin=a.primer3_bin, blastn_bin=a.blastn_bin,
+            size_tolerance=a.size_tolerance,
+            candidates_per_tile=a.candidates_per_tile,
+        )
+        from .design import clean_sequence
+        reg = region or (0, len(clean_sequence(seq)) - 1)
+        if a.format == "json":
+            outs.append(json.dumps(R.tiling_to_dict(tiles, tid, reg, a.db), indent=2, default=str))
+        else:
+            outs.append(R.tiling_to_text(tiles, tid, reg))
+    _emit(("\n" if a.format == "json" else "\n\n").join(outs), a.out)
+    return 0
+
+
+# --------------------------------------------------------------------------- #
+# assay / markers (breeding pipeline)
+# --------------------------------------------------------------------------- #
+def _load_variants(vcf_path):
+    if not vcf_path:
+        return []
+    from .vcf import parse_vcf
+    return parse_vcf(vcf_path)
+
+
+def _render_assay(result, fmt: str, provenance=None) -> str:
+    pairs = result.get("pairs", [])
+    if fmt == "json":
+        import json as _json
+        if provenance is not None:
+            result = {**result, "provenance": provenance}
+        return _json.dumps(result, indent=2, default=str)
+    if fmt == "csv":
+        return OUT.pairs_to_csv(pairs)
+    if fmt == "bed":
+        return OUT.products_to_bed(pairs)
+    if fmt == "order":
+        return OUT.order_table(pairs)
+    if fmt == "html":
+        ctx = {
+            "title": f"Assay: {result['target']['name']}",
+            "template": f"{result['target']['chrom']}:{result['target']['start']}-{result['target']['end']}",
+            "databases": result["databases"],
+            "generated": (provenance or {}).get("generated", ""),
+            "params": {}, "provenance": provenance or {}, "pairs": pairs,
+        }
+        return OUT.html_report(ctx)
+    return R.assay_to_text(result)
+
+
+def _cmd_assay(a) -> int:
+    from .genome import Genome
+    from .regions import resolve_gene, resolve_interval, resolve_snp
+    from .assay import run_assay
+    from .provenance import make_manifest
+
+    genome = Genome(a.genome)
+    caps_snp = None
+    if a.gene:
+        region = resolve_gene(a.gff3, a.gene, feature=a.gene_feature, flank=0)
+    elif a.interval:
+        chrom, span = a.interval.split(":")
+        s, e = span.split("-")
+        region = resolve_interval(chrom, int(s), int(e), name=a.name or a.interval)
+    elif a.snp:
+        chrom, pos = a.snp.split(":")
+        region = resolve_snp(chrom, int(pos), flank=a.flank or 250, name=a.name)
+        if a.alt:
+            caps_snp = {"genomic_pos": int(pos), "alt": a.alt}
+    else:
+        raise SystemExit("assay: give --gene (with --gff3), --interval, or --snp")
+
+    dp = DesignParams(product_size_ranges=_parse_size_ranges(a.product_size),
+                      opt_tm=a.opt_tm, min_tm=a.min_tm, max_tm=a.max_tm,
+                      min_gc=a.min_gc, max_gc=a.max_gc, num_return=a.num_return)
+    sp = _spec_from_args(a)
+    variants = _load_variants(a.vcf)
+
+    result = run_assay(region, genome, a.db, flank=a.flank, design_params=dp,
+                       spec_params=sp, variants=variants, caps_snp=caps_snp,
+                       primer3_bin=a.primer3_bin, blastn_bin=a.blastn_bin)
+    prov = make_manifest({"design": dp.__dict__, "spec": sp.__dict__, "flank": a.flank},
+                         a.db, template_info=result["target"])
+    _emit(_render_assay(result, a.format, prov), a.out)
+    return 0
+
+
+def _cmd_markers(a) -> int:
+    from .genome import Genome
+    from .regions import resolve_interval
+    from .assay import design_qtl_markers
+    import json as _json
+
+    genome = Genome(a.genome)
+    chrom, span = a.interval.split(":")
+    s, e = span.split("-")
+    qtl = resolve_interval(chrom, int(s), int(e), name=a.name or "QTL")
+    dp = DesignParams(product_size_ranges=_parse_size_ranges(a.product_size),
+                      opt_tm=a.opt_tm, min_tm=a.min_tm, max_tm=a.max_tm,
+                      num_return=a.num_return)
+    sp = _spec_from_args(a)
+    markers = design_qtl_markers(qtl, genome, a.db, n_markers=a.n_markers,
+                                 spacing=a.spacing, marker_flank=a.marker_flank,
+                                 design_params=dp, spec_params=sp,
+                                 primer3_bin=a.primer3_bin, blastn_bin=a.blastn_bin)
+    if a.format == "json":
+        _emit(_json.dumps(markers, indent=2, default=str), a.out)
+    else:
+        lines = [f"QTL {a.interval}: {len(markers)} markers"]
+        for m in markers:
+            if m.get("pairs"):
+                p = m["pairs"][0]
+                lines.append(f"  {m['marker']} @ {m.get('anchor')}: risk {p['risk']}  "
+                             f"{p['product_size']}bp  F {p['forward']} / R {p['reverse']}")
+            else:
+                lines.append(f"  {m['marker']} @ {m.get('anchor')}: "
+                             f"{m.get('error','no pair found')}")
+        _emit("\n".join(lines), a.out)
+    return 0
+
+
+# --------------------------------------------------------------------------- #
+# makedb
+# --------------------------------------------------------------------------- #
+def _cmd_makedb(a) -> int:
+    out = make_blastdb(a.infile, out=a.out_db, title=a.title,
+                       parse_seqids=not a.no_parse_seqids,
+                       makeblastdb_bin=a.makeblastdb_bin)
+    print(f"built database: {out}")
+    return 0
+
+
+# --------------------------------------------------------------------------- #
+# parser
+# --------------------------------------------------------------------------- #
+def _add_template_args(sp) -> None:
+    g = sp.add_argument_group("template")
+    src = g.add_mutually_exclusive_group(required=True)
+    src.add_argument("--template", help="template DNA sequence (string)")
+    src.add_argument("--template-fasta", help="FASTA file with one or more templates")
+    g.add_argument("--template-id", default="template")
+
+
+def _add_design_knobs(sp) -> None:
+    d = sp.add_argument_group("primer3")
+    d.add_argument("--opt-size", type=int, default=20)
+    d.add_argument("--min-size", type=int, default=18)
+    d.add_argument("--max-size", type=int, default=25)
+    d.add_argument("--opt-tm", type=float, default=60.0)
+    d.add_argument("--min-tm", type=float, default=57.0)
+    d.add_argument("--max-tm", type=float, default=63.0)
+    d.add_argument("--min-gc", type=float, default=20.0)
+    d.add_argument("--max-gc", type=float, default=80.0)
+    d.add_argument("--size-tolerance", type=int, default=10)
+    d.add_argument("--primer3-bin")
+
+
+def build_parser() -> argparse.ArgumentParser:
+    ap = argparse.ArgumentParser(
+        prog="primerblast-oss",
+        description="Local Primer-BLAST: design, in-silico PCR, and region tiling, offline.")
+    ap.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
+    sub = ap.add_subparsers(dest="cmd", required=True)
+
+    # design
+    d = sub.add_parser("design", help="design primer pairs and check specificity")
+    _add_template_args(d)
+    d.add_argument("--product-size", default="70-1000",
+                   help="range(s), e.g. '150-500' or '150-500,500-1000'")
+    d.add_argument("--num-return", type=int, default=10)
+    d.add_argument("--target", help="focus region on template: start,length (0-based)")
+    _add_design_knobs(d)
+    _add_spec_args(d)
+    _add_out_args(d, formats=("text", "json", "tsv"))
+    d.set_defaults(func=_cmd_design)
+
+    # check
+    c = sub.add_parser("check", help="in-silico PCR: predict products for given primers")
+    c.add_argument("--forward")
+    c.add_argument("--reverse")
+    c.add_argument("--primer", action="append", help="NAME=SEQ or SEQ (repeatable)")
+    c.add_argument("--primers-fasta")
+    _add_spec_args(c)
+    _add_out_args(c, formats=("text", "json"))
+    c.set_defaults(func=_cmd_check)
+
+    # tile
+    t = sub.add_parser("tile", help="cover a whole region with overlapping amplicons")
+    _add_template_args(t)
+    t.add_argument("--region", help="sub-region to cover: start,end (0-based inclusive)")
+    t.add_argument("--amplicon-min", type=int, default=400)
+    t.add_argument("--amplicon-max", type=int, default=800)
+    t.add_argument("--overlap", type=int, default=40)
+    t.add_argument("--candidates-per-tile", type=int, default=8,
+                   help="primer pairs evaluated per window (lower = faster)")
+    _add_design_knobs(t)
+    _add_spec_args(t)
+    _add_out_args(t, formats=("text", "json"))
+    t.set_defaults(func=_cmd_tile)
+
+    # assay (breeding pipeline: gene/interval/SNP -> primers + variants + CAPS + risk)
+    y = sub.add_parser("assay", help="full assay: design + specificity + variants + CAPS + risk")
+    tg = y.add_argument_group("target (choose one)")
+    tg.add_argument("--gene", help="gene id (requires --gff3)")
+    tg.add_argument("--gene-feature", default="cds", choices=["gene", "mrna", "exon", "cds"])
+    tg.add_argument("--interval", help="chrom:start-end (1-based)")
+    tg.add_argument("--snp", help="chrom:pos (design a CAPS amplicon spanning it)")
+    tg.add_argument("--alt", help="alt allele base at --snp (enables CAPS scan)")
+    tg.add_argument("--name", help="target name")
+    y.add_argument("--genome", required=True, help="reference FASTA (.fai indexed)")
+    y.add_argument("--gff3", help="GFF3 annotation (for --gene)")
+    y.add_argument("--vcf", help="VCF of variants (SNP-under-primer + amplicon SNPs)")
+    y.add_argument("--flank", type=int, default=200)
+    y.add_argument("--product-size", default="100-800")
+    y.add_argument("--num-return", type=int, default=10)
+    _add_design_knobs(y)
+    _add_spec_args(y)
+    _add_out_args(y, formats=("text", "json", "csv", "bed", "order", "html"))
+    y.set_defaults(func=_cmd_assay)
+
+    # markers (QTL interval -> evenly spaced markers)
+    k = sub.add_parser("markers", help="design evenly spaced markers across a QTL interval")
+    k.add_argument("--interval", required=True, help="chrom:start-end QTL interval")
+    k.add_argument("--genome", required=True)
+    k.add_argument("--name")
+    k.add_argument("--n-markers", type=int, default=0)
+    k.add_argument("--spacing", type=int, default=0, help="bp between markers (alt to --n-markers)")
+    k.add_argument("--marker-flank", type=int, default=300)
+    k.add_argument("--product-size", default="100-500")
+    k.add_argument("--num-return", type=int, default=6)
+    _add_design_knobs(k)
+    _add_spec_args(k)
+    _add_out_args(k, formats=("text", "json"))
+    k.set_defaults(func=_cmd_markers)
+
+    # makedb
+    m = sub.add_parser("makedb", help="build a BLAST nucleotide database from FASTA")
+    m.add_argument("infile", help="input FASTA")
+    m.add_argument("--out-db", help="output db prefix")
+    m.add_argument("--title")
+    m.add_argument("--no-parse-seqids", action="store_true")
+    m.add_argument("--makeblastdb-bin")
+    m.set_defaults(func=_cmd_makedb)
+
+    return ap
+
+
+def main(argv=None) -> int:
+    ap = build_parser()
+    args = ap.parse_args(argv)
+    return args.func(args)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

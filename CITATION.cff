@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: "If you use primerblast-oss in your research, please cite it."
+title: "primerblast-oss: local, open-source Primer-BLAST for plant breeding"
+abstract: >-
+  A local, offline reimplementation of NCBI Primer-BLAST built on Primer3 and
+  BLAST+, with plant-breeding features: multi-reference specificity, whole-region
+  tiling, in-silico PCR, SNP-under-primer detection, amplicon conservation,
+  CAPS/dCAPS marker design, and experimenter risk scoring.
+type: software
+version: 0.2.0
+date-released: "2026-07-08"
+license: MIT
+repository-code: "https://github.com/light-suzuki/primerblast-oss"
+keywords:
+  - PCR primer design
+  - in-silico PCR
+  - BLAST specificity
+  - CAPS
+  - dCAPS
+  - plant breeding
+  - QTL
+authors:
+  - name: "primerblast-oss contributors"

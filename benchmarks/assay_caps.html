@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DdeI CAPS demo (chr1:5878 T&gt;C)</title>
+<style>
+:root { color-scheme: light; }
+* { box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    Helvetica, Arial, sans-serif;
+  color: #1f2328; background: #ffffff; margin: 0; padding: 24px 32px;
+  line-height: 1.45; font-size: 14px;
+}
+h1 { font-size: 22px; margin: 0 0 4px; }
+h2 { font-size: 17px; margin: 28px 0 8px; border-bottom: 2px solid #d0d7de;
+     padding-bottom: 4px; }
+h3 { font-size: 15px; margin: 18px 0 6px; }
+.meta { color: #57606a; font-size: 13px; margin: 2px 0; }
+table { border-collapse: collapse; width: 100%; margin: 8px 0 4px;
+        font-size: 13px; }
+th, td { border: 1px solid #d0d7de; padding: 5px 8px; text-align: left;
+         vertical-align: top; }
+th { background: #f6f8fa; font-weight: 600; }
+tr:nth-child(even) td { background: #fafbfc; }
+code, .seq { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo,
+             Consolas, monospace; font-size: 12.5px; word-break: break-all; }
+.badge { display: inline-block; padding: 1px 9px; border-radius: 10px;
+         color: #fff; font-size: 12px; font-weight: 600; }
+.pair { border: 1px solid #d0d7de; border-radius: 8px; padding: 12px 16px;
+        margin: 12px 0; background: #fff; }
+.pair h3 { margin-top: 0; }
+.kv { display: flex; flex-wrap: wrap; gap: 4px 24px; margin: 6px 0; }
+.kv div { min-width: 160px; }
+.kv .label { color: #57606a; font-size: 12px; }
+.flags span { display: inline-block; margin-right: 12px; font-size: 12.5px; }
+.off { color: #cf222e; } .on { color: #1a7f37; }
+footer { margin-top: 32px; border-top: 1px solid #d0d7de; padding-top: 12px;
+         color: #57606a; font-size: 12px; }
+footer pre { background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 6px;
+             padding: 10px; overflow-x: auto; font-size: 12px; }
+@media print {
+  body { padding: 0; font-size: 12px; }
+  .pair { break-inside: avoid; }
+  h2 { break-after: avoid; }
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>DdeI CAPS demo (chr1:5878 T&gt;C)</h1>
+  <p class="meta"><b>Template:</b> DdeI_CAPS</p>
+  <p class="meta"><b>Databases:</b> /home/kouhei/.codex/blast_databases/pisum_v2</p>
+  <p class="meta"><b>Generated:</b> 2026-07-08</p>
+</header>
+
+<h2>Summary (5 primer pairs)</h2>
+<table><thead><tr><th>Rank</th><th>Name</th><th>Risk</th><th>Product (bp)</th><th>Tm F/R</th><th>GC F/R</th><th>Off-tgt</th><th>F/F</th><th>R/R</th><th>F/R off</th><th>3&#x27; mm min</th></tr></thead><tbody><tr><td>1</td><td>DdeI_CAPS_P2</td><td><span class="badge" style="background:#cf222e">high</span></td><td>430</td><td>60.0 / 60.2</td><td>50.0 / 55.0</td><td>8</td><td>0</td><td>0</td><td>8</td><td>0</td></tr><tr><td>2</td><td>DdeI_CAPS_P3</td><td><span class="badge" style="background:#cf222e">high</span></td><td>407</td><td>60.0 / 59.6</td><td>50.0 / 55.0</td><td>8</td><td>0</td><td>0</td><td>8</td><td>0</td></tr><tr><td>3</td><td>DdeI_CAPS_P1</td><td><span class="badge" style="background:#cf222e">high</span></td><td>362</td><td>60.0 / 59.8</td><td>50.0 / 55.0</td><td>8</td><td>0</td><td>0</td><td>8</td><td>0</td></tr><tr><td>4</td><td>DdeI_CAPS_P5</td><td><span class="badge" style="background:#cf222e">high</span></td><td>444</td><td>60.2 / 60.2</td><td>55.0 / 55.0</td><td>9</td><td>1</td><td>0</td><td>8</td><td>0</td></tr><tr><td>5</td><td>DdeI_CAPS_P4</td><td><span class="badge" style="background:#cf222e">high</span></td><td>376</td><td>60.2 / 59.8</td><td>55.0 / 55.0</td><td>10</td><td>1</td><td>0</td><td>9</td><td>0</td></tr></tbody></table>
+
+<h2>Primer pair details</h2>
+<div class="pair">
+  <h3>#1 &middot; DdeI_CAPS_P2 &nbsp; <span class="badge" style="background:#cf222e">high</span></h3>
+  <div class="kv">
+    <div><span class="label">Forward (5'-&gt;3')</span><br>
+         <span class="seq">TGAAGCGCGGTTACCTCAAT</span></div>
+    <div><span class="label">Reverse (5'-&gt;3')</span><br>
+         <span class="seq">TTTCAGGCTCTGCAGTCACC</span></div>
+  </div>
+  <div class="kv">
+    <div><span class="label">Product size</span><br>430 bp</div>
+    <div><span class="label">Tm F / R</span><br>60.0 / 60.2 &deg;C</div>
+    <div><span class="label">GC F / R</span><br>50.0 / 55.0 %</div>
+    <div><span class="label">Forward pos</span><br>5585-5604</div>
+    <div><span class="label">Reverse pos</span><br>5995-6014</div>
+  </div>
+  <h4 style="margin:12px 0 4px;font-size:13px;">Predicted products</h4>
+  <table><thead><tr><th>Subject</th><th>Start</th><th>End</th><th>Size (bp)</th><th>Orientation</th><th>Target</th></tr></thead><tbody><tr><td>chr1</td><td>5585</td><td>6014</td><td>430</td><td>F/R</td><td><span class="on">intended</span></td></tr><tr><td>chr1</td><td>26454</td><td>26883</td><td>430</td><td>F/R</td><td><span class="off">off-target</span></td></tr><tr><td>chr1</td><td>68425</td><td>68854</td><td>430</td><td>F/R</td><td><span class="off">off-target</span></td></tr><tr><td>chr2</td><td>366172676</td><td>366173105</td><td>430</td><td>F/R</td><td><span class="off">off-target</span></td></tr><tr><td>chr6</td><td>126320</td><td>126749</td><td>430</td><td>F/R</td><td><span class="off">off-target</span></td></tr><tr><td>chr6</td><td>623722</td><td>624151</td><td>430</td><td>F/R</td><td><span class="off">off-target</span></td></tr><tr><td>scaffold1040</td><td>11109119</td><td>11109548</td><td>430</td><td>F/R</td><td><span class="off">off-target</span></td></tr><tr><td>scaffold1040</td><td>18211565</td><td>18211994</td><td>430</td><td>R/F</td><td><span class="off">off-target</span></td></tr><tr><td>scaffold1040</td><td>18717016</td><td>18717445</td><td>430</td><td>R/F</td><td><span class="off">off-target</span></td></tr></tbody></table>
+  <div class="flags" style="margin-top:8px;">
+    <span><b>CAPS enzyme:</b> MseI</span>
+    <span><b>Gel-distinguishable:</b> no</span>
+    <span><b>SNP in primer:</b> no</span>
+    <span><b>3' mismatch min (off-tgt):</b> 0</span>
+    <span><b>Conserved in:</b> pisum_v2</span>
+  </div>
+</div>
+<div class="pair">
+  <h3>#2 &middot; DdeI_CAPS_P3 &nbsp; <span class="badge" style="background:#cf222e">high</span></h3>
+  <div class="kv">
+    <div><span class="label">Forward (5'-&gt;3')</span><br>
+         <span class="seq">TGAAGCGCGGTTACCTCAAT</span></div>
+    <div><span class="label">Reverse (5'-&gt;3')</span><br>
+         <span class="seq">TGTTTCAGGTGTCGGTCTCC</span></div>
+  </div>
+  <div class="kv">
+    <div><span class="label">Product size</span><br>407 bp</div>
+    <div><span class="label">Tm F / R</span><br>60.0 / 59.6 &deg;C</div>
+    <div><span class="label">GC F / R</span><br>50.0 / 55.0 %</div>
+    <div><span class="label">Forward pos</span><br>5585-5604</div>
+    <div><span class="label">Reverse pos</span><br>5972-5991</div>
+  </div>
+  <h4 style="margin:12px 0 4px;font-size:13px;">Predicted products</h4>
+  <table><thead><tr><th>Subject</th><th>Start</th><th>End</th><th>Size (bp)</th><th>Orientation</th><th>Target</th></tr></thead><tbody><tr><td>chr1</td><td>5585</td><td>5991</td><td>407</td><td>F/R</td><td><span class="on">intended</span></td></tr><tr><td>chr1</td><td>26454</td><td>26860</td><td>407</td><td>F/R</td><td><span class="off">off-target</span></td></tr><tr><td>chr1</td><td>68425</td><td>68831</td><td>407</td><td>F/R</td><td><span class="off">off-target</span></td></tr><tr><td>chr2</td><td>366172676</td><td>366173082</td><td>407</td><td>F/R</td><td><span class="off">off-target</span></td></tr><tr><td>chr6</td><td>126320</td><td>126726</td><td>407</td><td>F/R</td><td><span class="off">off-target</span></td></tr><tr><td>chr6</td><td>623722</td><td>624128</td><td>407</td><td>F/R</td><td><span class="off">off-target</span></td></tr><tr><td>scaffold1040</td><td>11109119</td><td>11109525</td><td>407</td><td>F/R</td><td><span class="off">off-target</span></td></tr><tr><td>scaffold1040</td><td>18211588</td><td>18211994</td><td>407</td><td>R/F</td><td><span class="off">off-target</span></td></tr><tr><td>scaffold1040</td><td>18717039</td><td>18717445</td><td>407</td><td>R/F</td><td><span class="off">off-target</span></td></tr></tbody></table>
+  <div class="flags" style="margin-top:8px;">
+    <span><b>CAPS enzyme:</b> MseI</span>
+    <span><b>Gel-distinguishable:</b> no</span>
+    <span><b>SNP in primer:</b> no</span>
+    <span><b>3' mismatch min (off-tgt):</b> 0</span>
+    <span><b>Conserved in:</b> pisum_v2</span>
+  </div>
+</div>
+<div class="pair">
+  <h3>#3 &middot; DdeI_CAPS_P1 &nbsp; <span class="badge" style="background:#cf222e">high</span></h3>
+  <div class="kv">
+    <div><span class="label">Forward (5'-&gt;3')</span><br>
+         <span class="seq">TGAAGCGCGGTTACCTCAAT</span></div>
+    <div><span class="label">Reverse (5'-&gt;3')</span><br>
+         <span class="seq">CCTTGAATCCGCCAAACACC</span></div>
+  </div>
+  <div class="kv">
+    <div><span class="label">Product size</span><br>362 bp</div>
+    <div><span class="label">Tm F / R</span><br>60.0 / 59.8 &deg;C</div>
+    <div><span class="label">GC F / R</span><br>50.0 / 55.0 %</div>
+    <div><span class="label">Forward pos</span><br>5585-5604</div>
+    <div><span class="label">Reverse pos</span><br>5927-5946</div>
+  </div>
+  <h4 style="margin:12px 0 4px;font-size:13px;">Predicted products</h4>
+  <table><thead><tr><th>Subject</th><th>Start</th><th>End</th><th>Size (bp)</th><th>Orientation</th><th>Target</th></tr></thead><tbody><tr><td>chr1</td><td>5585</td><td>5946</td><td>362</td><td>F/R</td><td><span class="on">intended</span></td></tr><tr><td>chr1</td><td>26454</td><td>26815</td><td>362</td><td>F/R</td><td><span class="off">off-target</span></td></tr><tr><td>chr1</td><td>68425</td><td>68786</td><td>362</td><td>F/R</td><td><span class="off">off-target</span></td></tr><tr><td>chr6</td><td>126320</td><td>126681</td><td>362</td><td>F/R</td><td><span class="off">off-target</span></td></tr><tr><td>chr6</td><td>623722</td><td>624083</td><td>362</td><td>F/R</td><td><span class="off">off-target</span></td></tr><tr><td>scaffold1040</td><td>11109119</td><td>11109480</td><td>362</td><td>F/R</td><td><span class="off">off-target</span></td></tr><tr><td>scaffold1040</td><td>18211633</td><td>18211994</td><td>362</td><td>R/F</td><td><span class="off">off-target</span></td></tr><tr><td>scaffold1040</td><td>18717084</td><td>18717445</td><td>362</td><td>R/F</td><td><span class="off">off-target</span></td></tr><tr><td>chr2</td><td>366172676</td><td>366173037</td><td>362</td><td>F/R</td><td><span class="off">off-target</span></td></tr></tbody></table>
+  <div class="flags" style="margin-top:8px;">
+    <span><b>CAPS enzyme:</b> MseI</span>
+    <span><b>Gel-distinguishable:</b> no</span>
+    <span><b>SNP in primer:</b> no</span>
+    <span><b>3' mismatch min (off-tgt):</b> 0</span>
+    <span><b>Conserved in:</b> pisum_v2</span>
+  </div>
+</div>
+<div class="pair">
+  <h3>#4 &middot; DdeI_CAPS_P5 &nbsp; <span class="badge" style="background:#cf222e">high</span></h3>
+  <div class="kv">
+    <div><span class="label">Forward (5'-&gt;3')</span><br>
+         <span class="seq">TGTTGAGGAGGCAGTGAAGC</span></div>
+    <div><span class="label">Reverse (5'-&gt;3')</span><br>
+         <span class="seq">TTTCAGGCTCTGCAGTCACC</span></div>
+  </div>
+  <div class="kv">
+    <div><span class="label">Product size</span><br>444 bp</div>
+    <div><span class="label">Tm F / R</span><br>60.2 / 60.2 &deg;C</div>
+    <div><span class="label">GC F / R</span><br>55.0 / 55.0 %</div>
+    <div><span class="label">Forward pos</span><br>5571-5590</div>
+    <div><span class="label">Reverse pos</span><br>5995-6014</div>
+  </div>
+  <h4 style="margin:12px 0 4px;font-size:13px;">Predicted products</h4>
+  <table><thead><tr><th>Subject</th><th>Start</th><th>End</th><th>Size (bp)</th><th>Orientation</th><th>Target</th></tr></thead><tbody><tr><td>chr1</td><td>5571</td><td>6014</td><td>444</td><td>F/R</td><td><span class="on">intended</span></td></tr><tr><td>chr1</td><td>26440</td><td>26883</td><td>444</td><td>F/R</td><td><span class="off">off-target</span></td></tr><tr><td>chr1</td><td>68411</td><td>68854</td><td>444</td><td>F/R</td><td><span class="off">off-target</span></td></tr><tr><td>chr6</td><td>126306</td><td>126749</td><td>444</td><td>F/R</td><td><span class="off">off-target</span></td></tr><tr><td>chr6</td><td>623708</td><td>624151</td><td>444</td><td>F/R</td><td><span class="off">off-target</span></td></tr><tr><td>scaffold1040</td><td>11109105</td><td>11109548</td><td>444</td><td>F/R</td><td><span class="off">off-target</span></td></tr><tr><td>scaffold1040</td><td>18211565</td><td>18212008</td><td>444</td><td>R/F</td><td><span class="off">off-target</span></td></tr><tr><td>scaffold1040</td><td>18717016</td><td>18717459</td><td>444</td><td>R/F</td><td><span class="off">off-target</span></td></tr><tr><td>chr2</td><td>366172662</td><td>366173105</td><td>444</td><td>F/R</td><td><span class="off">off-target</span></td></tr><tr><td>chr5</td><td>560480488</td><td>560481991</td><td>1504</td><td>F/F</td><td><span class="off">off-target</span></td></tr></tbody></table>
+  <div class="flags" style="margin-top:8px;">
+    <span><b>CAPS enzyme:</b> MseI</span>
+    <span><b>Gel-distinguishable:</b> no</span>
+    <span><b>SNP in primer:</b> no</span>
+    <span><b>3' mismatch min (off-tgt):</b> 0</span>
+    <span><b>Conserved in:</b> pisum_v2</span>
+  </div>
+</div>
+<div class="pair">
+  <h3>#5 &middot; DdeI_CAPS_P4 &nbsp; <span class="badge" style="background:#cf222e">high</span></h3>
+  <div class="kv">
+    <div><span class="label">Forward (5'-&gt;3')</span><br>
+         <span class="seq">TGTTGAGGAGGCAGTGAAGC</span></div>
+    <div><span class="label">Reverse (5'-&gt;3')</span><br>
+         <span class="seq">CCTTGAATCCGCCAAACACC</span></div>
+  </div>
+  <div class="kv">
+    <div><span class="label">Product size</span><br>376 bp</div>
+    <div><span class="label">Tm F / R</span><br>60.2 / 59.8 &deg;C</div>
+    <div><span class="label">GC F / R</span><br>55.0 / 55.0 %</div>
+    <div><span class="label">Forward pos</span><br>5571-5590</div>
+    <div><span class="label">Reverse pos</span><br>5927-5946</div>
+  </div>
+  <h4 style="margin:12px 0 4px;font-size:13px;">Predicted products</h4>
+  <table><thead><tr><th>Subject</th><th>Start</th><th>End</th><th>Size (bp)</th><th>Orientation</th><th>Target</th></tr></thead><tbody><tr><td>chr1</td><td>5571</td><td>5946</td><td>376</td><td>F/R</td><td><span class="on">intended</span></td></tr><tr><td>chr1</td><td>26440</td><td>26815</td><td>376</td><td>F/R</td><td><span class="off">off-target</span></td></tr><tr><td>chr1</td><td>68411</td><td>68786</td><td>376</td><td>F/R</td><td><span class="off">off-target</span></td></tr><tr><td>chr6</td><td>126306</td><td>126681</td><td>376</td><td>F/R</td><td><span class="off">off-target</span></td></tr><tr><td>chr6</td><td>623708</td><td>624083</td><td>376</td><td>F/R</td><td><span class="off">off-target</span></td></tr><tr><td>scaffold1040</td><td>11109105</td><td>11109480</td><td>376</td><td>F/R</td><td><span class="off">off-target</span></td></tr><tr><td>scaffold1040</td><td>18211633</td><td>18212008</td><td>376</td><td>R/F</td><td><span class="off">off-target</span></td></tr><tr><td>scaffold1040</td><td>18717084</td><td>18717459</td><td>376</td><td>R/F</td><td><span class="off">off-target</span></td></tr><tr><td>chr2</td><td>76460099</td><td>76463510</td><td>3412</td><td>R/F</td><td><span class="off">off-target</span></td></tr><tr><td>chr2</td><td>366172662</td><td>366173037</td><td>376</td><td>F/R</td><td><span class="off">off-target</span></td></tr><tr><td>chr5</td><td>560480488</td><td>560481991</td><td>1504</td><td>F/F</td><td><span class="off">off-target</span></td></tr></tbody></table>
+  <div class="flags" style="margin-top:8px;">
+    <span><b>CAPS enzyme:</b> MseI</span>
+    <span><b>Gel-distinguishable:</b> no</span>
+    <span><b>SNP in primer:</b> no</span>
+    <span><b>3' mismatch min (off-tgt):</b> 0</span>
+    <span><b>Conserved in:</b> pisum_v2</span>
+  </div>
+</div>
+
+<footer>
+  <p><b>Provenance &amp; parameters</b> (for reproducibility)</p>
+  <pre>{
+  &quot;params&quot;: {},
+  &quot;provenance&quot;: {}
+}</pre>
+</footer>
+</body>
+</html>

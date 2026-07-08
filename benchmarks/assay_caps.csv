@@ -1,0 +1,6 @@
+name,forward,reverse,product_size,tm_f,tm_r,tm_diff,gc_f,gc_r,n_off_target,n_ff,n_rr,n_fr_offtarget,tp5_mismatch_min,snp_in_primer,conserved_refs,caps_enzyme,gel_distinguishable,risk
+DdeI_CAPS_P2,TGAAGCGCGGTTACCTCAAT,TTTCAGGCTCTGCAGTCACC,430,60.0,60.2,0.2,50.0,55.0,8,0,0,8,0,no,pisum_v2,MseI,no,high
+DdeI_CAPS_P3,TGAAGCGCGGTTACCTCAAT,TGTTTCAGGTGTCGGTCTCC,407,60.0,59.6,0.4,50.0,55.0,8,0,0,8,0,no,pisum_v2,MseI,no,high
+DdeI_CAPS_P1,TGAAGCGCGGTTACCTCAAT,CCTTGAATCCGCCAAACACC,362,60.0,59.8,0.2,50.0,55.0,8,0,0,8,0,no,pisum_v2,MseI,no,high
+DdeI_CAPS_P5,TGTTGAGGAGGCAGTGAAGC,TTTCAGGCTCTGCAGTCACC,444,60.2,60.2,0.0,55.0,55.0,9,1,0,8,0,no,pisum_v2,MseI,no,high
+DdeI_CAPS_P4,TGTTGAGGAGGCAGTGAAGC,CCTTGAATCCGCCAAACACC,376,60.2,59.8,0.4,55.0,55.0,10,1,0,9,0,no,pisum_v2,MseI,no,high

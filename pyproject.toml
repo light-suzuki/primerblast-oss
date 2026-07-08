@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "primerblast-oss"
+version = "0.2.0"
+description = "Local, open-source Primer-BLAST for plant breeding: design, in-silico PCR, multi-reference specificity, CAPS/dCAPS, offline"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [{ name = "primerblast-oss contributors" }]
+keywords = [
+    "pcr", "primer", "primer3", "blast", "specificity", "in-silico-pcr",
+    "bioinformatics", "plant-breeding", "caps", "dcaps", "genotyping", "qtl",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Operating System :: POSIX :: Linux",
+]
+
+# No Python runtime dependencies: relies on the external primer3_core and
+# BLAST+ (blastn / makeblastdb) executables being on PATH.
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/light-suzuki/primerblast-oss"
+Repository = "https://github.com/light-suzuki/primerblast-oss"
+Issues = "https://github.com/light-suzuki/primerblast-oss/issues"
+
+[project.scripts]
+primerblast-oss = "primerblast_oss.cli:main"
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[tool.setuptools]
+packages = ["primerblast_oss"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
