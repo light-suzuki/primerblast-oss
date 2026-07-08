@@ -16,24 +16,19 @@ CAPS/dCAPS marker design, and experimenter risk scoring.
 
 ## Why local and open source
 
-NCBI Primer-BLAST is invaluable, but it is **not open source** and exists only
-as a hosted web service on US-government infrastructure. For a tool this widely
-relied upon in research that is an uncomfortable position: you cannot read,
-audit, fork, or fix it, you cannot run it where your data lives, and unpublished
-or embargoed genomes cannot be sent to it at all.
+NCBI Primer-BLAST is excellent, but it is **not open source** and runs only as a
+hosted web service. In practice that means you can't audit, fork, or self-host
+it, you can't run it next to your data, and unpublished or embargoed genomes
+can't be submitted to it.
 
-It also makes your pipeline depend on an external service staying up. NIH/NCBI
-resources have repeatedly been degraded or interrupted by US government funding
-lapses and shutdowns — for example the 2018–2019 shutdown (the longest in US
-history) cut NCBI support and updates, and funding disruptions under the Trump
-administration have again put NIH services at risk. Building a reproducible
-analysis — a paper, a thesis, a breeding program — on a single external,
-politically exposed dependency is fragile.
+Relying on any external service also ties your pipeline to its availability and
+policies (rate limits, maintenance, occasional outages). Keeping the workflow
+**local and offline** removes that dependency and makes runs fully
+reproducible — pinned FASTA, GFF3, VCF, BLAST DB, and tool versions, with no
+queue or login. That matters most for the case the web tool can't serve anyway:
+local, unpublished, multi-cultivar genomes.
 
-primerblast-oss keeps the whole workflow **local, offline, and MIT-licensed**:
-your genomes, your machine, your control — fully reproducible, with no queue,
-login, rate limit, or upstream outage to worry about. If a widely used method
-matters to science, it should be open and runnable by anyone.
+primerblast-oss is **MIT-licensed**, so anyone can read, run, and build on it.
 
 ## Why this exists
 
