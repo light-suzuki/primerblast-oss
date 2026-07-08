@@ -38,22 +38,29 @@ predicted amplicons** to flag unintended PCR products. Most local "primer +
 BLAST" scripts only do a per-primer BLAST and miss step (2) — the part that
 actually detects off-target products.
 
-`primerblast-oss` implements step (2) faithfully and adds capabilities NCBI's
-web tool cannot offer:
+`primerblast-oss` is an independent reimplementation of step (2) — using a
+BLAST-alignment-based priming model, not NCBI's exact algorithm — with a focus
+on things a local, breeding-oriented workflow needs:
 
 | | NCBI Primer-BLAST | primerblast-oss |
 |---|---|---|
 | Primer3 design | ✅ | ✅ |
-| Pair BLAST hits into predicted amplicons | ✅ | ✅ |
-| Off-target products from either primer as F **or** R (F/F, R/R, F/R) | ✅ | ✅ |
-| 3'-end anchored priming model (terminal match + 3'-window mismatch limit) | ✅ | ✅ |
-| Runs offline on **unpublished / local** genomes | ❌ | ✅ |
-| Screen against **multiple databases** in one run | ❌ | ✅ |
-| **In-silico PCR** from pasted primers (orientation-free) | ❌ | ✅ |
-| **Tile a whole region** with overlapping amplicons | ❌ (clusters on one side) | ✅ |
-| Gel-resolvability of off-targets (size-gap aware) | ❌ | ✅ |
-| Full control of every threshold, scriptable, no queue | partial | ✅ |
-| No login, no rate limit | ❌ | ✅ |
+| Pairs BLAST hits into predicted amplicons | ✅ | ✅ |
+| Off-target products from either primer as F/F, R/R, F/R | ✅ | ✅ |
+| 3'-end-aware priming model | ✅ | ✅ |
+| Runs offline on **unpublished / local** genomes | hard | ✅ |
+| Screen against **multiple databases** in one run | — | ✅ |
+| **In-silico PCR** from pasted primers (orientation-free) | — | ✅ |
+| **Tile a whole region** with overlapping amplicons | — | ✅ |
+| Gel-resolvability of off-targets (size-gap aware) | — | ✅ |
+| Scriptable CLI + library, no queue/login | limited | ✅ |
+
+This is about **fit for a local, offline workflow**, not a claim of being better
+overall. NCBI Primer-BLAST has real advantages this tool does not: curated,
+continuously updated databases, a mature thermodynamic model, and deeper
+primer-dimer / hairpin analysis. A ✅ in both columns means the capability
+exists on each side — not that the underlying models are identical or that
+outputs will match.
 
 ## How specificity is judged
 
@@ -132,7 +139,7 @@ python -m primerblast_oss check \
 
 ### `tile` — region + amplicon length → overlapping amplicons covering the whole region
 
-Fixes Primer-BLAST's habit of clustering primers on one side: this walks the
+Primer-BLAST designs one amplicon around a target; `tile` instead walks the
 entire region with overlapping amplicons (e.g. to sequence a whole gene).
 
 ```bash
@@ -177,9 +184,12 @@ python -m primerblast_oss markers --interval chr1:80000000-90000000 \
 python -m primerblast_oss makedb genome.fa --out-db genome_db
 ```
 
-## How this addresses NCBI Primer-BLAST's weak points
+## How it approaches NCBI Primer-BLAST's common pain points
 
-| # | NCBI Primer-BLAST weakness | primerblast-oss |
+These are the pain points the tool is designed around. Coverage varies and some
+items are partial — see [Limitations](#limitations).
+
+| # | Common pain point | primerblast-oss approach |
 |---|---|---|
 | 1 | weak at batch / many regions | `markers`, `assay` over BED/gene lists; CLI + library, scriptable |
 | 2 | poor fit for local / custom assemblies | everything runs on local FASTA + BLAST DB; `makedb` helper |
@@ -189,7 +199,7 @@ python -m primerblast_oss makedb genome.fa --out-db genome_db
 | 6 | unexpected side products hard to read | BLAST hits **paired into predicted amplicons** with sizes |
 | 7 | F-F / R-R products hard to see | enumerated explicitly and shown in the ASCII map & tables |
 | 8 | 3'-end mismatch not visible | explicit 3'-terminal **5 bp / 10 bp** mismatch counts per hit |
-| 9 | paralogs / repeats / duplications | genome-wide pairing surfaces every duplicated priming site |
+| 9 | paralogs / repeats / duplications | genome-wide pairing surfaces duplicated priming sites (no dedicated repeat mask; bounded by BLAST `-max_target_seqs`) |
 | 10 | not built for CAPS/dCAPS | `caps` scan: enzymes that digest two alleles differently, gel gap |
 | 11 | weak GFF3 / VCF / QTL integration | `--gene`/`--gff3`, `--vcf`, `--interval`, BED input |
 | 12 | opaque empty results | Primer3 explain string surfaced; per-stage diagnostics |
@@ -200,6 +210,28 @@ python -m primerblast_oss makedb genome.fa --out-db genome_db
 Design cues were taken from
 [PrimerServer2](https://github.com/billzt/PrimerServer2) (strand-aware BLAST-hit
 pairing, multi-threaded `blastn`, coordinate input) and NCBI Primer-BLAST.
+
+## Limitations
+
+Honest scope, so you know what it does *not* do:
+
+- **Not validated against NCBI Primer-BLAST.** It is an independent
+  reimplementation; results are plausible and internally checked, not verified to
+  match NCBI's output.
+- **Priming is judged by BLAST alignment + a mismatch/3'-anchor rule, not
+  thermodynamics.** Off-target annealing temperature (Tm) is not computed, so a
+  hit that passes the mismatch thresholds may still be a weak primer in practice
+  (and vice-versa).
+- **Off-target discovery is bounded by BLAST `-max_target_seqs`** (default 5000).
+  In extremely repetitive regions some hits can be missed; there is no dedicated
+  repeat mask.
+- **dCAPS support is best-effort** and CAPS calls depend on the enzyme table
+  (~40 common enzymes), not an exhaustive REBASE set.
+- **Batch/QTL modes work but are not benchmarked at large scale**; each pair
+  costs a BLAST search, so wide sweeps are IO/CPU bound.
+- **primer-dimer / hairpin checks are only what Primer3 provides** during design.
+
+Contributions toward any of these are welcome.
 
 ### Key options (shared by design/check/tile)
 

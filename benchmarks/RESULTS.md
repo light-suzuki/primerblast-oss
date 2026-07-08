@@ -24,11 +24,11 @@ Coordinate check (independent): the predicted on-target amplicon for pair 1,
 and a 3′ end equal to the reverse-complement of the reverse primer — exact
 match, confirming the genomic mapping.
 
-## 2. Multi-cultivar screening (capability beyond NCBI Primer-BLAST)
+## 2. Multi-cultivar screening (local, multiple databases)
 
 Same template, screened simultaneously against three cultivar genomes
-(`pisum_v2`, `JI2694`, `pisum_zw6`) in a single command. NCBI Primer-BLAST
-cannot do this: these are local assemblies and it screens one database at a
+(`pisum_v2`, `JI2694`, `pisum_zw6`) in a single command. The NCBI web tool does
+not cover this case: these are local assemblies and it screens one database at a
 time. A machine-readable example report is saved at
 `benchmarks/example_report.json`; the summary is below.
 
@@ -44,9 +44,8 @@ Highlighted pair (368 bp, `F=GCACTCTAGAGGTTCAAGGCC`, `R=TGGTACGTGTGGTTCAGTTTCA`)
 | `JI2694` (local assembly) | 1 product, **forward primer over a SNP** (mm 1+0) at `ch1VI:85,071,532–85,071,899` | allele/cultivar-specific behavior |
 
 This is the payoff of local multi-database screening: the same primer pair is
-clean in two cultivars but overlaps a cultivar-specific SNP in a third — an
-insight NCBI Primer-BLAST cannot produce because `JI2694` is not a public
-database. The two weaker pairs are again flagged with many off-target products
+clean in two cultivars but overlaps a cultivar-specific SNP in a third — which
+requires screening `JI2694`, a local unpublished assembly, directly. The two weaker pairs are again flagged with many off-target products
 (R/R and F/R amplicons at degenerate sites) in every genome.
 
 ## 3. In-silico PCR (`check` mode)
@@ -81,8 +80,8 @@ Ranks come from the per-amplicon specificity check (A = unique product,
 B = extra products but resolvable by size). The extreme 3' end is not covered
 because a primer needs landing sequence *downstream* of what it amplifies —
 extract the target with flanking padding for full CDS coverage. This whole-
-region walk is what NCBI Primer-BLAST does not do: it designs one amplicon
-around a single target and clusters primers on one side.
+region walk complements NCBI Primer-BLAST, which designs one amplicon around a
+single target rather than tiling a region.
 
 ## 5. Full breeding assay (`assay`) — gene + multi-reference + VCF + risk
 
@@ -108,8 +107,8 @@ perfect-match products a size/identity heuristic would mislabel as "the intended
 one", (c) confirms the amplicon is conserved in all 3 cultivars, and (d) detects
 that one pair's reverse primer sits over the synthetic SNP at chr1:6,000. The
 verdict — *no specific primer exists for this gene; it has ≥4 genome-wide
-copies* — is the kind of result NCBI Primer-BLAST cannot give on a local
-assembly, and is exactly weakness #9 (paralogs/duplications) made visible.
+copies* — comes from screening the local assembly directly, and illustrates
+pain point #9 (paralogs/duplications).
 
 ## 6. CAPS/dCAPS + output formats
 
