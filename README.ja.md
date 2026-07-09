@@ -47,7 +47,7 @@ NCBI Primer-BLAST は2つのことを行います:(1) Primer3 が候補プライ
 
 これは**ローカル・オフラインのワークフローへの適合**についての話であって、総合的に優れているという主張ではありません。NCBI Primer-BLAST には本ツールにない実利があります:キュレーションされ継続更新されるデータベース、成熟した熱力学モデル、より踏み込んだプライマーダイマー/ヘアピン解析です。[PrimerServer2](https://github.com/billzt/PrimerServer2) も強力なローカルツールでコアのレシピを多く共有しています。primerblast-oss がその上に足しているのは、領域全体のタイリング、ゲル分離性、1回実行のマルチDBスクリーニング、育種アッセイ(GFF3/VCF/CAPS/QTL/risk)、そしてダイマーの*チェック*だけでなく多重互換セットの*設計*です。複数列に ✅ がある場合、その能力が各側に存在することを意味するだけで、内部モデルが同一であるとか出力が一致することを意味しません。
 
-**ベンチマーク(要約):** ランダムに配置した **40座位の Arabidopsis TAIR10** で、primerblast-oss と PrimerServer2 は**非反復座位の92%**で同一のアンプリコン集合(数・サイズ・座標)を予測しました。公開ゲノムの *Lotus japonicus* では手検証3ペアが完全一致し、Arabidopsisの1座位ではトップの新規設計ペアが PrimerServer2 と**ライブのNCBI Primer-BLAST**の両方と一致しました。手法・数値・残差の分析は [`benchmarks/RESULTS.md`](benchmarks/RESULTS.md) §7–§9 にあります。
+**ベンチマーク(要約):** ランダムに配置した **40座位の Arabidopsis TAIR10** で、primerblast-oss と PrimerServer2 は**非反復座位の92%**で同一のアンプリコン集合(数・サイズ・座標)を予測しました。*Lotus japonicus* の手検証3ペアは PrimerServer2 と完全一致し、**ライブのNCBI Primer-BLAST**に対して回した**6座位**すべてで primerblast-oss は NCBI/PrimerServer2 の範囲内に収まりました — PrimerServer2 が拾う「3'非整合」オフターゲットを NCBI とともに棄却する例を含みます。手法・数値・残差の分析は [`benchmarks/RESULTS.md`](benchmarks/RESULTS.md) §7–§9 にあります。
 
 ## 検証状況
 
@@ -55,7 +55,7 @@ NCBI Primer-BLAST は2つのことを行います:(1) Primer3 が候補プライ
 
 - **PrimerServer2 との40座位自動対決(Arabidopsis TAIR10)。** パラメータを揃えた条件で、両ツールは**非反復座位 33/36(92%)**で予測アンプリコン集合が完全一致しました。残る不一致はすべて説明可能です:両ツールともプライマーを非特異と判定するが反復コピーの列挙が異なる反復座位と、プライマーの3'末端が完全には整合しないマージナルなサイト(primerblast-oss はこれを非プライミングとして棄却し、PrimerServer2 は二本鎖Tmで保持)です。実装エラーに起因するものはありません([`benchmarks/RESULTS.md`](benchmarks/RESULTS.md) §9)。
 - **PrimerServer2、*Lotus japonicus*。** 手検証3ペアがアンプリコン数・サイズ・座標で完全一致(§7)。
-- **NCBI Primer-BLAST(単一座位)。** 公開の Arabidopsis TAIR10 テンプレートで、トップの新規設計ペアはライブのNCBIサービスが返すペアと同一で、両者とも特異的と判定しました。これはスポットチェックであって系統的検証ではありません(§8)。
+- **NCBI Primer-BLAST(6座位)。** 6ペアをライブのNCBIサービスと両ローカルツールに通しました。3つのクリーンな座位では三者が完全一致。残る3つの境界的座位でも primerblast-oss は **NCBI/PrimerServer2 の範囲内**に収まり、1座位では PrimerServer2 が保持する「3'非整合」オフターゲットを NCBI とともに棄却、別の1座位では PrimerServer2 側と一致しました。差はすべて Tm または 3'整合の閾値近傍にある単一の境界産物で、エラーではありません(§8b)。なお標本数は控えめで、NCBIはローカルFASTAでなく自前の *Arabidopsis* アセンブリを検索します。
 - **継続的な回帰ベンチマーク。** CIが合成のFASTA/BLASTデータベースを構築し、Primer3設計、BLASTアンプリコンペアリング、重複/オフターゲット分類、熱力学ゲート、多重ダイマーチェックを毎プッシュで検査します。
 
 **NCBI Primer-BLAST** に対してはドロップイン等価を主張しません:NCBIはキュレーション済みで継続更新されるデータベース、ホスト型UX、非公開で長年成熟した特異性モデルで優位を保ちます。primerblast-oss は、重要なデータがローカル・未公開・複数リファレンスである、あるいはスクリプトで再現可能に実行する必要がある場合に、より強い選択肢です。

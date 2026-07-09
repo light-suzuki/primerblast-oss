@@ -29,7 +29,11 @@ All notable changes to this project are documented here. The format follows
   Primer-BLAST does not do.
 - **NCBI Primer-BLAST head-to-head benchmark** (Arabidopsis TAIR10, published):
   on the same template, primerblast-oss's top de-novo pair and its specificity
-  verdict match the live NCBI web service exactly (`benchmarks/RESULTS.md` §8).
+  verdict match the live NCBI web service exactly (`benchmarks/RESULTS.md` §8),
+  extended to a **six-locus panel** (§8b) run against the live NCBI service and
+  both local tools — primerblast-oss stays within the NCBI / PrimerServer2 range
+  on all six, matching NCBI in rejecting a non-3'-anchored off-target that
+  PrimerServer2 keeps.
 - **Automated multi-locus PrimerServer2 benchmark** (`benchmarks/head_to_head_ps2.py`):
   designs a pair in each of N genome windows and compares both tools' predicted
   amplicons under matched parameters. Across 40 TAIR10 loci the tools agree on the

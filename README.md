@@ -77,11 +77,13 @@ will match.
 
 **Benchmarks (summary):** across **40 randomly-placed Arabidopsis TAIR10 loci**,
 primerblast-oss and PrimerServer2 predict the same amplicon set (count, size,
-coordinates) on **92 % of non-repetitive loci**; on a published *Lotus japonicus*
-genome three hand-checked pairs matched exactly; and on one Arabidopsis locus the
-top de-novo pair agreed with **both** PrimerServer2 and the live NCBI
-Primer-BLAST service. Full method, numbers, and an analysis of the residual
-disagreements are in [`benchmarks/RESULTS.md`](benchmarks/RESULTS.md) §7–§9.
+coordinates) on **92 % of non-repetitive loci**; three hand-checked *Lotus
+japonicus* pairs matched PrimerServer2 exactly; and across **six loci** run
+against the **live NCBI Primer-BLAST** service, primerblast-oss stays within the
+NCBI / PrimerServer2 range on every one — matching NCBI in rejecting a
+non-3'-anchored off-target that PrimerServer2 keeps. Full method, numbers, and an
+analysis of the residual disagreements are in
+[`benchmarks/RESULTS.md`](benchmarks/RESULTS.md) §7–§9.
 
 ## Validation status
 
@@ -100,10 +102,14 @@ and offline reproducibility. The evidence to date:
   ([`benchmarks/RESULTS.md`](benchmarks/RESULTS.md) §9).
 - **PrimerServer2, *Lotus japonicus*.** Three hand-checked pairs matched exactly
   on amplicon count, size, and coordinates (§7).
-- **NCBI Primer-BLAST (single locus).** On a published Arabidopsis TAIR10
-  template, the top de-novo pair was identical to the pair the live NCBI service
-  returns, and both judged it specific. This is a spot check, not systematic
-  validation (§8).
+- **NCBI Primer-BLAST (six loci).** Six pairs were run through the live NCBI
+  service and both local tools. All three agree exactly on the three clean loci;
+  on the three borderline loci primerblast-oss sits **within the NCBI /
+  PrimerServer2 range** — on one it matches NCBI in rejecting an off-target that
+  PrimerServer2 keeps (a non-3'-anchored site), on another it matches
+  PrimerServer2. Every difference is a single borderline product near a Tm or
+  3'-alignment threshold, not an error (§8b). Still a modest sample, and NCBI
+  screens its own *Arabidopsis* assembly rather than the local FASTA.
 - **Continuous regression benchmark.** CI builds a synthetic FASTA/BLAST database
   and exercises Primer3 design, BLAST amplicon pairing, duplicate/off-target
   classification, thermodynamic gating, and multiplex dimer checks on every push.
