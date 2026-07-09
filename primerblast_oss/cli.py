@@ -218,6 +218,34 @@ def _cmd_check(a) -> int:
 
 
 # --------------------------------------------------------------------------- #
+# multiplex (primer-dimer compatibility, no BLAST)
+# --------------------------------------------------------------------------- #
+def _cmd_multiplex(a) -> int:
+    from . import dimers
+    if not dimers.available():
+        raise SystemExit("multiplex: needs primer3-py (pip install .[thermo])")
+    primers = _collect_primers(a)
+    dp = dimers.DimerParams()
+    res = dimers.analyze_multiplex(list(primers.items()), dp)
+    if a.format == "json":
+        out = {
+            "n_primers": res["n_primers"], "compatible": res["compatible"],
+            "n_concerning": res["n_concerning"], "worst_dg": res["worst_dg"],
+            "concerning": [{"a": s.a, "b": s.b, "tm": s.tm, "dg": s.dg} for s in res["concerning"]],
+        }
+        _emit(json.dumps(out, indent=2), a.out)
+        return 0
+    lines = [f"multiplex check: {res['n_primers']} primers, "
+             f"{res['n_pairs_checked']} cross-dimers evaluated",
+             f"verdict: {'COMPATIBLE' if res['compatible'] else 'INCOMPATIBLE'} "
+             f"({res['n_concerning']} concerning; worst ΔG {res['worst_dg']} kcal/mol)"]
+    for s in res["concerning"]:
+        lines.append(f"  {s.a} x {s.b}: cross-dimer Tm {s.tm} ΔG {s.dg} kcal/mol")
+    _emit("\n".join(lines), a.out)
+    return 0
+
+
+# --------------------------------------------------------------------------- #
 # tile
 # --------------------------------------------------------------------------- #
 def _cmd_tile(a) -> int:
@@ -423,6 +451,16 @@ def build_parser() -> argparse.ArgumentParser:
     _add_spec_args(c)
     _add_out_args(c, formats=("text", "json"))
     c.set_defaults(func=_cmd_check)
+
+    # multiplex (primer-dimer compatibility of a primer pool; no BLAST)
+    mx = sub.add_parser("multiplex",
+                        help="check primer-dimer compatibility across a pool of primers")
+    mx.add_argument("--forward")
+    mx.add_argument("--reverse")
+    mx.add_argument("--primer", action="append", help="NAME=SEQ or SEQ (repeatable)")
+    mx.add_argument("--primers-fasta")
+    _add_out_args(mx, formats=("text", "json"))
+    mx.set_defaults(func=_cmd_multiplex)
 
     # tile
     t = sub.add_parser("tile", help="cover a whole region with overlapping amplicons")

@@ -115,6 +115,21 @@ def test_thermo_viability_optional():
     assert weak is not None and not weak.viable
 
 
+def test_dimers_optional():
+    from primerblast_oss import dimers
+    if not dimers.available():
+        return  # primer3-py absent -> optional feature skipped
+    # clean designed primers: no concerning cross-dimer, multiplex compatible
+    clean = dimers.analyze_pair("CACCTCTTTCGATGCATGCG", "TCTTCCTTCGCCTCAAACCC")
+    assert clean["ok"] is True
+    pool = dimers.analyze_multiplex([("F", "CACCTCTTTCGATGCATGCG"),
+                                     ("R", "TCTTCCTTCGCCTCAAACCC")])
+    assert pool["compatible"] is True
+    # deliberately complementary pair: strong cross-dimer flagged
+    bad = dimers.analyze_pair("GGGGCCCCAAAATTTTGGGG", "CCCCAAAATTTTGGGGCCCC")
+    assert bad["n_concerning"] > 0 and bad["cross_dimer_dg"] < -10
+
+
 def test_caps_ecori_distinguishable():
     left = "ACGT" * 30
     right = "TGCA" * 30

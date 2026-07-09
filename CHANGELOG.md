@@ -7,6 +7,11 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- **Primer-dimer / hairpin / multiplex analysis** (`primer3-py`): per-pair
+  hairpin, self-dimer and forward×reverse cross-dimer scoring (ΔG + Tm), folded
+  into risk. New `multiplex` subcommand checks every-primer-vs-every-primer
+  cross-dimers across a pool to pick compatible sets — something NCBI
+  Primer-BLAST does not do.
 - **Optional thermodynamic scoring** (`primer3-py`): each priming site gets a
   duplex Tm and 3'-end stability ΔG; thermodynamically non-viable sites are gated
   out of amplicon prediction. Enabled via `--genome-fasta` (automatic in

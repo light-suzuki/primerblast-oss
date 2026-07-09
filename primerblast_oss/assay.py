@@ -129,6 +129,9 @@ def analyze_pair(pair, per_db: Sequence[Dict], design_db: str,
 
     conservation = conservation_from_per_db(per_db, pair.product_size)
 
+    from . import dimers as _dimers
+    dimer = _dimers.analyze_pair(pair.forward, pair.reverse) if _dimers.available() else None
+
     risk = assess_risk(
         n_comigrating_offtarget=design_res.get("n_comigrating", 0),
         n_ff=n_ff, n_rr=n_rr, n_fr_offtarget=n_fr,
@@ -138,6 +141,8 @@ def analyze_pair(pair, per_db: Sequence[Dict], design_db: str,
         gel_distinguishable=design_res.get("gel_distinguishable", True),
         conserved_fraction=(conservation["n_conserved"] / conservation["n_refs"]
                             if conservation["n_refs"] else None),
+        dimer_concern=(dimer["n_concerning"] > 0 if dimer else False),
+        cross_dimer_dg=(dimer["cross_dimer_dg"] if dimer else None),
     )
 
     left_pos = [intended.start, intended.start + len_f - 1] if intended else \
@@ -163,6 +168,12 @@ def analyze_pair(pair, per_db: Sequence[Dict], design_db: str,
         "caps_enzyme": (caps_info or {}).get("best_enzyme"),
         "caps": caps_info,
         "gel_distinguishable": design_res.get("gel_distinguishable", True),
+        "dimers": ({
+            "worst_dg": dimer["worst_dg"], "cross_dimer_dg": dimer["cross_dimer_dg"],
+            "n_concerning": dimer["n_concerning"], "ok": dimer["ok"],
+            "concerning": [{"kind": s.kind, "a": s.a, "b": s.b, "tm": s.tm, "dg": s.dg}
+                           for s in dimer["structures"] if s.concerning],
+        } if dimer else None),
         "per_db_products": per_db_products,
         "products": [_amp_dict(a) for a in on + off],
     }

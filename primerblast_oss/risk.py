@@ -34,6 +34,8 @@ def assess_risk(
     gel_distinguishable: bool = True,
     conserved_fraction: Optional[float] = None,  # 0..1 across refs, if requested
     repeat_overlap: bool = False,
+    dimer_concern: bool = False,     # concerning self/cross-dimer or hairpin
+    cross_dimer_dg: Optional[float] = None,
 ) -> RiskAssessment:
     score = 100.0
     reasons: List[str] = []
@@ -86,13 +88,19 @@ def assess_risk(
         score -= 10.0
         reasons.append("primer overlaps an annotated repeat region")
 
+    if dimer_concern:
+        score -= 12.0
+        dg_txt = f" (ΔG {cross_dimer_dg} kcal/mol)" if cross_dimer_dg is not None else ""
+        reasons.append(f"primer-dimer / hairpin likely to form{dg_txt}")
+
     # an off-target that would actually prime (perfect 3' end) blocks "low"
     primes_offtarget = (offtarget_min_tp5 is not None and offtarget_min_tp5 == 0
                         and (n_ff or n_rr or n_fr_offtarget))
 
     score = max(0.0, min(100.0, score))
     if (score >= 80.0 and n_comigrating_offtarget == 0
-            and not snp_in_primer_3prime and not primes_offtarget):
+            and not snp_in_primer_3prime and not primes_offtarget
+            and not dimer_concern):
         level = "low"
     elif score >= 55.0 and n_comigrating_offtarget == 0:
         level = "medium"

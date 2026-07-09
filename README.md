@@ -56,6 +56,8 @@ on things a local, breeding-oriented workflow needs:
 | **In-silico PCR** from pasted primers (orientation-free) | — | ✅ |
 | **Tile a whole region** with overlapping amplicons | — | ✅ |
 | Gel-resolvability of off-targets (size-gap aware) | — | ✅ |
+| Thermodynamic off-target scoring (Tm + 3'-end ΔG) | ✅ | optional (primer3-py) |
+| **Multiplex** primer-dimer compatibility of a pool | — | ✅ |
 | Scriptable CLI + library, no queue/login | limited | ✅ |
 
 This is about **fit for a local, offline workflow**, not a claim of being better
@@ -144,7 +146,17 @@ reach it through the default localhost forwarding.
 
 ## Usage
 
-Four subcommands: **design**, **check**, **tile**, **makedb**.
+Subcommands: **design**, **check**, **multiplex**, **tile**, **assay**,
+**markers**, **makedb**.
+
+`multiplex` checks primer-dimer compatibility across a pool of primers (needs
+`primer3-py`) — every primer against every other, to pick sets you can run
+together:
+
+```bash
+python -m primerblast_oss multiplex \
+  --primer A_F=... --primer A_R=... --primer B_F=... --primer B_R=...
+```
 
 ### `design` — region + product size → primer pairs
 
@@ -272,7 +284,10 @@ Honest scope, so you know what it does *not* do:
   (~40 common enzymes), not an exhaustive REBASE set.
 - **Batch/QTL modes work but are not benchmarked at large scale**; each pair
   costs a BLAST search, so wide sweeps are IO/CPU bound.
-- **primer-dimer / hairpin checks are only what Primer3 provides** during design.
+- **primer-dimer / hairpin analysis needs primer3-py** (optional). With it, each
+  pair gets hairpin / self-dimer / cross-dimer scoring and the `multiplex`
+  subcommand checks a whole pool; without it, only Primer3's design-time limits
+  apply.
 
 Contributions toward any of these are welcome.
 
