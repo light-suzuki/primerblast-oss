@@ -18,7 +18,8 @@ from .pipeline import _score_pair
 
 def _evaluate(pair: PrimerPair, databases: Sequence[str], sp: SpecParams,
               blastn_bin: Optional[str], size_tolerance: int,
-              genome=None, thermo_params=None, thermo_gate: bool = True) -> None:
+              genome=None, thermo_params=None, thermo_gate: bool = True,
+              dimer_params=None) -> None:
     per_db = [
         pair_specificity(pair.forward, pair.reverse, db,
                          designed_size=pair.product_size, sp=sp,
@@ -27,7 +28,10 @@ def _evaluate(pair: PrimerPair, databases: Sequence[str], sp: SpecParams,
                          thermo_gate=thermo_gate)
         for db in databases
     ]
-    _score_pair(pair, per_db)
+    from . import dimers as _dimers
+    dimer = (_dimers.analyze_pair(pair.forward, pair.reverse, dimer_params)
+             if _dimers.available() else None)
+    _score_pair(pair, per_db, dimer)
 
 
 def design_tiling(
@@ -48,6 +52,7 @@ def design_tiling(
     genome=None,
     thermo_params=None,
     thermo_gate: bool = True,
+    dimer_params=None,
 ) -> List[Dict]:
     seq = clean_sequence(sequence)
     L = len(seq)
@@ -97,7 +102,7 @@ def design_tiling(
         for pair in pairs:
             _evaluate(pair, databases, sp, blastn_bin, size_tolerance,
                       genome=genome, thermo_params=thermo_params,
-                      thermo_gate=thermo_gate)
+                      thermo_gate=thermo_gate, dimer_params=dimer_params)
 
         # prefer specific, then gel-resolvable; then position: normally the
         # leftmost amplicon (walks coverage forward), but in the final

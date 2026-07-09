@@ -123,7 +123,7 @@ _CSV_COLUMNS: List[str] = [
     "gc_f", "gc_r",
     "n_off_target", "n_ff", "n_rr", "n_fr_offtarget",
     "tp5_mismatch_min", "snp_in_primer",
-    "conserved_refs", "caps_enzyme", "gel_distinguishable", "risk",
+    "conserved_refs", "caps_enzyme", "gel_distinguishable", "cross_dimer_dg", "risk",
 ]
 
 
@@ -163,6 +163,7 @@ def pairs_to_csv(pairs: List[dict]) -> str:
             conserved_str,
             _get(pair, "caps_enzyme"),
             _bool_str(pair.get("gel_distinguishable")),
+            _num((pair.get("dimers") or {}).get("cross_dimer_dg")),
             _get(pair, "risk"),
         ])
     return buf.getvalue()

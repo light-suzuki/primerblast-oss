@@ -70,10 +70,12 @@ def to_tsv(result: PipelineResult) -> str:
         "rank", "score", "specific_all_db", "gel_distinguishable",
         "forward", "reverse", "product_size", "tm_f", "tm_r", "gc_f", "gc_r",
         "total_on_target", "total_off_target", "total_comigrating",
+        "dimer_ok", "cross_dimer_dg",
     ]
     lines = ["\t".join(cols)]
     for p in result.pairs:
         s = p.specificity
+        dm = s.get("dimers") or {}
         lines.append("\t".join(str(x) for x in [
             s.get("rank"), s.get("score"), s.get("specific_all_db"),
             s.get("gel_distinguishable"),
@@ -81,6 +83,7 @@ def to_tsv(result: PipelineResult) -> str:
             round(p.tm_f, 1), round(p.tm_r, 1), round(p.gc_f, 1), round(p.gc_r, 1),
             s.get("total_on_target"), s.get("total_off_target"),
             s.get("total_comigrating"),
+            dm.get("ok"), dm.get("cross_dimer_dg"),
         ]))
     return "\n".join(lines)
 
@@ -108,6 +111,12 @@ def to_text(result: PipelineResult, max_offtarget_rows: int = 6) -> str:
                    f"on-target {s.get('total_on_target')}  "
                    f"off-target {s.get('total_off_target')} "
                    f"(co-migrating {s.get('total_comigrating')})")
+        dm = s.get("dimers")
+        if dm:
+            tag = "OK" if dm.get("ok") else f"{dm.get('n_concerning')} concerning"
+            out.append(f"    primer-dimer/hairpin: {tag}  "
+                       f"worst ΔG {dm.get('worst_dg')}  "
+                       f"F×R ΔG {dm.get('cross_dimer_dg')} kcal/mol")
         for db in s.get("per_db", []):
             if db["specific"]:
                 tag = "OK (single product)"
@@ -131,9 +140,12 @@ def to_text(result: PipelineResult, max_offtarget_rows: int = 6) -> str:
                 out.append(f"         warning: high-copy primer hit list ({copies}; "
                            f"threshold={threshold}); treat specificity as repeat-sensitive")
             for a in db["off_target"][:max_offtarget_rows]:
+                tm_s = ""
+                if getattr(a, "fwd_tm", None) is not None:
+                    tm_s = f"  Tm {a.fwd_tm}/{a.rev_tm}"
                 out.append(
                     f"         off: {a.subject}:{a.start}-{a.end} "
-                    f"{a.size}bp  {a.orientation}  mm {a.fwd_mismatch}+{a.rev_mismatch}"
+                    f"{a.size}bp  {a.orientation}  mm {a.fwd_mismatch}+{a.rev_mismatch}{tm_s}"
                 )
             extra = len(db["off_target"]) - max_offtarget_rows
             if extra > 0:
@@ -276,6 +288,11 @@ def assay_to_text(result: Dict) -> str:
                            f"ref {c['allele_ref_fragments']} vs alt {c['allele_alt_fragments']}")
             else:
                 out.append("    CAPS: no distinguishing enzyme found")
+        dm = p.get("dimers")
+        if dm:
+            tag = "OK" if dm.get("ok") else f"{dm.get('n_concerning')} concerning"
+            out.append(f"    primer-dimer/hairpin: {tag}  "
+                       f"F×R ΔG {dm.get('cross_dimer_dg')} kcal/mol")
         out.append(f"    reasons: {'; '.join(p.get('risk_reasons', []))}")
     return "\n".join(out)
 

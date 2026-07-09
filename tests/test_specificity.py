@@ -177,7 +177,7 @@ def test_priming_site_stats_warn_high_copy_hits(monkeypatch=None):
     try:
         sites, stats = priming_sites_with_stats(
             "ACGTACGTACGTACGTACGT", "F", "db",
-            SpecParams(max_target_seqs=10, high_copy_hit_threshold=2), "blastn")
+            SpecParams(max_target_seqs=10, high_copy_site_threshold=2), "blastn")
     finally:
         S._run_blast = old
     assert len(sites) == 2

@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed / Fixed
+- Primer-dimer / hairpin analysis now runs in **`design` and `tile`** too (not
+  only `assay` / `multiplex`), affecting rank, and dimer ΔG/Tm are shown in the
+  text, TSV and CSV outputs.
+- The **high-copy-primer warning** now triggers on the number of *priming sites*
+  (`--high-copy-site-threshold`, default 500) instead of raw BLAST HSP count, so
+  a specific primer on a large genome is no longer falsely flagged
+  repeat-sensitive.
+
 ### Added
 - **Primer-dimer / hairpin / multiplex analysis** (`primer3-py`): per-pair
   hairpin, self-dimer and forward×reverse cross-dimer scoring (ΔG + Tm), folded

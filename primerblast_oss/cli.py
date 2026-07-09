@@ -1,10 +1,13 @@
 """Command-line interface for primerblast-oss.
 
 Subcommands:
-  design   region + product size  ->  primer pairs, checked for specificity
-  check    primer sequences        ->  all predicted PCR products (in-silico PCR)
-  tile     region + amplicon size  ->  overlapping amplicons covering the whole region
-  makedb   FASTA                    ->  BLAST nucleotide database
+  design     region + product size  ->  primer pairs, checked for specificity
+  check      primer sequences       ->  all predicted PCR products (in-silico PCR)
+  multiplex  primer pool            ->  primer-dimer compatibility across the pool
+  tile       region + amplicon size ->  overlapping amplicons covering a whole region
+  assay      gene / interval / SNP  ->  design + specificity + variants + CAPS + risk
+  markers    QTL interval           ->  evenly spaced markers across the interval
+  makedb     FASTA                  ->  BLAST nucleotide database
 """
 from __future__ import annotations
 
@@ -67,6 +70,7 @@ def _spec_from_args(a) -> SpecParams:
         max_target_seqs=max_target_seqs,
         num_threads=a.num_threads,
         high_copy_hit_threshold=a.high_copy_hit_threshold,
+        high_copy_site_threshold=a.high_copy_site_threshold,
     )
 
 
@@ -91,7 +95,9 @@ def _add_spec_args(ap: argparse.ArgumentParser) -> None:
     s.add_argument("--num-threads", type=int, default=4,
                    help="blastn worker threads")
     s.add_argument("--high-copy-hit-threshold", type=int, default=10000,
-                   help="raw BLAST HSP count that triggers a high-copy primer warning")
+                   help="raw BLAST HSP count reported per primer (informational)")
+    s.add_argument("--high-copy-site-threshold", type=int, default=500,
+                   help="priming-site count that flags a repeat-prone primer")
     s.add_argument("--exhaustive", action="store_true",
                    help="use a higher BLAST hit cap (50000 unless --max-target-seqs is set)")
     s.add_argument("--no-3prime-terminal", action="store_true",
@@ -184,12 +190,14 @@ def _cmd_design(a) -> int:
     )
     sp = _spec_from_args(a)
     genome, tp, gate = _thermo_setup(a)
+    dimer_params = _dimer_params_from_args(a)
     outs = []
     for tid, seq in _templates(a):
         res = run_pipeline(tid, seq, a.db, design_params=dp, spec_params=sp,
                            primer3_bin=a.primer3_bin, blastn_bin=a.blastn_bin,
                            size_tolerance=a.size_tolerance,
-                           genome=genome, thermo_params=tp, thermo_gate=gate)
+                           genome=genome, thermo_params=tp, thermo_gate=gate,
+                           dimer_params=dimer_params)
         outs.append(R.to_json(res) if a.format == "json"
                     else R.to_tsv(res) if a.format == "tsv"
                     else R.to_text(res))
@@ -279,6 +287,7 @@ def _cmd_tile(a) -> int:
     )
     sp = _spec_from_args(a)
     genome, tp, gate = _thermo_setup(a)
+    dimer_params = _dimer_params_from_args(a)
     outs = []
     for tid, seq in _templates(a):
         tiles = design_tiling(
@@ -289,6 +298,7 @@ def _cmd_tile(a) -> int:
             size_tolerance=a.size_tolerance,
             candidates_per_tile=a.candidates_per_tile,
             genome=genome, thermo_params=tp, thermo_gate=gate,
+            dimer_params=dimer_params,
         )
         from .design import clean_sequence
         reg = region or (0, len(clean_sequence(seq)) - 1)
@@ -462,6 +472,7 @@ def build_parser() -> argparse.ArgumentParser:
     d.add_argument("--target", help="focus region on template: start,length (0-based)")
     _add_design_knobs(d)
     _add_spec_args(d)
+    _add_dimer_args(d)
     _add_out_args(d, formats=("text", "json", "tsv"))
     d.set_defaults(func=_cmd_design)
 
@@ -497,6 +508,7 @@ def build_parser() -> argparse.ArgumentParser:
                    help="primer pairs evaluated per window (lower = faster)")
     _add_design_knobs(t)
     _add_spec_args(t)
+    _add_dimer_args(t)
     _add_out_args(t, formats=("text", "json"))
     t.set_defaults(func=_cmd_tile)
 

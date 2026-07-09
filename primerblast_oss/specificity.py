@@ -37,7 +37,8 @@ class SpecParams:
     word_size: int = 7
     evalue: float = 30000.0
     max_target_seqs: int = 5000
-    high_copy_hit_threshold: int = 10000
+    high_copy_hit_threshold: int = 10000   # raw HSP count (reported, informational)
+    high_copy_site_threshold: int = 500    # priming-site count that flags a repeat-prone primer
     dust: str = "no"
     reward: int = 1
     penalty: int = -1
@@ -246,7 +247,9 @@ def priming_sites_with_stats(
         priming_sites=len(sites),
         unique_subjects=len(subjects),
         near_target_limit=len(subjects) >= max(1, int(sp.max_target_seqs * 0.95)),
-        high_copy=raw_hits >= sp.high_copy_hit_threshold,
+        # repeat-prone = many *priming* sites (3'-anchored), not raw seed HSPs,
+        # so a specific primer on a large genome is not falsely flagged.
+        high_copy=len(sites) >= sp.high_copy_site_threshold,
     )
     return sites, stats
 
