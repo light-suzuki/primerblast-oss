@@ -17,11 +17,14 @@ from .pipeline import _score_pair
 
 
 def _evaluate(pair: PrimerPair, databases: Sequence[str], sp: SpecParams,
-              blastn_bin: Optional[str], size_tolerance: int) -> None:
+              blastn_bin: Optional[str], size_tolerance: int,
+              genome=None, thermo_params=None, thermo_gate: bool = True) -> None:
     per_db = [
         pair_specificity(pair.forward, pair.reverse, db,
                          designed_size=pair.product_size, sp=sp,
-                         blastn_bin=blastn_bin, size_tolerance=size_tolerance)
+                         blastn_bin=blastn_bin, size_tolerance=size_tolerance,
+                         genome=genome, thermo_params=thermo_params,
+                         thermo_gate=thermo_gate)
         for db in databases
     ]
     _score_pair(pair, per_db)
@@ -42,6 +45,9 @@ def design_tiling(
     size_tolerance: int = 10,
     candidates_per_tile: int = 8,
     max_tiles: int = 200,
+    genome=None,
+    thermo_params=None,
+    thermo_gate: bool = True,
 ) -> List[Dict]:
     seq = clean_sequence(sequence)
     L = len(seq)
@@ -89,7 +95,9 @@ def design_tiling(
             continue
 
         for pair in pairs:
-            _evaluate(pair, databases, sp, blastn_bin, size_tolerance)
+            _evaluate(pair, databases, sp, blastn_bin, size_tolerance,
+                      genome=genome, thermo_params=thermo_params,
+                      thermo_gate=thermo_gate)
 
         # prefer specific, then gel-resolvable; then position: normally the
         # leftmost amplicon (walks coverage forward), but in the final

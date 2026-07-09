@@ -81,7 +81,8 @@ def reclassify_by_anchor(design_res: Dict, chrom: str, ext_start: int, ext_end: 
 
 def analyze_pair(pair, per_db: Sequence[Dict], design_db: str,
                  template: Optional[Template], variants: Sequence,
-                 caps_info: Optional[Dict], gel_min_gap: int = 50) -> Dict:
+                 caps_info: Optional[Dict], gel_min_gap: int = 50,
+                 dimer_params=None) -> Dict:
     """Build a full summary dict for one designed pair."""
     len_f, len_r = len(pair.forward), len(pair.reverse)
     design_res = next((d for d in per_db if d["db"] == design_db), per_db[0])
@@ -130,7 +131,8 @@ def analyze_pair(pair, per_db: Sequence[Dict], design_db: str,
     conservation = conservation_from_per_db(per_db, pair.product_size)
 
     from . import dimers as _dimers
-    dimer = _dimers.analyze_pair(pair.forward, pair.reverse) if _dimers.available() else None
+    dimer = (_dimers.analyze_pair(pair.forward, pair.reverse, dimer_params)
+             if _dimers.available() else None)
 
     risk = assess_risk(
         n_comigrating_offtarget=design_res.get("n_comigrating", 0),
@@ -223,6 +225,7 @@ def run_assay(
     blastn_bin: Optional[str] = None,
     thermo_params=None,
     thermo_gate: bool = True,
+    dimer_params=None,
 ) -> Dict:
     """Design and fully evaluate primers for one target region."""
     template = extract_template(genome, region, flank=flank)
@@ -256,7 +259,7 @@ def run_assay(
                 caps_info = build_caps(template, pair, snp_local, caps_snp["alt"])
         pair_dicts.append(
             analyze_pair(pair, per_db, design_db, template, variants, caps_info,
-                         gel_min_gap=gel_min_gap))
+                         gel_min_gap=gel_min_gap, dimer_params=dimer_params))
 
     # order by risk then specificity score
     order = {"low": 0, "medium": 1, "high": 2}

@@ -309,6 +309,9 @@ Contributions toward any of these are welcome.
 | `--high-copy-hit-threshold` | raw BLAST HSP count that triggers a repeat-sensitivity warning | 10000 |
 | `--gel-min-gap` | size gap (bp) to resolve two products on a gel | 50 |
 | `--no-3prime-terminal` | allow a mismatched 3' terminal base | off |
+| `--genome-fasta` | enable primer3-py thermodynamic site scoring for design/check/tile | off |
+| `--min-anneal-tm` / `--max-3p-dg` | thermodynamic off-target gate thresholds | 40 / -5 |
+| `--dimer-dg-warn` / `--dimer-tm-warn` | primer-dimer/hairpin warning thresholds for assay/multiplex | -8 / 45 |
 | `--format` | `text` \| `json` \| `tsv` (design only) | text |
 
 ### Verdicts & scoring

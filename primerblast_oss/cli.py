@@ -128,6 +128,25 @@ def _thermo_setup(a, genome=None):
     return genome, tp, (not getattr(a, "no_thermo_gate", False))
 
 
+def _add_dimer_args(ap: argparse.ArgumentParser) -> None:
+    d = ap.add_argument_group("primer-dimer / hairpin (optional, needs primer3-py)")
+    d.add_argument("--dimer-dg-warn", type=float, default=-8.0,
+                   help="flag structures with ΔG at or below this kcal/mol")
+    d.add_argument("--dimer-tm-warn", type=float, default=45.0,
+                   help="flag weaker structures at or above this Tm")
+    d.add_argument("--dimer-dg-at-tm-warn", type=float, default=-4.0,
+                   help="ΔG floor paired with --dimer-tm-warn")
+
+
+def _dimer_params_from_args(a):
+    from .dimers import DimerParams
+    return DimerParams(
+        dg_warn=a.dimer_dg_warn,
+        tm_warn=a.dimer_tm_warn,
+        dg_at_tm_warn=a.dimer_dg_at_tm_warn,
+    )
+
+
 def _add_out_args(ap: argparse.ArgumentParser, formats=("text", "json", "tsv")) -> None:
     o = ap.add_argument_group("output")
     o.add_argument("--format", choices=list(formats), default="text")
@@ -225,7 +244,7 @@ def _cmd_multiplex(a) -> int:
     if not dimers.available():
         raise SystemExit("multiplex: needs primer3-py (pip install .[thermo])")
     primers = _collect_primers(a)
-    dp = dimers.DimerParams()
+    dp = _dimer_params_from_args(a)
     res = dimers.analyze_multiplex(list(primers.items()), dp)
     if a.format == "json":
         out = {
@@ -259,6 +278,7 @@ def _cmd_tile(a) -> int:
         min_gc=a.min_gc, max_gc=a.max_gc,
     )
     sp = _spec_from_args(a)
+    genome, tp, gate = _thermo_setup(a)
     outs = []
     for tid, seq in _templates(a):
         tiles = design_tiling(
@@ -268,6 +288,7 @@ def _cmd_tile(a) -> int:
             primer3_bin=a.primer3_bin, blastn_bin=a.blastn_bin,
             size_tolerance=a.size_tolerance,
             candidates_per_tile=a.candidates_per_tile,
+            genome=genome, thermo_params=tp, thermo_gate=gate,
         )
         from .design import clean_sequence
         reg = region or (0, len(clean_sequence(seq)) - 1)
@@ -342,11 +363,13 @@ def _cmd_assay(a) -> int:
     sp = _spec_from_args(a)
     variants = _load_variants(a.vcf)
     _g, tp, gate = _thermo_setup(a, genome=genome)
+    dimer_params = _dimer_params_from_args(a)
 
     result = run_assay(region, genome, a.db, flank=a.flank, design_params=dp,
                        spec_params=sp, variants=variants, caps_snp=caps_snp,
                        primer3_bin=a.primer3_bin, blastn_bin=a.blastn_bin,
-                       thermo_params=tp, thermo_gate=gate)
+                       thermo_params=tp, thermo_gate=gate,
+                       dimer_params=dimer_params)
     prov = make_manifest({"design": dp.__dict__, "spec": sp.__dict__, "flank": a.flank},
                          a.db, template_info=result["target"])
     _emit(_render_assay(result, a.format, prov), a.out)
@@ -459,6 +482,7 @@ def build_parser() -> argparse.ArgumentParser:
     mx.add_argument("--reverse")
     mx.add_argument("--primer", action="append", help="NAME=SEQ or SEQ (repeatable)")
     mx.add_argument("--primers-fasta")
+    _add_dimer_args(mx)
     _add_out_args(mx, formats=("text", "json"))
     mx.set_defaults(func=_cmd_multiplex)
 
@@ -493,6 +517,7 @@ def build_parser() -> argparse.ArgumentParser:
     y.add_argument("--num-return", type=int, default=10)
     _add_design_knobs(y)
     _add_spec_args(y)
+    _add_dimer_args(y)
     _add_out_args(y, formats=("text", "json", "csv", "bed", "order", "html"))
     y.set_defaults(func=_cmd_assay)
 
