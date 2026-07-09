@@ -1,134 +1,170 @@
 <style>
 :root {
-  --bg: #f6f7f9;
+  --bg: #f3f6f4;
+  --bg-2: #e9f0ec;
   --panel: #ffffff;
-  --ink: #1b2430;
-  --muted: #6b7686;
-  --line: #e2e6ec;
+  --ink: #16241d;
+  --muted: #64756c;
+  --line: #e2e8e4;
+  --line-strong: #cdd8d1;
   --accent: #2f6f4f;
+  --accent-2: #3d8b64;
+  --accent-soft: #e9f3ed;
   --accent-ink: #ffffff;
   --chip: #eef2f0;
-  --code-bg: #0f172a;
-  --code-ink: #e2e8f0;
+  --code-bg: #0f1b17;
+  --code-ink: #d9e8e0;
+  --shadow: 0 1px 2px rgba(20,40,30,.04), 0 8px 24px rgba(20,40,30,.06);
+  --shadow-sm: 0 1px 2px rgba(20,40,30,.05), 0 2px 8px rgba(20,40,30,.05);
   --a: #1f7a4d; --b: #2f7fb0; --c: #b8860b; --d: #b23a48;
   --low: #2f8f5b; --med: #c8891a; --high: #c0392b;
+  --radius: 14px;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #12161c; --panel: #1b212b; --ink: #e7ecf3; --muted: #9aa6b6;
-    --line: #2b333f; --accent: #3f9d70; --chip: #232c38;
-    --code-bg: #0b1020; --code-ink: #d7e0ee;
+    --bg: #10161300; --bg-2: #131c18; --panel: #182019; --ink: #e7efe9; --muted: #9aaaa0;
+    --line: #27332c; --line-strong: #33423a; --accent: #4aa87a; --accent-2: #5cc08f;
+    --accent-soft: #1c2a22; --chip: #202b24; --code-bg: #0a120e; --code-ink: #d2e4d9;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 28px rgba(0,0,0,.35);
+    --shadow-sm: 0 1px 2px rgba(0,0,0,.25), 0 2px 10px rgba(0,0,0,.28);
   }
+  body { background: #0f1512; }
 }
 * { box-sizing: border-box; }
 body {
   margin: 0; background: var(--bg); color: var(--ink);
-  font: 14px/1.5 system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif;
+  font: 14px/1.6 system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
-.app { max-width: 1120px; margin: 0 auto; padding: 16px; }
+.app { max-width: 1140px; margin: 0 auto; padding: 0 16px 48px; }
+a { color: var(--accent); }
 
-.topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-.brand { display: flex; gap: 12px; align-items: center; }
-.logo { font-size: 30px; }
-h1 { margin: 0; font-size: 20px; letter-spacing: .2px; }
-.subtitle { margin: 2px 0 0; color: var(--muted); font-size: 12.5px; }
-.topbar-right { display: flex; align-items: center; gap: 10px; }
-.status { font-size: 12px; padding: 4px 10px; border-radius: 999px; background: var(--chip); }
-.status-ok { color: var(--low); }
-.status-bad { color: var(--high); }
-.lang-btn { border: 1px solid var(--line); background: var(--panel); color: var(--ink);
-  border-radius: 8px; padding: 6px 12px; cursor: pointer; font-weight: 600; }
-.lang-btn:hover { border-color: var(--accent); }
+/* ---------- top bar ---------- */
+.topbar {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  padding: 16px 20px; margin: 16px 0 0;
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
+  border-radius: var(--radius); color: #fff; box-shadow: var(--shadow);
+}
+.brand { display: flex; gap: 14px; align-items: center; min-width: 0; }
+.logo { font-size: 34px; line-height: 1; filter: drop-shadow(0 2px 4px rgba(0,0,0,.2)); }
+h1 { margin: 0; font-size: 21px; letter-spacing: .2px; font-weight: 800; color: #fff; }
+.subtitle { margin: 3px 0 0; color: rgba(255,255,255,.86); font-size: 12.5px; font-weight: 500; }
+.topbar-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.status { font-size: 12px; padding: 5px 11px; border-radius: 999px; background: rgba(255,255,255,.18);
+  color: #fff; font-weight: 600; backdrop-filter: blur(4px); white-space: nowrap; }
+.status-bad { background: rgba(192,57,43,.85); }
+.lang-btn { border: 1px solid rgba(255,255,255,.4); background: rgba(255,255,255,.14); color: #fff;
+  border-radius: 9px; padding: 6px 13px; cursor: pointer; font-weight: 700; font-size: 13px; transition: background .15s; }
+.lang-btn:hover { background: rgba(255,255,255,.28); }
 
+/* ---------- database panel ---------- */
 .db-panel { margin-top: 14px; background: var(--panel); border: 1px solid var(--line);
-  border-radius: 12px; padding: 12px 14px; }
+  border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow-sm); }
 .db-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.db-head strong { font-size: 13.5px; }
 .db-head .hint { color: var(--muted); font-size: 12px; }
 .db-count { color: var(--muted); font-size: 12px; margin-left: auto; }
-.db-list { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.db-count.warn { color: var(--high); font-weight: 700; }
+.db-list { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
 .db-list:empty::before { content: attr(data-empty); color: var(--muted); font-size: 12.5px; }
 .db-chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 13px;
-  border: 1.5px solid var(--line); border-radius: 999px; cursor: pointer; user-select: none;
-  background: var(--bg); font-size: 13px; font-weight: 600; transition: border-color .12s, background .12s; }
+  border: 1.5px solid var(--line-strong); border-radius: 999px; cursor: pointer; user-select: none;
+  background: var(--bg); font-size: 13px; font-weight: 600; transition: border-color .12s, background .12s, color .12s; }
 .db-chip:hover { border-color: var(--accent); }
 .db-chip .tick { font-weight: 800; color: var(--muted); }
 .db-chip.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .db-chip.on .tick { color: var(--accent-ink); }
-.db-name { letter-spacing: .2px; }
 .db-custom { display: flex; gap: 8px; }
 .db-custom input { flex: 1; }
-.mini { border: 1px solid var(--line); background: var(--bg); color: var(--ink);
-  border-radius: 8px; padding: 5px 12px; cursor: pointer; font-size: 12.5px; }
-.mini:hover { border-color: var(--accent); }
-
+.mini { border: 1px solid var(--line-strong); background: var(--bg); color: var(--ink);
+  border-radius: 8px; padding: 6px 13px; cursor: pointer; font-size: 12.5px; font-weight: 600; transition: border-color .12s; }
+.mini:hover { border-color: var(--accent); color: var(--accent); }
 .req-tag { font-size: 10px; font-weight: 800; color: #fff; background: var(--high);
   border-radius: 999px; padding: 2px 9px; letter-spacing: .4px; }
-.db-count.warn { color: var(--high); font-weight: 700; }
 
-.step-guide { margin: 12px 2px 2px; padding: 10px 14px; background: var(--chip); border: 1px solid var(--line);
-  border-radius: 10px; color: var(--ink); font-weight: 600; font-size: 13px; text-align: center; }
-
-.mode-intro { margin: 0 0 16px; padding: 12px 16px; border-left: 4px solid var(--accent);
-  background: var(--chip); border-radius: 0 10px 10px 0; }
-.mode-intro h2 { margin: 0 0 4px; font-size: 15.5px; color: var(--accent); }
-.mode-intro p { margin: 0; color: var(--ink); font-size: 12.5px; line-height: 1.6; }
-
-.tabs { display: flex; gap: 4px; margin: 16px 0 0; flex-wrap: wrap; }
+/* ---------- tabs ---------- */
+.tabs { display: flex; gap: 5px; margin: 18px 0 0; flex-wrap: wrap; }
 .tab { border: 1px solid transparent; background: transparent; color: var(--muted);
-  padding: 9px 14px; border-radius: 10px 10px 0 0; cursor: pointer; font-weight: 600; font-size: 13.5px; }
-.tab:hover { color: var(--ink); }
-.tab.active { color: var(--ink); background: var(--panel); border-color: var(--line); border-bottom-color: var(--panel); }
+  padding: 9px 15px; border-radius: 10px 10px 0 0; cursor: pointer; font-weight: 600; font-size: 13.5px;
+  display: inline-flex; align-items: center; gap: 6px; transition: color .12s, background .12s; }
+.tab .ti { font-size: 15px; }
+.tab:hover { color: var(--ink); background: var(--bg-2); }
+.tab.active { color: var(--accent); background: var(--panel); border-color: var(--line);
+  border-bottom-color: var(--panel); font-weight: 700; }
+.tab.tab-guide.active { color: var(--accent); }
 
-.workspace { background: var(--panel); border: 1px solid var(--line); border-radius: 0 12px 12px 12px; padding: 16px; }
-.panel { display: none; }
+.workspace { background: var(--panel); border: 1px solid var(--line);
+  border-radius: 0 var(--radius) var(--radius) var(--radius); padding: 20px; box-shadow: var(--shadow-sm); }
+.panel { display: none; animation: fade .2s ease; }
 .panel.active { display: block; }
-fieldset { border: 1px solid var(--line); border-radius: 10px; margin: 0 0 14px; padding: 12px 14px 4px;
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px 14px; }
-legend { font-weight: 700; font-size: 12.5px; color: var(--accent); padding: 0 6px; }
-label { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--muted); position: relative; }
+@keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+/* ---------- mode intro ---------- */
+.mode-intro { margin: 0 0 18px; padding: 14px 16px; border-left: 4px solid var(--accent);
+  background: var(--accent-soft); border-radius: 0 10px 10px 0; }
+.mode-intro h2 { margin: 0 0 4px; font-size: 16px; color: var(--accent); font-weight: 800; }
+.mode-intro p { margin: 0; color: var(--ink); font-size: 13px; line-height: 1.65; }
+
+/* ---------- forms ---------- */
+fieldset { border: 1px solid var(--line); border-radius: 12px; margin: 0 0 16px; padding: 14px 16px 6px;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px 16px; }
+legend { font-weight: 800; font-size: 12.5px; color: var(--accent); padding: 0 8px; letter-spacing: .2px; }
+label { display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; color: var(--muted); position: relative; }
 b.req { position: absolute; top: 0; right: 2px; color: var(--high); font-weight: 800; font-size: 14px; line-height: 1; }
 label.full { grid-column: 1 / -1; }
 label.check { flex-direction: row; align-items: center; gap: 8px; color: var(--ink); }
-label > span { font-weight: 600; }
-input, textarea, select { font: inherit; padding: 7px 9px; border: 1px solid var(--line);
-  border-radius: 8px; background: var(--bg); color: var(--ink); width: 100%; }
-input:focus, textarea:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: var(--accent); }
-textarea { resize: vertical; font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; }
+label > span { font-weight: 600; color: var(--ink); }
+input, textarea, select { font: inherit; padding: 8px 10px; border: 1px solid var(--line-strong);
+  border-radius: 9px; background: var(--bg); color: var(--ink); width: 100%; transition: border-color .12s, box-shadow .12s; }
+input:focus, textarea:focus, select:focus { outline: none; border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft); }
+textarea { resize: vertical; font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; font-size: 12.5px; }
 .hint { color: var(--muted); font-style: normal; font-size: 11px; }
 label.check input { width: auto; }
 
-.actions { display: flex; gap: 10px; margin-top: 4px; }
-.run { background: var(--accent); color: var(--accent-ink); border: none; border-radius: 9px;
-  padding: 10px 22px; font-weight: 700; cursor: pointer; font-size: 14px; }
+.actions { display: flex; gap: 10px; margin-top: 6px; align-items: center; flex-wrap: wrap; }
+.run { background: var(--accent); color: var(--accent-ink); border: none; border-radius: 10px;
+  padding: 11px 26px; font-weight: 700; cursor: pointer; font-size: 14px; box-shadow: var(--shadow-sm); transition: background .15s, transform .05s; }
+.run:hover { background: var(--accent-2); }
+.run:active { transform: translateY(1px); }
 .run:disabled { opacity: .6; cursor: progress; }
-.ghost { background: transparent; border: 1px solid var(--line); color: var(--muted);
-  border-radius: 9px; padding: 10px 18px; cursor: pointer; }
+.ghost { background: transparent; border: 1px solid var(--line-strong); color: var(--muted);
+  border-radius: 10px; padding: 11px 18px; cursor: pointer; font-weight: 600; transition: border-color .12s, color .12s; }
+.ghost:hover { border-color: var(--accent); color: var(--accent); }
+.example-btn { background: var(--accent-soft); border: 1px dashed var(--accent); color: var(--accent);
+  border-radius: 10px; padding: 11px 16px; cursor: pointer; font-weight: 700; font-size: 12.5px; transition: background .12s; margin-right: auto; }
+.example-btn:hover { background: var(--panel); }
 
 details.adv { grid-column: 1/-1; }
-details.adv > summary { cursor: pointer; font-weight: 700; color: var(--accent); font-size: 12.5px; padding: 4px 0; }
-details.adv .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px,1fr)); gap: 10px 14px; margin-top: 10px; }
+details.adv > summary { cursor: pointer; font-weight: 700; color: var(--accent); font-size: 12.5px; padding: 6px 0; list-style: none; }
+details.adv > summary::-webkit-details-marker { display: none; }
+details.adv > summary::before { content: "▸ "; color: var(--accent); }
+details.adv[open] > summary::before { content: "▾ "; }
+details.adv .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px,1fr)); gap: 12px 16px; margin-top: 12px; }
 
-.results { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 16px; }
-.results-empty { color: var(--muted); text-align: center; padding: 24px; }
+/* ---------- results ---------- */
+.results { margin-top: 20px; border-top: 1px solid var(--line); padding-top: 18px; }
+.results-empty { color: var(--muted); text-align: center; padding: 28px; }
 .spinner { display: inline-block; width: 15px; height: 15px; border: 2px solid var(--line);
   border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; vertical-align: -3px; margin-right: 8px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .err { background: color-mix(in srgb, var(--high) 12%, transparent); border: 1px solid var(--high);
-  color: var(--high); border-radius: 8px; padding: 12px 14px; white-space: pre-wrap;
+  color: var(--high); border-radius: 10px; padding: 13px 15px; white-space: pre-wrap;
   font-family: ui-monospace, monospace; font-size: 12px; }
-
 .result-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
-.result-head h3 { margin: 0; font-size: 15px; }
+.result-head h3 { margin: 0; font-size: 15.5px; }
 .result-head .meta { color: var(--muted); font-size: 12.5px; }
 
 table { border-collapse: collapse; width: 100%; font-size: 12.5px; margin: 6px 0 14px; }
-th, td { border-bottom: 1px solid var(--line); padding: 7px 9px; text-align: left; vertical-align: top; }
+th, td { border-bottom: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
 th { color: var(--muted); font-weight: 700; font-size: 11.5px; text-transform: uppercase; letter-spacing: .3px; }
-tbody tr:hover { background: var(--chip); }
+tbody tr:hover { background: var(--bg-2); }
 .seqmono { font-family: ui-monospace, monospace; }
-.tbl-wrap { overflow-x: auto; }
+.tbl-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
+.tbl-wrap table { margin: 0; }
 
-.badge { display: inline-block; padding: 2px 9px; border-radius: 999px; font-weight: 800; font-size: 11px; color: #fff; }
+.badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-weight: 800; font-size: 11px; color: #fff; }
 .rank-A, .v-specific { background: var(--a); }
 .rank-B, .v-gel { background: var(--b); }
 .rank-C { background: var(--c); }
@@ -136,7 +172,7 @@ tbody tr:hover { background: var(--chip); }
 .risk-low { background: var(--low); } .risk-med { background: var(--med); } .risk-high { background: var(--high); }
 .badge.small { font-size: 10px; padding: 1px 7px; }
 
-.pair-card { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; }
+.pair-card { border: 1px solid var(--line); border-radius: 12px; padding: 13px 15px; margin-bottom: 12px; box-shadow: var(--shadow-sm); }
 .pair-card > summary { cursor: pointer; list-style: none; }
 .pair-card > summary::-webkit-details-marker { display: none; }
 .pair-summary { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
@@ -144,25 +180,83 @@ tbody tr:hover { background: var(--chip); }
 .pair-summary .seqmono { font-size: 12px; }
 .subline { color: var(--muted); font-size: 11.5px; margin-top: 2px; }
 
-.legend { margin: 0 0 14px; background: var(--chip); border: 1px solid var(--line); border-radius: 10px; padding: 2px 14px; }
-.legend > summary { cursor: pointer; font-weight: 700; color: var(--accent); font-size: 12.5px; padding: 9px 0; }
+.legend { margin: 0 0 16px; background: var(--accent-soft); border: 1px solid var(--line); border-radius: 10px; padding: 2px 15px; }
+.legend > summary { cursor: pointer; font-weight: 700; color: var(--accent); font-size: 12.5px; padding: 10px 0; }
 .legend > summary::before { content: "ⓘ "; }
-.legend p { margin: 2px 0 10px; color: var(--ink); font-size: 12px; line-height: 1.6; }
-.verdict-plain { margin: 8px 0 0; font-size: 12.5px; font-weight: 600; padding: 7px 11px; border-radius: 8px; }
+.legend p { margin: 2px 0 10px; color: var(--ink); font-size: 12px; line-height: 1.65; }
+.verdict-plain { margin: 8px 0 0; font-size: 12.5px; font-weight: 600; padding: 8px 12px; border-radius: 9px; }
 .pv-ok { background: color-mix(in srgb, var(--a) 14%, transparent); color: var(--a); }
 .pv-warn { background: color-mix(in srgb, var(--c) 18%, transparent); color: var(--c); }
 .pv-bad { background: color-mix(in srgb, var(--high) 14%, transparent); color: var(--high); }
 .meta [title], .badge[title] { cursor: help; }
-
-pre.ascii, pre.explain { background: var(--code-bg); color: var(--code-ink); border-radius: 8px;
-  padding: 12px 14px; overflow-x: auto; font-family: ui-monospace, monospace; font-size: 11.5px; line-height: 1.45; }
-
+pre.ascii, pre.explain { background: var(--code-bg); color: var(--code-ink); border-radius: 10px;
+  padding: 13px 15px; overflow-x: auto; font-family: ui-monospace, monospace; font-size: 11.5px; line-height: 1.5; }
 .downloads { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 6px 0 16px; }
 .downloads strong { font-size: 12px; color: var(--muted); margin-right: 4px; }
-.dlbtn { border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 8px;
-  padding: 5px 12px; cursor: pointer; font-size: 12px; text-decoration: none; }
+.dlbtn { border: 1px solid var(--line-strong); background: var(--bg); color: var(--ink); border-radius: 8px;
+  padding: 6px 13px; cursor: pointer; font-size: 12px; text-decoration: none; font-weight: 600; transition: border-color .12s, color .12s; }
 .dlbtn:hover { border-color: var(--accent); color: var(--accent); }
 
+/* ---------- GUIDE page ---------- */
+.guide { max-width: 900px; }
+.guide-hero { text-align: center; padding: 8px 0 22px; }
+.guide-hero h2 { margin: 0 0 8px; font-size: 24px; font-weight: 800; letter-spacing: .2px; }
+.guide-hero p { margin: 0 auto; max-width: 640px; color: var(--muted); font-size: 14px; line-height: 1.7; }
+.guide h3 { font-size: 16.5px; margin: 30px 0 12px; padding-bottom: 8px; border-bottom: 2px solid var(--accent-soft); font-weight: 800; }
+.guide h3 .gi { margin-right: 8px; }
+
+.steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.step { position: relative; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 16px 16px 14px; }
+.step .num { position: absolute; top: -12px; left: 14px; width: 26px; height: 26px; border-radius: 50%;
+  background: var(--accent); color: #fff; font-weight: 800; font-size: 13px; display: grid; place-items: center; box-shadow: var(--shadow-sm); }
+.step h4 { margin: 8px 0 5px; font-size: 14px; font-weight: 800; }
+.step p { margin: 0; font-size: 12.5px; color: var(--muted); line-height: 1.6; }
+
+.mode-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
+.mode-card { text-align: left; background: var(--bg); border: 1px solid var(--line); border-radius: 12px;
+  padding: 16px; cursor: pointer; transition: border-color .14s, transform .06s, box-shadow .14s; font: inherit; color: inherit; }
+.mode-card:hover { border-color: var(--accent); box-shadow: var(--shadow-sm); transform: translateY(-2px); }
+.mode-card .mc-top { display: flex; align-items: center; gap: 9px; margin-bottom: 7px; }
+.mode-card .mc-ico { font-size: 22px; }
+.mode-card .mc-name { font-weight: 800; font-size: 14.5px; }
+.mode-card .mc-when { display: inline-block; font-size: 10.5px; font-weight: 700; color: var(--accent);
+  background: var(--accent-soft); border-radius: 999px; padding: 2px 9px; margin-bottom: 8px; }
+.mode-card p { margin: 0; font-size: 12.5px; color: var(--muted); line-height: 1.6; }
+.mode-card .mc-go { margin-top: 9px; font-size: 12px; font-weight: 700; color: var(--accent); }
+
+.info-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.info-box { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 15px 17px; }
+.info-box h4 { margin: 0 0 8px; font-size: 13.5px; font-weight: 800; }
+.info-box ul { margin: 0; padding-left: 18px; }
+.info-box li { font-size: 12.5px; color: var(--ink); margin-bottom: 6px; line-height: 1.55; }
+.info-box li .k { font-weight: 700; }
+.info-box code { background: var(--chip); border-radius: 5px; padding: 1px 6px; font-size: 11.5px;
+  font-family: ui-monospace, monospace; color: var(--accent); }
+
+.glossary { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 24px; }
+.gl { border-bottom: 1px solid var(--line); padding: 9px 2px; }
+.gl dt { font-weight: 800; font-size: 13px; margin-bottom: 3px; }
+.gl dd { margin: 0; font-size: 12px; color: var(--muted); line-height: 1.55; }
+
+.faq details { border: 1px solid var(--line); border-radius: 10px; margin-bottom: 8px; background: var(--bg); }
+.faq summary { cursor: pointer; font-weight: 700; font-size: 13px; padding: 12px 15px; list-style: none; }
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::before { content: "＋ "; color: var(--accent); font-weight: 800; }
+.faq details[open] summary::before { content: "− "; }
+.faq details p { margin: 0; padding: 0 15px 14px; font-size: 12.5px; color: var(--muted); line-height: 1.65; }
+.faq details p code { background: var(--chip); border-radius: 5px; padding: 1px 6px; font-family: ui-monospace, monospace; font-size: 11.5px; color: var(--accent); }
+
+.guide-cta { text-align: center; margin: 28px 0 4px; }
+.guide-cta button { background: var(--accent); color: #fff; border: none; border-radius: 10px;
+  padding: 12px 30px; font-weight: 800; font-size: 14px; cursor: pointer; box-shadow: var(--shadow-sm); }
+.guide-cta button:hover { background: var(--accent-2); }
+.guide-foot { text-align: center; color: var(--muted); font-size: 12px; margin-top: 22px; }
+
+@media (max-width: 720px) {
+  .steps { grid-template-columns: 1fr; }
+  .info-cols, .glossary { grid-template-columns: 1fr; }
+  h1 { font-size: 18px; }
+}
 </style>
 <div class="app">
   <header class="topbar">
@@ -194,20 +288,113 @@ pre.ascii, pre.explain { background: var(--code-bg); color: var(--code-ink); bor
     </div>
   </section>
 
-  <div class="step-guide" data-i18n="step.guide"></div>
-
   <nav class="tabs" id="tabs">
-    <button class="tab active" data-tab="design" data-i18n="tab.design"></button>
-    <button class="tab" data-tab="check" data-i18n="tab.check"></button>
-    <button class="tab" data-tab="tile" data-i18n="tab.tile"></button>
-    <button class="tab" data-tab="assay" data-i18n="tab.assay"></button>
-    <button class="tab" data-tab="markers" data-i18n="tab.markers"></button>
-    <button class="tab" data-tab="makedb" data-i18n="tab.makedb"></button>
+    <button class="tab tab-guide active" data-tab="guide"><span class="ti">📖</span><span data-i18n="tab.guide"></span></button>
+    <button class="tab" data-tab="design"><span class="ti">🎯</span><span data-i18n="tab.design"></span></button>
+    <button class="tab" data-tab="check"><span class="ti">🧪</span><span data-i18n="tab.check"></span></button>
+    <button class="tab" data-tab="tile"><span class="ti">🧱</span><span data-i18n="tab.tile"></span></button>
+    <button class="tab" data-tab="assay"><span class="ti">🌱</span><span data-i18n="tab.assay"></span></button>
+    <button class="tab" data-tab="markers"><span class="ti">📍</span><span data-i18n="tab.markers"></span></button>
+    <button class="tab" data-tab="makedb"><span class="ti">🗄️</span><span data-i18n="tab.makedb"></span></button>
   </nav>
 
   <div class="workspace">
+    <!-- GUIDE / はじめに -->
+    <section class="panel guide active" data-panel="guide">
+      <div class="guide-hero">
+        <h2 data-i18n="g.hero.t"></h2>
+        <p data-i18n="g.hero.d"></p>
+      </div>
+
+      <h3><span class="gi">🚦</span><span data-i18n="g.steps.t"></span></h3>
+      <div class="steps">
+        <div class="step"><span class="num">1</span><h4 data-i18n="g.step1.t"></h4><p data-i18n="g.step1.d"></p></div>
+        <div class="step"><span class="num">2</span><h4 data-i18n="g.step2.t"></h4><p data-i18n="g.step2.d"></p></div>
+        <div class="step"><span class="num">3</span><h4 data-i18n="g.step3.t"></h4><p data-i18n="g.step3.d"></p></div>
+      </div>
+
+      <h3><span class="gi">🧭</span><span data-i18n="g.modes.t"></span></h3>
+      <div class="mode-grid">
+        <button class="mode-card" data-goto="design">
+          <div class="mc-top"><span class="mc-ico">🎯</span><span class="mc-name" data-i18n="tab.design"></span></div>
+          <span class="mc-when" data-i18n="g.m.design.when"></span>
+          <p data-i18n="g.m.design.d"></p><div class="mc-go" data-i18n="g.open"></div>
+        </button>
+        <button class="mode-card" data-goto="check">
+          <div class="mc-top"><span class="mc-ico">🧪</span><span class="mc-name" data-i18n="tab.check"></span></div>
+          <span class="mc-when" data-i18n="g.m.check.when"></span>
+          <p data-i18n="g.m.check.d"></p><div class="mc-go" data-i18n="g.open"></div>
+        </button>
+        <button class="mode-card" data-goto="tile">
+          <div class="mc-top"><span class="mc-ico">🧱</span><span class="mc-name" data-i18n="tab.tile"></span></div>
+          <span class="mc-when" data-i18n="g.m.tile.when"></span>
+          <p data-i18n="g.m.tile.d"></p><div class="mc-go" data-i18n="g.open"></div>
+        </button>
+        <button class="mode-card" data-goto="assay">
+          <div class="mc-top"><span class="mc-ico">🌱</span><span class="mc-name" data-i18n="tab.assay"></span></div>
+          <span class="mc-when" data-i18n="g.m.assay.when"></span>
+          <p data-i18n="g.m.assay.d"></p><div class="mc-go" data-i18n="g.open"></div>
+        </button>
+        <button class="mode-card" data-goto="markers">
+          <div class="mc-top"><span class="mc-ico">📍</span><span class="mc-name" data-i18n="tab.markers"></span></div>
+          <span class="mc-when" data-i18n="g.m.markers.when"></span>
+          <p data-i18n="g.m.markers.d"></p><div class="mc-go" data-i18n="g.open"></div>
+        </button>
+        <button class="mode-card" data-goto="makedb">
+          <div class="mc-top"><span class="mc-ico">🗄️</span><span class="mc-name" data-i18n="tab.makedb"></span></div>
+          <span class="mc-when" data-i18n="g.m.makedb.when"></span>
+          <p data-i18n="g.m.makedb.d"></p><div class="mc-go" data-i18n="g.open"></div>
+        </button>
+      </div>
+
+      <h3><span class="gi">✅</span><span data-i18n="g.need.t"></span></h3>
+      <div class="info-cols">
+        <div class="info-box">
+          <h4 data-i18n="g.need.tools.t"></h4>
+          <ul>
+            <li data-i18n-html="g.need.tools.1"></li>
+            <li data-i18n-html="g.need.tools.2"></li>
+            <li data-i18n-html="g.need.tools.3"></li>
+          </ul>
+        </div>
+        <div class="info-box">
+          <h4 data-i18n="g.need.data.t"></h4>
+          <ul>
+            <li data-i18n-html="g.need.data.1"></li>
+            <li data-i18n-html="g.need.data.2"></li>
+            <li data-i18n-html="g.need.data.3"></li>
+          </ul>
+        </div>
+      </div>
+
+      <h3><span class="gi">📚</span><span data-i18n="g.gloss.t"></span></h3>
+      <dl class="glossary">
+        <div class="gl"><dt data-i18n="g.gl.primer.t"></dt><dd data-i18n="g.gl.primer.d"></dd></div>
+        <div class="gl"><dt data-i18n="g.gl.amplicon.t"></dt><dd data-i18n="g.gl.amplicon.d"></dd></div>
+        <div class="gl"><dt data-i18n="g.gl.template.t"></dt><dd data-i18n="g.gl.template.d"></dd></div>
+        <div class="gl"><dt data-i18n="g.gl.db.t"></dt><dd data-i18n="g.gl.db.d"></dd></div>
+        <div class="gl"><dt data-i18n="g.gl.spec.t"></dt><dd data-i18n="g.gl.spec.d"></dd></div>
+        <div class="gl"><dt data-i18n="g.gl.offtarget.t"></dt><dd data-i18n="g.gl.offtarget.d"></dd></div>
+        <div class="gl"><dt data-i18n="g.gl.tm.t"></dt><dd data-i18n="g.gl.tm.d"></dd></div>
+        <div class="gl"><dt data-i18n="g.gl.caps.t"></dt><dd data-i18n="g.gl.caps.d"></dd></div>
+      </dl>
+
+      <h3><span class="gi">💡</span><span data-i18n="g.faq.t"></span></h3>
+      <div class="faq">
+        <details><summary data-i18n="g.faq.1.q"></summary><p data-i18n-html="g.faq.1.a"></p></details>
+        <details><summary data-i18n="g.faq.2.q"></summary><p data-i18n-html="g.faq.2.a"></p></details>
+        <details><summary data-i18n="g.faq.3.q"></summary><p data-i18n-html="g.faq.3.a"></p></details>
+        <details><summary data-i18n="g.faq.4.q"></summary><p data-i18n-html="g.faq.4.a"></p></details>
+      </div>
+
+      <div class="guide-cta">
+        <button data-goto="design" data-i18n="g.cta"></button>
+      </div>
+      <p class="guide-foot" data-i18n-html="g.foot"></p>
+    </section>
+
     <!-- DESIGN -->
-    <form class="panel active" data-panel="design" data-mode="design">
+    <form class="panel" data-panel="design" data-mode="design">
       <div class="mode-intro"><h2 data-i18n="intro.design.t"></h2><p data-i18n="intro.design.d"></p></div>
       <fieldset><legend data-i18n="grp.template"></legend>
         <label class="full"><span data-i18n="f.src"></span>
@@ -240,7 +427,9 @@ pre.ascii, pre.explain { background: var(--code-bg); color: var(--code-ink); bor
       </fieldset>
       <div data-knobs></div>
       <div data-spec></div>
-      <div class="actions"><button type="submit" class="run" data-i18n="btn.run"></button>
+      <div class="actions">
+        <button type="button" class="example-btn" data-example="design" data-i18n="btn.example"></button>
+        <button type="submit" class="run" data-i18n="btn.run"></button>
         <button type="reset" class="ghost" data-i18n="btn.reset"></button></div>
     </form>
 
@@ -254,7 +443,9 @@ pre.ascii, pre.explain { background: var(--code-bg); color: var(--code-ink); bor
           <textarea name="primers" rows="3" placeholder="P3=ACGT...&#10;GGATCC..."></textarea></label>
       </fieldset>
       <div data-spec></div>
-      <div class="actions"><button type="submit" class="run" data-i18n="btn.run"></button>
+      <div class="actions">
+        <button type="button" class="example-btn" data-example="check" data-i18n="btn.example"></button>
+        <button type="submit" class="run" data-i18n="btn.run"></button>
         <button type="reset" class="ghost" data-i18n="btn.reset"></button></div>
     </form>
 
@@ -273,7 +464,9 @@ pre.ascii, pre.explain { background: var(--code-bg); color: var(--code-ink); bor
       </fieldset>
       <div data-knobs></div>
       <div data-spec></div>
-      <div class="actions"><button type="submit" class="run" data-i18n="btn.run"></button>
+      <div class="actions">
+        <button type="button" class="example-btn" data-example="tile" data-i18n="btn.example"></button>
+        <button type="submit" class="run" data-i18n="btn.run"></button>
         <button type="reset" class="ghost" data-i18n="btn.reset"></button></div>
     </form>
 
@@ -347,18 +540,19 @@ pre.ascii, pre.explain { background: var(--code-bg); color: var(--code-ink); bor
 <script>
 // Bilingual (English / Japanese) string table for the primerblast-oss GUI.
 // Every user-visible label lives here. HTML elements carry data-i18n /
-// data-i18n-ph / data-i18n-title attributes; app.js resolves them at load and
-// on every language switch. Dynamic (result) strings are fetched via t(key).
+// data-i18n-ph / data-i18n-title / data-i18n-html attributes; the controller
+// resolves them at load and on every language switch.
 
 const I18N = {
   en: {
     "app.title": "primerblast-oss",
-    "app.subtitle": "Local Primer-BLAST · design, in-silico PCR, breeding assays — fully offline",
+    "app.subtitle": "Local Primer-BLAST · design, in-silico PCR & breeding assays — fully offline",
     "lang.toggle": "日本語",
     "status.checking": "checking tools…",
     "status.ok": "primer3 + BLAST+ ready",
     "status.missing": "missing tools:",
 
+    "tab.guide": "Guide",
     "tab.design": "Design",
     "tab.check": "In-silico PCR",
     "tab.tile": "Tiling",
@@ -366,11 +560,78 @@ const I18N = {
     "tab.markers": "QTL markers",
     "tab.makedb": "Build DB",
 
-    "step.guide": "① Pick database(s)　→　② Choose a mode　→　③ Fill in & Run",
     "db.required": "required",
     "db.pick": "⚠ Select at least one database to run.",
     "req.mark": "*",
 
+    // ---- guide page ----
+    "g.hero.t": "Design PCR primers that only amplify what you want",
+    "g.hero.d": "primerblast-oss designs primers with Primer3 and checks their specificity against your own BLAST databases — completely offline, on your own (even unpublished) genomes. New here? This page walks you through it in three steps.",
+    "g.steps.t": "How it works — 3 steps",
+    "g.step1.t": "Pick your database(s)",
+    "g.step1.d": "In the panel at the top, tick the BLAST database(s) to screen against. Choosing several at once screens across cultivars. No database yet? Build one in the “Build DB” tab.",
+    "g.step2.t": "Choose a mode & fill the form",
+    "g.step2.d": "Each tab is a task — design new primers, test existing ones, and so on. Required fields are marked with a red *. Not sure? Press “Load example”.",
+    "g.step3.t": "Run & read the result",
+    "g.step3.d": "Press Run. Each primer pair gets a plain-language verdict, a rank (A–D), and an off-target table you can download as TSV/CSV/BED/JSON.",
+
+    "g.modes.t": "Which mode do I need?",
+    "g.open": "Open this tab →",
+    "g.m.design.when": "Start here",
+    "g.m.design.d": "Have a sequence or a gene name and need fresh primers? Design candidate pairs and score each one’s specificity.",
+    "g.m.check.when": "Already have primers",
+    "g.m.check.d": "Paste primer sequences to predict every PCR product they would make (in-silico PCR / electronic PCR).",
+    "g.m.tile.when": "Long region",
+    "g.m.tile.d": "Cover a whole locus end-to-end with overlapping amplicons — for Sanger sequencing or scanning.",
+    "g.m.assay.when": "Breeding",
+    "g.m.assay.d": "From a gene, interval, or SNP: design + specificity + SNPs under primers + CAPS enzymes + a risk score, all at once.",
+    "g.m.markers.when": "Mapping",
+    "g.m.markers.d": "Place evenly-spaced genotyping markers across a QTL interval.",
+    "g.m.makedb.when": "Setup",
+    "g.m.makedb.d": "Turn a FASTA genome into a BLAST database so it appears as a selectable chip above.",
+
+    "g.need.t": "What you need",
+    "g.need.tools.t": "Tools (checked automatically)",
+    "g.need.tools.1": "<span class='k'>primer3_core</span> — designs the primers (badge turns green when found)",
+    "g.need.tools.2": "<span class='k'>BLAST+</span> (<code>blastn</code>, <code>makeblastdb</code>) — checks specificity",
+    "g.need.tools.3": "The status badge (top-right) shows <span class='k'>ready</span> when both are installed",
+    "g.need.data.t": "Your data",
+    "g.need.data.1": "A <span class='k'>BLAST database</span> — or a FASTA to build one from",
+    "g.need.data.2": "For gene / assay / marker modes: a <code>.fai</code>-indexed genome FASTA",
+    "g.need.data.3": "Optional: a <code>GFF3</code> annotation and a <code>VCF</code> of known variants",
+
+    "g.gloss.t": "Glossary",
+    "g.gl.primer.t": "Primer",
+    "g.gl.primer.d": "A short (~20 nt) DNA piece that marks where PCR starts. A pair (forward + reverse) brackets the region you copy.",
+    "g.gl.amplicon.t": "Amplicon / product",
+    "g.gl.amplicon.d": "The DNA fragment produced between a primer pair. Its length in bp is the “product size”.",
+    "g.gl.template.t": "Template",
+    "g.gl.template.d": "The sequence you want to amplify — pasted directly, or extracted from a genome by gene name.",
+    "g.gl.db.t": "BLAST database",
+    "g.gl.db.d": "An indexed genome (or set of sequences) the primers are searched against to find where else they might bind.",
+    "g.gl.spec.t": "Specificity",
+    "g.gl.spec.d": "How selectively a primer pair amplifies only the intended target and nothing else.",
+    "g.gl.offtarget.t": "Off-target",
+    "g.gl.offtarget.d": "An unintended PCR product. If it is close in size to your target it may “co-migrate” (overlap) on a gel.",
+    "g.gl.tm.t": "Tm",
+    "g.gl.tm.d": "Melting temperature (°C) of a primer. Forward and reverse Tm should be close for a clean reaction.",
+    "g.gl.caps.t": "CAPS / dCAPS",
+    "g.gl.caps.d": "A genotyping trick: a restriction enzyme cuts one allele but not the other, so the two show different band patterns.",
+
+    "g.faq.t": "Tips & FAQ",
+    "g.faq.1.q": "The Run button does nothing / warns about a database",
+    "g.faq.1.a": "Every mode except <span style='font-weight:700'>Build DB</span> needs at least one database selected. Tick a chip in the top panel first. If none are listed, build one in <span style='font-weight:700'>Build DB</span> or add a path manually.",
+    "g.faq.2.q": "No databases show up",
+    "g.faq.2.a": "The app scans <code>~/.codex/blast_databases</code>, <code>~/blast_databases</code> and <code>~/primerblast-oss/databases</code>. Use <span style='font-weight:700'>Add</span> to type any database prefix (the path without the <code>.nin</code> suffix), or build one from a FASTA in the Build DB tab.",
+    "g.faq.3.q": "How long does a run take?",
+    "g.faq.3.a": "BLAST dominates the time — a few seconds per primer on a small database, longer on a multi-gigabase genome or when screening several databases at once. The result area shows a spinner while it works.",
+    "g.faq.4.q": "Can I do this from the command line instead?",
+    "g.faq.4.a": "Yes — every mode mirrors a CLI subcommand: <code>python -m primerblast_oss {design,check,tile,assay,markers,makedb}</code>. The GUI is just a friendly front end over the same engine.",
+
+    "g.cta": "Start with Design →",
+    "g.foot": "Open source (MIT) · <a href='https://github.com/light-suzuki/primerblast-oss' target='_blank' rel='noopener'>github.com/light-suzuki/primerblast-oss</a>",
+
+    // ---- mode intros ----
     "intro.design.t": "Design primers",
     "intro.design.d": "From a template sequence — or a gene name (with a GFF3 + genome) — design primer pairs and score how specific each one is against the selected databases.",
     "intro.check.t": "In-silico PCR",
@@ -466,6 +727,7 @@ const I18N = {
     "btn.run": "Run",
     "btn.running": "Running…",
     "btn.reset": "Reset",
+    "btn.example": "Load example",
 
     "res.empty": "Pick database(s), fill in the form above, and press Run — results will appear here.",
     "res.running": "Working… BLAST can take several seconds to minutes per database.",
@@ -543,6 +805,7 @@ const I18N = {
     "status.ok": "primer3 + BLAST+ 利用可能",
     "status.missing": "不足ツール:",
 
+    "tab.guide": "はじめに",
     "tab.design": "設計",
     "tab.check": "in-silico PCR",
     "tab.tile": "タイリング",
@@ -550,11 +813,78 @@ const I18N = {
     "tab.markers": "QTLマーカー",
     "tab.makedb": "DB作成",
 
-    "step.guide": "① データベースを選ぶ　→　② モードを選ぶ　→　③ 入力して実行",
     "db.required": "必須",
     "db.pick": "⚠ 実行するにはデータベースを1つ以上選んでください。",
     "req.mark": "*",
 
+    // ---- guide page ----
+    "g.hero.t": "狙った配列だけを増やすPCRプライマーを設計する",
+    "g.hero.d": "primerblast-oss は Primer3 でプライマーを設計し、その特異性を手元のBLASTデータベースに対して検証します。すべてオフラインで、未公開ゲノムにも使えます。初めての方へ ── このページで3ステップの流れを説明します。",
+    "g.steps.t": "使い方 — 3ステップ",
+    "g.step1.t": "データベースを選ぶ",
+    "g.step1.d": "上部のパネルで、照合するBLASTデータベースにチェックを入れます。複数選ぶと品種横断で照合できます。まだ無い場合は「DB作成」タブで作れます。",
+    "g.step2.t": "モードを選び入力する",
+    "g.step2.d": "各タブが1つの作業です(新規設計・既存プライマーの検証など)。必須項目は赤い * が付きます。迷ったら「例を読み込む」を押してください。",
+    "g.step3.t": "実行して結果を読む",
+    "g.step3.d": "[実行]を押します。各プライマーペアに平易な判定文・ランク(A〜D)・オフターゲット表が出て、TSV/CSV/BED/JSONでダウンロードできます。",
+
+    "g.modes.t": "どのモードを使えばいい?",
+    "g.open": "このタブを開く →",
+    "g.m.design.when": "まずはここから",
+    "g.m.design.d": "配列や遺伝子名から新しいプライマーが欲しいとき。候補ペアを設計し、各ペアの特異性を採点します。",
+    "g.m.check.when": "既にプライマーがある",
+    "g.m.check.d": "プライマー配列を貼り付けると、生じる全PCR産物を予測します(in-silico PCR / 電子PCR)。",
+    "g.m.tile.when": "長い領域",
+    "g.m.tile.d": "領域全体を重なり合うアンプリコンで端から端まで覆います。サンガーシーケンスや走査用。",
+    "g.m.assay.when": "育種",
+    "g.m.assay.d": "遺伝子・区間・SNPから、設計+特異性+プライマー結合部のSNP+CAPS酵素+リスク採点を一括で。",
+    "g.m.markers.when": "マッピング",
+    "g.m.markers.d": "QTL区間をまたいで等間隔のジェノタイピングマーカーを配置します。",
+    "g.m.makedb.when": "準備",
+    "g.m.makedb.d": "FASTAゲノムをBLASTデータベースに変換し、上のチップとして選べるようにします。",
+
+    "g.need.t": "必要なもの",
+    "g.need.tools.t": "ツール(自動チェック)",
+    "g.need.tools.1": "<span class='k'>primer3_core</span> ── プライマーを設計(見つかるとバッジが緑に)",
+    "g.need.tools.2": "<span class='k'>BLAST+</span>(<code>blastn</code>・<code>makeblastdb</code>)── 特異性を照合",
+    "g.need.tools.3": "右上のステータスバッジが両方揃うと<span class='k'>利用可能</span>になります",
+    "g.need.data.t": "あなたのデータ",
+    "g.need.data.1": "<span class='k'>BLASTデータベース</span>、または作成元となるFASTA",
+    "g.need.data.2": "遺伝子/アッセイ/マーカーのモードには <code>.fai</code> 付きゲノムFASTA",
+    "g.need.data.3": "任意: <code>GFF3</code> 注釈、既知変異の <code>VCF</code>",
+
+    "g.gloss.t": "用語集",
+    "g.gl.primer.t": "プライマー",
+    "g.gl.primer.d": "PCRの開始点を示す短い(約20塩基)DNA。フォワードとリバースのペアでコピーする領域を挟みます。",
+    "g.gl.amplicon.t": "アンプリコン / 産物",
+    "g.gl.amplicon.d": "プライマーペアの間で増幅されるDNA断片。その長さ(bp)が「産物長」です。",
+    "g.gl.template.t": "テンプレート",
+    "g.gl.template.d": "増幅したい配列。直接貼り付けるか、遺伝子名でゲノムから抽出します。",
+    "g.gl.db.t": "BLASTデータベース",
+    "g.gl.db.d": "プライマーが他にどこへ結合しうるか検索する対象の、索引付きゲノム(や配列群)。",
+    "g.gl.spec.t": "特異性",
+    "g.gl.spec.d": "プライマーペアが目的の標的だけを、余計なものを増やさずに増幅する度合い。",
+    "g.gl.offtarget.t": "オフターゲット",
+    "g.gl.offtarget.d": "意図しないPCR産物。標的とサイズが近いとゲル上で「共泳動」(重なって)見分けにくくなります。",
+    "g.gl.tm.t": "Tm(融解温度)",
+    "g.gl.tm.d": "プライマーの融解温度(℃)。フォワードとリバースのTmが近いほど反応がきれいです。",
+    "g.gl.caps.t": "CAPS / dCAPS",
+    "g.gl.caps.d": "ジェノタイピング手法。制限酵素が片方のアレルだけを切り、バンドパターンの違いで判別します。",
+
+    "g.faq.t": "ヒントとFAQ",
+    "g.faq.1.q": "[実行]を押しても何も起きない / DBの警告が出る",
+    "g.faq.1.a": "<span style='font-weight:700'>DB作成</span>以外の全モードは、データベースを最低1つ選ぶ必要があります。まず上部パネルでチップにチェックを。一覧が空なら<span style='font-weight:700'>DB作成</span>で作るか、パスを手入力してください。",
+    "g.faq.2.q": "データベースが表示されない",
+    "g.faq.2.a": "アプリは <code>~/.codex/blast_databases</code>・<code>~/blast_databases</code>・<code>~/primerblast-oss/databases</code> を走査します。<span style='font-weight:700'>追加</span>で任意のDB接頭辞(<code>.nin</code>を除いたパス)を入力するか、DB作成タブでFASTAから作成できます。",
+    "g.faq.3.q": "実行にどれくらいかかる?",
+    "g.faq.3.a": "時間の大半はBLASTです。小さなDBならプライマー1本あたり数秒、数ギガ塩基のゲノムや複数DB同時では長くなります。処理中は結果欄にスピナーが出ます。",
+    "g.faq.4.q": "コマンドラインでも実行できる?",
+    "g.faq.4.a": "はい。各モードはCLIサブコマンドに対応します: <code>python -m primerblast_oss {design,check,tile,assay,markers,makedb}</code>。GUIは同じエンジンの分かりやすい入口です。",
+
+    "g.cta": "設計から始める →",
+    "g.foot": "オープンソース(MIT) · <a href='https://github.com/light-suzuki/primerblast-oss' target='_blank' rel='noopener'>github.com/light-suzuki/primerblast-oss</a>",
+
+    // ---- mode intros ----
     "intro.design.t": "プライマー設計",
     "intro.design.d": "テンプレート配列、または遺伝子名(GFF3+ゲノム)からプライマーペアを設計し、選択したDBに対する特異性(オフターゲットの少なさ)を採点します。",
     "intro.check.t": "in-silico PCR(電子PCR)",
@@ -650,6 +980,7 @@ const I18N = {
     "btn.run": "実行",
     "btn.running": "実行中…",
     "btn.reset": "リセット",
+    "btn.example": "例を読み込む",
 
     "res.empty": "上でデータベースを選び、フォームに入力して[実行]を押すと、ここに結果が表示されます。",
     "res.running": "処理中… BLASTはDBごとに数秒〜数分かかります。",
@@ -738,6 +1069,9 @@ function applyI18n() {
   document.querySelectorAll("[data-i18n]").forEach((el) => {
     el.textContent = t(el.getAttribute("data-i18n"));
   });
+  document.querySelectorAll("[data-i18n-html]").forEach((el) => {
+    el.innerHTML = t(el.getAttribute("data-i18n-html"));
+  });
   document.querySelectorAll("[data-i18n-ph]").forEach((el) => {
     el.setAttribute("placeholder", t(el.getAttribute("data-i18n-ph")));
   });
@@ -746,7 +1080,6 @@ function applyI18n() {
   });
   if (typeof onLangChange === "function") onLangChange();
 }
-
 </script>
 <script>
 // Front-end controller for the primerblast-oss GUI.
@@ -762,6 +1095,34 @@ const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g,
 let selectedDbs = [];           // chosen database prefixes
 let customDbs = [];             // user-typed prefixes
 let lastResult = null;          // for re-render on language switch
+
+// --------------------------------------------------------------------------
+// example data (so a first-timer can press Run immediately)
+// --------------------------------------------------------------------------
+// A small synthetic ~480 bp template with unique flanks — enough for Primer3 to
+// return pairs and for tiling to place a couple of tiles.
+const DEMO_SEQ =
+  "ATGGCTAGCACCGGTTCAGACGTGAAGCTTGCCTGACTTCAGGATCCACGTGACCTGAGT" +
+  "CAGTGGCCATTGACGTCAATGGGAGTTTGTTTTGGCACCAAAATCAACGGGACTTTCCAA" +
+  "AATGTCGTAACAACTCCGCCCCATTGACGCAAATGGGCGGTAGGCGTGTACGGTGGGAGG" +
+  "TCTATATAAGCAGAGCTCTCTGGCTAACTAGAGAACCCACTGCTTACTGGCTTATCGAAA" +
+  "TTAATACGACTCACTATAGGGAGACCCAAGCTGGCTAGCGTTTAAACTTAAGCTTGGTAC" +
+  "CGAGCTCGGATCCACTAGTAACGGCCGCCAGTGTGCTGGAATTCTGCAGATATCCATCAC" +
+  "ACTGGCGGCCGCTCGAGCATGCATCTAGAGGGCCCAATTCGCCCTATAGTGAGTCGTATT" +
+  "ACAATTCACTGGCCGTCGTTTTACAACGTCGTGACTGGGAAAACCCTGGCGTTACCCAAC";
+const EXAMPLES = {
+  design: (f) => { setVal(f, "source", "sequence"); setVal(f, "template", DEMO_SEQ);
+    setVal(f, "template_id", "demo"); setVal(f, "product_size", "120-300"); setVal(f, "num_return", "5"); },
+  check: (f) => { setVal(f, "forward", "ATGGCTAGCACCGGTTCAGA"); setVal(f, "reverse", "GTTGGGTAACGCCAGGGTTT"); },
+  tile: (f) => { setVal(f, "template", DEMO_SEQ); setVal(f, "template_id", "demo");
+    setVal(f, "amplicon_min", "150"); setVal(f, "amplicon_max", "300"); setVal(f, "overlap", "30"); },
+};
+function setVal(form, name, value) {
+  const el = $(`[name="${name}"]`, form);
+  if (!el) return;
+  el.value = value;
+  el.dispatchEvent(new Event("change", { bubbles: true }));
+}
 
 // --------------------------------------------------------------------------
 // shared advanced field groups (injected into every relevant form)
@@ -858,15 +1219,15 @@ async function loadHealth() {
 // --------------------------------------------------------------------------
 // tabs
 // --------------------------------------------------------------------------
+function showTab(name) {
+  $$(".tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
+  $$(".panel").forEach((p) => p.classList.toggle("active", p.dataset.panel === name));
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
 function initTabs() {
-  $$(".tab").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      $$(".tab").forEach((b) => b.classList.remove("active"));
-      $$(".panel").forEach((p) => p.classList.remove("active"));
-      btn.classList.add("active");
-      $(`.panel[data-panel="${btn.dataset.tab}"]`).classList.add("active");
-    });
-  });
+  $$(".tab").forEach((btn) => btn.addEventListener("click", () => showTab(btn.dataset.tab)));
+  // guide "mode cards" and CTA buttons jump to a tab
+  $$("[data-goto]").forEach((el) => el.addEventListener("click", () => showTab(el.dataset.goto)));
 }
 
 // --------------------------------------------------------------------------
@@ -919,7 +1280,6 @@ function buildParams(mode, form) {
     p.primers = (p.primers || "").split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
   }
   if (mode === "assay") {
-    // keep only the fields for the chosen target kind
     const kind = p.target_kind;
     if (kind !== "gene") { p.gene = ""; p.gff3 = ""; }
     if (kind !== "interval") { p.interval = ""; }
@@ -932,7 +1292,8 @@ async function runMode(mode, form) {
   const btn = $(".run", form);
   const results = $("#results");
   if (mode !== "makedb" && selectedDbs.length === 0) {
-    results.innerHTML = `<div class="err">${esc(t("db.none"))}</div>`;
+    results.innerHTML = `<div class="err">${esc(t("db.pick"))}</div>`;
+    results.scrollIntoView({ behavior: "smooth", block: "nearest" });
     return;
   }
   btn.disabled = true;
@@ -1001,14 +1362,12 @@ function riskBadge(level) {
   return `<span class="badge ${cls}">${t(key)}</span>`;
 }
 
-// one-line, plain-language reading of a design pair's specificity
 function plainVerdict(spec) {
   if (spec.specific_all_db) return { cls: "pv-ok", text: t("pv.specific") };
   if (spec.gel_distinguishable) return { cls: "pv-warn", text: t("pv.gel") };
   return { cls: "pv-bad", text: t("pv.ambiguous") };
 }
 
-// collapsible glossary explaining the terms used in each result mode
 function legendHTML(kind) {
   const rows = [];
   if (kind === "design" || kind === "tile") { rows.push("leg.rank", "leg.onoff", "leg.score"); }
@@ -1231,6 +1590,13 @@ function boot() {
       loadDatabases();
     }
   });
+  $$("[data-example]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const form = btn.closest("form");
+      const fill = EXAMPLES[btn.dataset.example];
+      if (fill) fill(form);
+    });
+  });
   $$(".panel[data-mode]").forEach((form) => {
     form.addEventListener("submit", (e) => {
       e.preventDefault();
@@ -1245,5 +1611,4 @@ function boot() {
 }
 
 document.addEventListener("DOMContentLoaded", boot);
-
 </script>
