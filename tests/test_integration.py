@@ -63,7 +63,7 @@ def test_conservation_across_refs():
     per_db = [
         {"db": "/x/cameor", "on_target": [a1], "off_target": []},
         {"db": "/x/ZW6", "on_target": [], "off_target": [a2]},
-        {"db": "/x/JI2694", "on_target": [], "off_target": []},   # not conserved
+        {"db": "/x/unpublished_cultivar", "on_target": [], "off_target": []},   # not conserved
     ]
     c = conservation_from_per_db(per_db, designed_size=369)
     assert c["n_conserved"] == 2

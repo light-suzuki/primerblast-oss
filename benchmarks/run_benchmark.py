@@ -20,7 +20,7 @@ from primerblast_oss.tools import faidx_fetch
 
 # Path to a directory holding local BLAST databases + the matching FASTA(.fai).
 # Override for your machine: `export PBO_DBDIR=/path/to/blastdb`.
-DBDIR = os.environ.get("PBO_DBDIR", "/home/kouhei/.codex/blast_databases")
+DBDIR = os.environ.get("PBO_DBDIR", "/home/user/.codex/blast_databases")
 
 
 def main():

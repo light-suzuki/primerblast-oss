@@ -27,7 +27,7 @@ match, confirming the genomic mapping.
 ## 2. Multi-cultivar screening (local, multiple databases)
 
 Same template, screened simultaneously against three cultivar genomes
-(`pisum_v2`, `JI2694`, `pisum_zw6`) in a single command. The NCBI web tool does
+(`pisum_v2`, `unpublished_cultivar`, `pisum_zw6`) in a single command. The NCBI web tool does
 not cover this case: these are local assemblies and it screens one database at a
 time. A machine-readable example report is saved at
 `benchmarks/example_report.json`; the summary is below.
@@ -41,11 +41,11 @@ Highlighted pair (368 bp, `F=GCACTCTAGAGGTTCAAGGCC`, `R=TGGTACGTGTGGTTCAGTTTCA`)
 |---|---|---|
 | `pisum_v2` (Cameor) | **specific** | single intended product |
 | `pisum_zw6` (RefSeq ZW6) | **specific** | perfect ortholog, stored on the opposite strand — correctly recognized (R/F) |
-| `JI2694` (local assembly) | 1 product, **forward primer over a SNP** (mm 1+0) at `ch1VI:85,071,532–85,071,899` | allele/cultivar-specific behavior |
+| `unpublished_cultivar` (unpublished assembly) | 1 product, **forward primer over a cultivar-specific SNP** (mm 1+0); coordinates withheld (unpublished genome) | allele-specific behavior |
 
 This is the payoff of local multi-database screening: the same primer pair is
 clean in two cultivars but overlaps a cultivar-specific SNP in a third — which
-requires screening `JI2694`, a local unpublished assembly, directly. The two weaker pairs are again flagged with many off-target products
+requires screening `unpublished_cultivar`, a local unpublished assembly, directly. The two weaker pairs are again flagged with many off-target products
 (R/R and F/R amplicons at degenerate sites) in every genome.
 
 ## 3. In-silico PCR (`check` mode)
@@ -87,7 +87,7 @@ single target rather than tiling a region.
 
 Target `Psat.cameor.v2.1g00050` CDS (resolved from `pisum_v2.gff3`,
 chr1:5,039–6,385, +), template ±100 bp flank, screened across **3 cultivar
-genomes** (pisum_v2 / JI2694 / pisum_zw6) with a synthetic VCF.
+genomes** (pisum_v2 / unpublished_cultivar / pisum_zw6) with a synthetic VCF.
 
 **Finding: this gene is multi-copy.** Every one of the 6 designed pairs is
 flagged **risk HIGH** — each amplifies its intended locus *plus* 4–8 additional
@@ -132,10 +132,10 @@ resolvability rather than just "a site changed".
 ## Reproduce
 
 ```bash
-DB=/home/kouhei/.codex/blast_databases
+DB=/home/user/.codex/blast_databases
 # design (single- and multi-db)
 python benchmarks/run_benchmark.py
-python benchmarks/run_benchmark.py --db $DB/pisum_v2 --db $DB/JI2694 --db $DB/pisum_zw6
+python benchmarks/run_benchmark.py --db $DB/pisum_v2 --db $DB/unpublished_cultivar --db $DB/pisum_zw6
 # in-silico PCR
 python -m primerblast_oss check \
   --forward GCACTCTAGAGGTTCAAGGCC --reverse TGGTACGTGTGGTTCAGTTTCA --db $DB/pisum_v2
@@ -145,7 +145,7 @@ python -m primerblast_oss tile --template-fasta benchmarks/example_template.fa \
 # full breeding assay (gene + 3 refs + VCF)
 python -m primerblast_oss assay --gene Psat.cameor.v2.1g00050 --gene-feature cds \
   --gff3 $DB/pisum_v2/pisum_v2.gff3 --genome $DB/pisum_v2.fa \
-  --db $DB/pisum_v2 --db $DB/JI2694 --db $DB/pisum_zw6 \
+  --db $DB/pisum_v2 --db $DB/unpublished_cultivar --db $DB/pisum_zw6 \
   --vcf benchmarks/synthetic_variants.vcf --flank 100 --product-size 150-600
 # CAPS marker across a SNP
 python -m primerblast_oss assay --snp chr1:6385 --alt A --genome $DB/pisum_v2.fa \

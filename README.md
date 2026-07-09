@@ -206,7 +206,7 @@ DB=/path/to/blastdb
 python -m primerblast_oss assay \
   --gene Psat.cameor.v2.1g00050 --gene-feature cds --gff3 genome.gff3 \
   --genome genome.fa \
-  --db $DB/cameor_v2 --db $DB/JI2694 --db $DB/ZW6 \
+  --db $DB/cameor_v2 --db $DB/unpublished_cultivar --db $DB/ZW6 \
   --vcf variants.vcf --flank 100 --product-size 150-600 --format html --out report.html
 
 # a CAPS marker spanning a SNP (alt allele given)

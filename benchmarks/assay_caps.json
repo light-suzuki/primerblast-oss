@@ -10,7 +10,7 @@
   },
   "template_len": 1001,
   "databases": [
-    "/home/kouhei/.codex/blast_databases/pisum_v2"
+    "pisum_v2"
   ],
   "n_pairs": 5,
   "pairs": [
@@ -980,7 +980,7 @@
     },
     "databases": [
       {
-        "db": "/home/kouhei/.codex/blast_databases/pisum_v2",
+        "db": "pisum_v2",
         "nin_bytes": "16828",
         "mtime": "2026-05-25T11:31:04.916276+00:00"
       }

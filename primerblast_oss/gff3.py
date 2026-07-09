@@ -224,7 +224,7 @@ def parse_gff3(path: str, seqid: Optional[str] = None) -> Gff3:
 if __name__ == "__main__":
     import time
 
-    path = "/home/kouhei/.codex/blast_databases/pisum_v2/pisum_v2.gff3"
+    path = "pisum_v2/pisum_v2.gff3"
     t0 = time.time()
     gff = parse_gff3(path, seqid="chr1")
     print(f"parsed {len(gff.features)} features (chr1) in {time.time() - t0:.1f}s")
