@@ -6,6 +6,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://www.python.org/)
 
+**English** | [日本語](README.ja.md)
+
 A local, open-source Primer-BLAST-like **command-line tool** for plant breeding
 and genetics. Design PCR primers with **Primer3** and check
 their **specificity** entirely offline against local BLAST+ databases —
