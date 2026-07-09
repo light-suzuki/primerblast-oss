@@ -210,6 +210,8 @@ def run_assay(
     caps_snp: Optional[Dict] = None,   # {"genomic_pos":int, "alt":str}
     primer3_bin: Optional[str] = None,
     blastn_bin: Optional[str] = None,
+    thermo_params=None,
+    thermo_gate: bool = True,
 ) -> Dict:
     """Design and fully evaluate primers for one target region."""
     template = extract_template(genome, region, flank=flank)
@@ -228,6 +230,7 @@ def run_assay(
         template.id, template.seq, databases,
         design_params=dp, spec_params=spec_params,
         primer3_bin=primer3_bin, blastn_bin=blastn_bin,
+        genome=genome, thermo_params=thermo_params, thermo_gate=thermo_gate,
     )
 
     variants = variants or []

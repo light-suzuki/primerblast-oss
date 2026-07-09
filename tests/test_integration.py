@@ -102,6 +102,19 @@ def test_reclassify_by_anchor_paralogs():
     assert out["gel_distinguishable"] is False
 
 
+def test_thermo_viability_optional():
+    from primerblast_oss import thermo
+    if not thermo.available():
+        return  # primer3-py not installed -> feature is optional, skip
+    rc = lambda s: s.translate(str.maketrans("ACGT", "TGCA"))[::-1]
+    P = "GCACTCTAGAGGTTCAAGGCC"
+    perfect = thermo.evaluate(P, rc(P))
+    assert perfect is not None and perfect.viable and perfect.tm > 55
+    # an unrelated target does not anneal -> very low Tm -> not viable
+    weak = thermo.evaluate(P, "TTATTATGATCGATAGCTAGC")
+    assert weak is not None and not weak.viable
+
+
 def test_caps_ecori_distinguishable():
     left = "ACGT" * 30
     right = "TGCA" * 30

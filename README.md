@@ -261,10 +261,10 @@ Honest scope, so you know what it does *not* do:
 - **Not validated against NCBI Primer-BLAST.** It is an independent
   implementation; results are plausible and internally checked, not verified to
   match NCBI's output.
-- **Priming is judged by BLAST alignment + a mismatch/3'-anchor rule, not
-  thermodynamics.** Off-target annealing temperature (Tm) is not computed, so a
-  hit that passes the mismatch thresholds may still be a weak primer in practice
-  (and vice-versa).
+- **Thermodynamic scoring is optional** (needs `pip install primer3-py`). When a
+  `--genome-fasta` is supplied (automatic in `assay`), each site gets a duplex Tm
+  and 3'-end ΔG via primer3 and thermodynamically non-viable sites are gated out;
+  without it, priming falls back to the BLAST-alignment mismatch / 3'-anchor rule.
 - **Off-target discovery is bounded by BLAST `-max_target_seqs`** (default 5000).
   In extremely repetitive regions some hits can be missed; there is no dedicated
   repeat mask.

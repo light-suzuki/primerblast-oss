@@ -74,6 +74,9 @@ def run_pipeline(
     primer3_bin: Optional[str] = None,
     blastn_bin: Optional[str] = None,
     size_tolerance: int = 10,
+    genome=None,
+    thermo_params=None,
+    thermo_gate: bool = True,
 ) -> PipelineResult:
     design_params = design_params or DesignParams()
     spec_params = spec_params or SpecParams()
@@ -88,6 +91,7 @@ def run_pipeline(
                 designed_size=pair.product_size,
                 sp=spec_params, blastn_bin=blastn_bin,
                 size_tolerance=size_tolerance,
+                genome=genome, thermo_params=thermo_params, thermo_gate=thermo_gate,
             )
             per_db.append(res)
         _score_pair(pair, per_db)

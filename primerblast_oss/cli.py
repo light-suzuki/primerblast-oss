@@ -99,6 +99,33 @@ def _add_spec_args(ap: argparse.ArgumentParser) -> None:
     s.add_argument("--require-3prime-terminal", action="store_true",
                    help="require the 3'-terminal base to match, overriding the profile")
     s.add_argument("--blastn-bin")
+    t = ap.add_argument_group("thermodynamics (optional, needs primer3-py)")
+    t.add_argument("--genome-fasta",
+                   help=".fai-indexed genome FASTA enabling thermodynamic site scoring "
+                        "(subject names must match the BLAST db)")
+    t.add_argument("--no-thermo", action="store_true",
+                   help="disable thermodynamic scoring even if a genome is available")
+    t.add_argument("--no-thermo-gate", action="store_true",
+                   help="annotate Tm/dG but do not drop thermodynamically non-viable sites")
+    t.add_argument("--min-anneal-tm", type=float, default=40.0,
+                   help="duplex Tm floor (degC) for a site to count as priming")
+    t.add_argument("--max-3p-dg", type=float, default=-5.0,
+                   help="3'-end stability ΔG ceiling (kcal/mol) for a viable site")
+
+
+def _thermo_setup(a, genome=None):
+    """Return (genome, thermo_params, thermo_gate) from CLI args.
+
+    `genome` may be pre-supplied (assay/markers already open one); otherwise a
+    --genome-fasta path is opened. Thermo is off when disabled or unavailable."""
+    from .thermo import ThermoParams, available
+    if getattr(a, "no_thermo", False) or not available():
+        return genome, None, True
+    if genome is None and getattr(a, "genome_fasta", None):
+        from .genome import Genome
+        genome = Genome(a.genome_fasta)
+    tp = ThermoParams(min_anneal_tm=a.min_anneal_tm, max_3p_dg=a.max_3p_dg)
+    return genome, tp, (not getattr(a, "no_thermo_gate", False))
 
 
 def _add_out_args(ap: argparse.ArgumentParser, formats=("text", "json", "tsv")) -> None:
@@ -137,11 +164,13 @@ def _cmd_design(a) -> int:
         min_gc=a.min_gc, max_gc=a.max_gc, num_return=a.num_return, target=target,
     )
     sp = _spec_from_args(a)
+    genome, tp, gate = _thermo_setup(a)
     outs = []
     for tid, seq in _templates(a):
         res = run_pipeline(tid, seq, a.db, design_params=dp, spec_params=sp,
                            primer3_bin=a.primer3_bin, blastn_bin=a.blastn_bin,
-                           size_tolerance=a.size_tolerance)
+                           size_tolerance=a.size_tolerance,
+                           genome=genome, thermo_params=tp, thermo_gate=gate)
         outs.append(R.to_json(res) if a.format == "json"
                     else R.to_tsv(res) if a.format == "tsv"
                     else R.to_text(res))
@@ -176,7 +205,10 @@ def _collect_primers(a) -> Dict[str, str]:
 def _cmd_check(a) -> int:
     primers = _collect_primers(a)
     sp = _spec_from_args(a)
-    results = [in_silico_pcr(primers, db, sp=sp, blastn_bin=a.blastn_bin) for db in a.db]
+    genome, tp, gate = _thermo_setup(a)
+    results = [in_silico_pcr(primers, db, sp=sp, blastn_bin=a.blastn_bin,
+                             genome=genome, thermo_params=tp, thermo_gate=gate)
+               for db in a.db]
     if a.format == "json":
         text = json.dumps(R.insilico_to_dict(results, primers), indent=2, default=str)
     else:
@@ -281,10 +313,12 @@ def _cmd_assay(a) -> int:
                       min_gc=a.min_gc, max_gc=a.max_gc, num_return=a.num_return)
     sp = _spec_from_args(a)
     variants = _load_variants(a.vcf)
+    _g, tp, gate = _thermo_setup(a, genome=genome)
 
     result = run_assay(region, genome, a.db, flank=a.flank, design_params=dp,
                        spec_params=sp, variants=variants, caps_snp=caps_snp,
-                       primer3_bin=a.primer3_bin, blastn_bin=a.blastn_bin)
+                       primer3_bin=a.primer3_bin, blastn_bin=a.blastn_bin,
+                       thermo_params=tp, thermo_gate=gate)
     prov = make_manifest({"design": dp.__dict__, "spec": sp.__dict__, "flank": a.flank},
                          a.db, template_info=result["target"])
     _emit(_render_assay(result, a.format, prov), a.out)

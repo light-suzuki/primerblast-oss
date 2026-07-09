@@ -37,6 +37,7 @@ primerblast-oss = "primerblast_oss.cli:main"
 
 [project.optional-dependencies]
 dev = ["pytest"]
+thermo = ["primer3-py>=2.0"]
 
 [tool.setuptools]
 packages = ["primerblast_oss", "primerblast_oss.webapp"]

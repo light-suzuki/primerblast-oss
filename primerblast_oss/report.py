@@ -150,6 +150,8 @@ def insilico_to_dict(results: List[Dict], primers: Dict[str, str]) -> dict:
         dbs.append({
             "db": r["db"],
             "sites_per_primer": r["sites_per_primer"],
+            "thermo_evaluated": r.get("thermo_evaluated"),
+            "viable_sites_per_primer": r.get("viable_sites_per_primer", {}),
             "raw_hits_per_primer": r.get("raw_hits_per_primer", {}),
             "unique_subjects_per_primer": r.get("unique_subjects_per_primer", {}),
             "near_blast_limit": r.get("near_blast_limit", []),
@@ -173,6 +175,9 @@ def insilico_to_text(results: List[Dict], primers: Dict[str, str]) -> str:
         out.append("")
         out.append(f"# {name}: {r['n_products']} predicted product(s)   "
                    f"sites/primer: {r['sites_per_primer']}")
+        if r.get("thermo_evaluated"):
+            out.append(f"    thermo: thermodynamically-viable priming sites/primer "
+                       f"{r.get('viable_sites_per_primer', {})} (primer3 Tm/3'-dG gated)")
         if r.get("near_blast_limit"):
             hit_counts = r.get("raw_hits_per_primer", {})
             subjects = r.get("unique_subjects_per_primer", {})
@@ -191,13 +196,20 @@ def insilico_to_text(results: List[Dict], primers: Dict[str, str]) -> str:
         if not r["products"]:
             out.append("    (no products within the size window)")
             continue
-        out.append("    size   subject:start-end            primers    mm      Δsize")
+        thermo = r.get("thermo_evaluated")
+        header = "    size   subject:start-end            primers    mm      Δsize"
+        out.append(header + ("   Tm(F/R)" if thermo else ""))
         for a in r["products"]:
             gap = a.__dict__.get("nearest_gap")
             gap_s = "-" if gap is None else str(gap)
+            tm_s = ""
+            if thermo:
+                ftm = getattr(a, "fwd_tm", None)
+                rtm = getattr(a, "rev_tm", None)
+                tm_s = f"   {ftm if ftm is not None else '-'}/{rtm if rtm is not None else '-'}"
             out.append(
                 f"    {a.size:>5}  {a.subject}:{a.start}-{a.end:<12}  "
-                f"{a.orientation:<9}  {a.fwd_mismatch}+{a.rev_mismatch:<4}  {gap_s}"
+                f"{a.orientation:<9}  {a.fwd_mismatch}+{a.rev_mismatch:<4}  {gap_s}{tm_s}"
             )
     return "\n".join(out)
 

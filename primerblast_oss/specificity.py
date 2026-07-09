@@ -91,6 +91,9 @@ class PrimingSite:
     plen: int = 20          # primer length, needed to place its 5' end
     tp5_mismatch: int = 0   # mismatches within the 3'-terminal 5 bases
     tp10_mismatch: int = 0  # mismatches within the 3'-terminal 10 bases
+    tm: Optional[float] = None          # duplex Tm at this site (if thermo run)
+    end3_dg: Optional[float] = None     # 3'-end stability ΔG (kcal/mol)
+    thermo_viable: Optional[bool] = None  # None = not evaluated
 
     @property
     def end5(self) -> int:
@@ -130,6 +133,10 @@ class Amplicon:
     on_target: bool = False
     fwd_tp5: int = 0        # forward primer 3'-5bp mismatches at this site
     rev_tp5: int = 0        # reverse primer 3'-5bp mismatches at this site
+    fwd_tm: Optional[float] = None      # duplex Tm of the plus-strand primer
+    rev_tm: Optional[float] = None      # duplex Tm of the minus-strand primer
+    fwd_end3_dg: Optional[float] = None
+    rev_end3_dg: Optional[float] = None
 
     @property
     def orientation(self) -> str:
@@ -269,6 +276,41 @@ def screen_primers_with_stats(
     return sites, stats
 
 
+def _site_binding_strand(genome, site: PrimingSite) -> str:
+    """Genomic sequence (5'->3') of the strand the primer anneals to at a site:
+    the bottom strand for a plus-strand site, the top strand for a minus site."""
+    lo, hi = min(site.end5, site.end3), max(site.end5, site.end3)
+    strand = "-" if site.strand == "+" else "+"
+    try:
+        return genome.fetch(site.subject, lo, hi, strand)
+    except Exception:  # noqa: BLE001 - missing subject / out-of-range -> skip thermo
+        return ""
+
+
+def annotate_thermo(sites: Sequence[PrimingSite], primers: Dict[str, str],
+                    genome, tp=None, gate: bool = True):
+    """Annotate each priming site with duplex Tm and 3'-end ΔG (primer3-py) and,
+    when `gate`, drop sites that would not realistically prime. Returns
+    (kept_sites, viable_count_by_primer). No-op if primer3-py or genome absent."""
+    from . import thermo as _thermo
+    if not _thermo.available() or genome is None:
+        return list(sites), {}
+    viable: Dict[str, int] = {}
+    kept: List[PrimingSite] = []
+    for s in sites:
+        seq = primers.get(s.primer)
+        target = _site_binding_strand(genome, s) if seq else ""
+        res = _thermo.evaluate(seq, target, tp) if (seq and target) else None
+        if res is not None:
+            s.tm, s.end3_dg, s.thermo_viable = res.tm, res.end3_dg, res.viable
+            if res.viable:
+                viable[s.primer] = viable.get(s.primer, 0) + 1
+            elif gate:
+                continue  # non-viable site: does not participate in amplicons
+        kept.append(s)
+    return kept, viable
+
+
 def enumerate_amplicons(sites: Sequence[PrimingSite], sp: SpecParams) -> List[Amplicon]:
     """Pair every plus-strand site with a downstream minus-strand site on the
     same subject within the product-size window. Orientation-agnostic: any
@@ -299,6 +341,8 @@ def enumerate_amplicons(sites: Sequence[PrimingSite], sp: SpecParams) -> List[Am
                     fwd_primer=f.primer, rev_primer=r.primer,
                     fwd_mismatch=f.total_mismatch, rev_mismatch=r.total_mismatch,
                     fwd_tp5=f.tp5_mismatch, rev_tp5=r.tp5_mismatch,
+                    fwd_tm=f.tm, rev_tm=r.tm,
+                    fwd_end3_dg=f.end3_dg, rev_end3_dg=r.end3_dg,
                 ))
     amplicons.sort(key=lambda a: (a.subject, a.start))
     return amplicons
@@ -334,15 +378,21 @@ def in_silico_pcr(
     db: str,
     sp: Optional[SpecParams] = None,
     blastn_bin: Optional[str] = None,
+    genome=None,
+    thermo_params=None,
+    thermo_gate: bool = True,
 ) -> Dict:
     """Predict every PCR product a pool of primers makes against one database.
 
     Orientation is not constrained: the result lists all products with their
-    sizes so the caller can judge whether extra products are resolvable.
+    sizes so the caller can judge whether extra products are resolvable. When a
+    `genome` (a Genome / .fetch provider) is given and primer3-py is installed,
+    each site is scored thermodynamically and non-viable sites are gated out.
     """
     sp = sp or SpecParams()
     blastn = _detect_blastn(blastn_bin)
     sites, hit_stats = screen_primers_with_stats(primers, db, sp, blastn)
+    sites, viable_sites = annotate_thermo(sites, primers, genome, thermo_params, thermo_gate)
     amplicons = enumerate_amplicons(sites, sp)
 
     sizes = [a.size for a in amplicons]
@@ -356,6 +406,8 @@ def in_silico_pcr(
         "db": db,
         "primers": {k: v for k, v in primers.items()},
         "sites_per_primer": per_primer,
+        "thermo_evaluated": bool(viable_sites) or (genome is not None and thermo_gate is False),
+        "viable_sites_per_primer": viable_sites,
         "raw_hits_per_primer": {k: v.raw_blast_hits for k, v in hit_stats.items()},
         "unique_subjects_per_primer": {k: v.unique_subjects for k, v in hit_stats.items()},
         "near_blast_limit": [k for k, v in hit_stats.items() if v.near_target_limit],
@@ -380,6 +432,9 @@ def pair_specificity(
     sp: Optional[SpecParams] = None,
     blastn_bin: Optional[str] = None,
     size_tolerance: int = 10,
+    genome=None,
+    thermo_params=None,
+    thermo_gate: bool = True,
 ) -> Dict:
     """Specificity analysis for one designed primer pair against one database.
 
@@ -390,7 +445,9 @@ def pair_specificity(
     """
     sp = sp or SpecParams()
     blastn = _detect_blastn(blastn_bin)
-    sites, hit_stats = screen_primers_with_stats({"F": forward, "R": reverse}, db, sp, blastn)
+    primers = {"F": forward, "R": reverse}
+    sites, hit_stats = screen_primers_with_stats(primers, db, sp, blastn)
+    sites, viable_sites = annotate_thermo(sites, primers, genome, thermo_params, thermo_gate)
     amplicons = enumerate_amplicons(sites, sp)
 
     for a in amplicons:
@@ -416,6 +473,8 @@ def pair_specificity(
         "db": db,
         "n_forward_sites": sum(1 for s in sites if s.primer == "F"),
         "n_reverse_sites": sum(1 for s in sites if s.primer == "R"),
+        "thermo_evaluated": bool(viable_sites) or (genome is not None and thermo_gate is False),
+        "viable_sites_per_primer": viable_sites,
         "raw_hits_per_primer": {k: v.raw_blast_hits for k, v in hit_stats.items()},
         "unique_subjects_per_primer": {k: v.unique_subjects for k, v in hit_stats.items()},
         "near_blast_limit": [k for k, v in hit_stats.items() if v.near_target_limit],

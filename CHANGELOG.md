@@ -4,6 +4,18 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project aims to follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- **Optional thermodynamic scoring** (`primer3-py`): each priming site gets a
+  duplex Tm and 3'-end stability ΔG; thermodynamically non-viable sites are gated
+  out of amplicon prediction. Enabled via `--genome-fasta` (automatic in
+  `assay`), with `--min-anneal-tm` / `--max-3p-dg` / `--no-thermo` /
+  `--no-thermo-gate`. Falls back to the mismatch/3'-anchor model when primer3-py
+  is absent. Tm/ΔG are reported per product, and because non-viable sites are
+  gated, off-target counts and risk reflect only thermodynamically-plausible
+  products.
+
 ## [0.2.0] - 2026-07-08
 
 Plant-breeding pipeline: turns the specificity engine into a breeding-oriented
