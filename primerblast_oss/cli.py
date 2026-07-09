@@ -303,7 +303,7 @@ def _cmd_multiplex_design(a) -> int:
         pairs = res.pairs
         if a.require_specific:
             good = [p for p in pairs if p.specificity.get("rank") in ("A", "B")]
-            pairs = good or pairs        # fall back to all if none are specific
+            pairs = good
         pairs = pairs[:a.candidates_per_target]
         per_target[tid] = pairs
         candidates.append((tid, [(p.forward, p.reverse) for p in pairs]))
@@ -616,7 +616,7 @@ def build_parser() -> argparse.ArgumentParser:
     md.add_argument("--candidates-per-target", type=int, default=5,
                     help="top-ranked pairs per target offered to the set selector")
     md.add_argument("--require-specific", action="store_true",
-                    help="offer only rank A/B (specific) candidates when any exist")
+                    help="require rank A/B candidates; leave targets without one unassigned")
     _add_design_knobs(md)
     _add_spec_args(md)
     _add_dimer_args(md)

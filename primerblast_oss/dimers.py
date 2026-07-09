@@ -119,10 +119,11 @@ def select_multiplex_set(candidates: Sequence[Tuple[str, Sequence[Tuple[str, str
 
     `candidates` is a list of (target_name, [(fwd, rev), ...]) -- several
     candidate pairs per target (e.g. the top design hits). Returns a chosen pair
-    per target such that no forward/reverse primer of any target forms a
-    concerning cross-dimer with a primer of another target. Uses backtracking to
-    find a fully compatible set; if none exists within the step budget, falls
-    back to a greedy partial selection and lists the targets left unassigned.
+    per target such that no two primers in the selected pool, including a
+    forward/reverse pair from the same target, form a concerning cross-dimer.
+    Uses backtracking to find a fully compatible set; if none exists within the
+    step budget, falls back to a greedy partial selection and lists the targets
+    left unassigned.
 
     NCBI Primer-BLAST does not do this: it designs each amplicon independently.
     """
@@ -133,15 +134,20 @@ def select_multiplex_set(candidates: Sequence[Tuple[str, Sequence[Tuple[str, str
     n = len(targets)
     assignment: List[Optional[int]] = [None] * n
     chosen: List[Tuple[str, str]] = []          # committed (label, seq)
-    conflicts: List[Structure] = []
     steps = [0]
 
     def compatible(new_primers: List[Tuple[str, str]]) -> bool:
+        # The final pool check evaluates every primer pair, including the F/R
+        # pair introduced together for one target. The selector must use the
+        # same rule or it can incorrectly return a "complete" incompatible set.
+        for (la, sa), (lb, sb) in combinations(new_primers, 2):
+            s = cross_dimer(la, sa, lb, sb, dp)
+            if s is not None and s.concerning:
+                return False
         for la, sa in new_primers:
             for lb, sb in chosen:
                 s = cross_dimer(la, sa, lb, sb, dp)
                 if s is not None and s.concerning:
-                    conflicts.append(s)
                     return False
         return True
 

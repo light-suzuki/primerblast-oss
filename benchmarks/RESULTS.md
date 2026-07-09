@@ -293,6 +293,23 @@ vs Tm-window priming threshold — with primerblast-oss taking the stricter,
 extension-competent-only interpretation. No discordance traced to an
 implementation error.
 
+## 10. Live NCBI direct-primer regression
+
+The external service is deliberately not called from CI. Instead,
+[`ncbi_live_regression.json`](ncbi_live_regression.json) records one polite,
+browser-submitted smoke comparison with fixed public inputs. On 2026-07-10 JST,
+the official NCBI Primer-BLAST job
+`fXegCnrAd2hQVnJTfzNWYQUoR1MoO1xOKQ` checked
+`GGTTCACCGCTCTCACTCAA` / `CTCCCTCAGTTGCAACCCAT` against
+`NC_045512.2` with the RefSeq representative-genomes database restricted to
+SARS-CoV-2. NCBI reported one specific 258 bp product at `28428-28685`; the
+current local `check` run against the same accession FASTA also returned exactly
+one 258 bp product at the same coordinates (0+0 mismatches).
+
+This is an external integration regression only, not evidence of plant-genome
+or NCBI-wide equivalence. The JSON records the source FASTA SHA-256, inputs,
+job ID, and expected comparison result so a future browser run can detect drift.
+
 ## Reproduce
 
 ```bash

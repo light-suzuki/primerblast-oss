@@ -1,0 +1,38 @@
+{
+  "purpose": "Live NCBI Primer-BLAST direct-primer regression, not a genome-scale accuracy claim.",
+  "submitted_at_jst": "2026-07-10",
+  "input": {
+    "template_accession": "NC_045512.2",
+    "organism": "Severe acute respiratory syndrome coronavirus 2",
+    "ncbi_database": "RefSeq Representative Genome Database",
+    "product_size_range": [150, 300],
+    "forward": "GGTTCACCGCTCTCACTCAA",
+    "reverse": "CTCCCTCAGTTGCAACCCAT"
+  },
+  "ncbi_primer_blast": {
+    "job_id": "fXegCnrAd2hQVnJTfzNWYQUoR1MoO1xOKQ",
+    "specificity": "specific to input template; no other targets found",
+    "product": {
+      "start": 28428,
+      "end": 28685,
+      "size": 258
+    }
+  },
+  "local_primerblast_oss": {
+    "fasta_sha256": "0891c00cc2d503f58e0c600ce5ee64e9c64b939525c70d5486bc46cbc7cb073e",
+    "n_products": 1,
+    "product": {
+      "start": 28428,
+      "end": 28685,
+      "size": 258,
+      "forward_mismatches": 0,
+      "reverse_mismatches": 0
+    }
+  },
+  "concordance": {
+    "count": true,
+    "coordinates": true,
+    "product_size": true
+  },
+  "scope": "This public single-genome direct-primer check detects integration drift only. It does not establish plant-genome or NCBI-wide equivalence."
+}

@@ -159,6 +159,22 @@ def test_multiplex_set_selection():
     a_sel = next(s for s in conflicting["selection"] if s["target"] == "A")
     assert a_sel["candidate_index"] == 1        # skipped the cross-dimering candidate
 
+    # A forward/reverse pair that strongly dimerizes with itself cannot be
+    # returned as a complete multiplex set. This must agree with the final
+    # every-primer-vs-every-primer pool check used by the CLI.
+    fwd = "AAGGCCTTAAGGCCTTAAGGCC"
+    rev = "GGCCTTAAGGCCTTAAGGCCTT"  # reverse complement of fwd
+    bad_pair = dimers.select_multiplex_set([("bad", [(fwd, rev)])])
+    assert bad_pair["complete"] is False
+    assert bad_pair["n_assigned"] == 0
+    assert bad_pair["unassigned"] == ["bad"]
+
+    # Empty candidate lists are valid partial results. The CLI uses this path
+    # when --require-specific finds no A/B pair for a target.
+    missing_specific = dimers.select_multiplex_set([("no_specific", [])])
+    assert missing_specific["complete"] is False
+    assert missing_specific["unassigned"] == ["no_specific"]
+
 
 def test_caps_ecori_distinguishable():
     left = "ACGT" * 30
