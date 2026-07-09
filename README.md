@@ -1,9 +1,8 @@
 # primerblast-oss
 
-[![Release](https://img.shields.io/github/v/release/light-suzuki/=semver)](https://github.com/light-suzuki/primerblast-oss/releases)
-
-
+[![Release](https://img.shields.io/github/v/release/light-suzuki/primerblast-oss?sort=semver)](https://github.com/light-suzuki/primerblast-oss/releases)
 [![CI](https://github.com/light-suzuki/primerblast-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/light-suzuki/primerblast-oss/actions/workflows/ci.yml)
+[![Benchmark](https://github.com/light-suzuki/primerblast-oss/actions/workflows/benchmark.yml/badge.svg)](https://github.com/light-suzuki/primerblast-oss/actions/workflows/benchmark.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://www.python.org/)
 
@@ -66,6 +65,33 @@ continuously updated databases, a mature thermodynamic model, and deeper
 primer-dimer / hairpin analysis. A ✅ in both columns means the capability
 exists on each side — not that the underlying models are identical or that
 outputs will match.
+
+## Current validation status
+
+The short-term target is **PrimerServer2-plus** for local, scriptable primer
+workflows: at least comparable specificity behavior on local genomes, plus
+multi-database screening, tiling, marker design, breeding-assay outputs, and
+offline reproducibility.
+
+Current evidence:
+
+- **PrimerServer2 head-to-head:** on a published *Lotus japonicus* genome, three
+  primer pairs checked by both tools produced the same amplicon count,
+  coordinates, and size when primerblast-oss was run with optional thermodynamic
+  gating. See [`benchmarks/RESULTS.md`](benchmarks/RESULTS.md).
+- **Synthetic continuous benchmark:** CI builds a tiny FASTA/BLAST database and
+  checks Primer3 design, BLAST amplicon pairing, duplicate/off-target
+  classification, F/F products, optional thermodynamic gating, and multiplex
+  primer-dimer analysis.
+- **Local breeding workflow coverage:** real pea-genome examples cover
+  multi-cultivar screening, in-silico PCR, whole-region tiling, GFF3/VCF-based
+  assays, CAPS/dCAPS, and risk scoring.
+
+Against **NCBI Primer-BLAST**, this project is not claiming drop-in equivalence:
+NCBI still has the advantage in curated databases, hosted UX, and a private,
+long-matured specificity model. primerblast-oss is stronger when the important
+data are local, unpublished, multi-reference, or need to be run reproducibly in
+scripts.
 
 ## How specificity is judged
 
