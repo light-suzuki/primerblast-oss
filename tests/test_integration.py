@@ -130,6 +130,36 @@ def test_dimers_optional():
     assert bad["n_concerning"] > 0 and bad["cross_dimer_dg"] < -10
 
 
+def test_multiplex_set_selection():
+    from primerblast_oss import dimers
+    if not dimers.available():
+        return  # primer3-py absent -> optional feature skipped
+
+    # two clean targets, one candidate each -> fully compatible set
+    clean = dimers.select_multiplex_set([
+        ("A", [("ACGTACGTACGTACGTACGT", "TTTTGGGGCCCCAAAATTTT")]),
+        ("B", [("GATCGATCGATCGATCGATC", "CTAGCTAGCTAGCTAGCTAG")]),
+    ])
+    assert clean["complete"] is True
+    assert clean["n_assigned"] == 2
+    assert clean["unassigned"] == []
+
+    # target A's first candidate forms a strong cross-dimer with target B's
+    # forward primer (it is its reverse complement); the selector must skip that
+    # candidate and pick A's clean second candidate instead.
+    rc = lambda s: s.translate(str.maketrans("ACGT", "TGCA"))[::-1]
+    b_fwd = "AAGGCCTTAAGGCCTTAAGGCC"
+    conflicting = dimers.select_multiplex_set([
+        ("B", [(b_fwd, "TTAATTAATTAATTAATTAA")]),
+        ("A", [(rc(b_fwd), "CCAATTGGCCAATTGGAATT"),          # conflicts with B_F
+               ("GGATCCGGATCCTTAATTAA", "CCAATTGGCCAATTGGAATT")]),  # clean
+    ])
+    assert conflicting["complete"] is True
+    assert conflicting["n_assigned"] == 2
+    a_sel = next(s for s in conflicting["selection"] if s["target"] == "A")
+    assert a_sel["candidate_index"] == 1        # skipped the cross-dimering candidate
+
+
 def test_caps_ecori_distinguishable():
     left = "ACGT" * 30
     right = "TGCA" * 30

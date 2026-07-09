@@ -79,6 +79,11 @@ Current evidence:
   primer pairs checked by both tools produced the same amplicon count,
   coordinates, and size when primerblast-oss was run with optional thermodynamic
   gating. See [`benchmarks/RESULTS.md`](benchmarks/RESULTS.md).
+- **NCBI Primer-BLAST head-to-head (one locus):** on a published Arabidopsis
+  TAIR10 template, primerblast-oss's top de-novo pair was identical to the pair
+  the live NCBI web service returns, and both call it specific (single product)
+  against the Arabidopsis genome. This is a single-locus check, not broad
+  validation — see [`benchmarks/RESULTS.md`](benchmarks/RESULTS.md) §8.
 - **Synthetic continuous benchmark:** CI builds a tiny FASTA/BLAST database and
   checks Primer3 design, BLAST amplicon pairing, duplicate/off-target
   classification, F/F products, optional thermodynamic gating, and multiplex
@@ -172,8 +177,8 @@ reach it through the default localhost forwarding.
 
 ## Usage
 
-Subcommands: **design**, **check**, **multiplex**, **tile**, **assay**,
-**markers**, **makedb**.
+Subcommands: **design**, **check**, **multiplex**, **multiplex-design**,
+**tile**, **assay**, **markers**, **makedb**.
 
 `multiplex` checks primer-dimer compatibility across a pool of primers (needs
 `primer3-py`) — every primer against every other, to pick sets you can run
@@ -182,6 +187,18 @@ together:
 ```bash
 python -m primerblast_oss multiplex \
   --primer A_F=... --primer A_R=... --primer B_F=... --primer B_R=...
+```
+
+`multiplex-design` goes a step further: give it several targets (a multi-record
+template FASTA) and it designs candidates for each, then picks **one
+mutually-compatible pair per target** so no two primers form a concerning
+cross-dimer. NCBI Primer-BLAST designs each amplicon independently and cannot do
+this.
+
+```bash
+python -m primerblast_oss multiplex-design \
+  --template-fasta targets.fa --db $DB --genome-fasta genome.fa \
+  --product-size 80-300 --candidates-per-target 5 --require-specific
 ```
 
 ### `design` — region + product size → primer pairs
@@ -296,9 +313,11 @@ pairing, multi-threaded `blastn`, coordinate input) and NCBI Primer-BLAST.
 
 Honest scope, so you know what it does *not* do:
 
-- **Not validated against NCBI Primer-BLAST.** It is an independent
-  implementation; results are plausible and internally checked, not verified to
-  match NCBI's output.
+- **Only spot-checked against NCBI Primer-BLAST.** It is an independent
+  implementation. One published-Arabidopsis locus matched NCBI exactly (same top
+  pair, same specificity verdict — `benchmarks/RESULTS.md` §8), but that is a
+  single locus, not systematic validation; results elsewhere are plausible and
+  internally checked, not guaranteed to match NCBI's output.
 - **Thermodynamic scoring is optional** (needs `pip install primer3-py`). When a
   `--genome-fasta` is supplied (automatic in `assay`), each site gets a duplex Tm
   and 3'-end ΔG via primer3 and thermodynamically non-viable sites are gated out;

@@ -1,10 +1,11 @@
 """Command-line interface for primerblast-oss.
 
 Subcommands:
-  design     region + product size  ->  primer pairs, checked for specificity
-  check      primer sequences       ->  all predicted PCR products (in-silico PCR)
-  multiplex  primer pool            ->  primer-dimer compatibility across the pool
-  tile       region + amplicon size ->  overlapping amplicons covering a whole region
+  design            region + product size  ->  primer pairs, checked for specificity
+  check             primer sequences       ->  all predicted PCR products (in-silico PCR)
+  multiplex         primer pool            ->  primer-dimer compatibility across the pool
+  multiplex-design  multi-target FASTA     ->  design + pick a mutually compatible set
+  tile              region + amplicon size ->  overlapping amplicons covering a region
   assay      gene / interval / SNP  ->  design + specificity + variants + CAPS + risk
   markers    QTL interval           ->  evenly spaced markers across the interval
   makedb     FASTA                  ->  BLAST nucleotide database
@@ -273,6 +274,109 @@ def _cmd_multiplex(a) -> int:
 
 
 # --------------------------------------------------------------------------- #
+# multiplex-design (design + pick a mutually compatible set, one pair per target)
+# --------------------------------------------------------------------------- #
+def _cmd_multiplex_design(a) -> int:
+    from . import dimers
+    if not dimers.available():
+        raise SystemExit("multiplex-design: needs primer3-py (pip install .[thermo])")
+
+    dp = DesignParams(
+        product_size_ranges=_parse_size_ranges(a.product_size),
+        opt_size=a.opt_size, min_size=a.min_size, max_size=a.max_size,
+        opt_tm=a.opt_tm, min_tm=a.min_tm, max_tm=a.max_tm,
+        min_gc=a.min_gc, max_gc=a.max_gc, num_return=a.num_return,
+    )
+    sp = _spec_from_args(a)
+    genome, tp, gate = _thermo_setup(a)
+    dimer_params = _dimer_params_from_args(a)
+
+    templates = _templates(a)
+    candidates: List[Tuple[str, List[Tuple[str, str]]]] = []
+    per_target: Dict[str, List] = {}
+    for tid, seq in templates:
+        res = run_pipeline(tid, seq, a.db, design_params=dp, spec_params=sp,
+                           primer3_bin=a.primer3_bin, blastn_bin=a.blastn_bin,
+                           size_tolerance=a.size_tolerance,
+                           genome=genome, thermo_params=tp, thermo_gate=gate,
+                           dimer_params=dimer_params)
+        pairs = res.pairs
+        if a.require_specific:
+            good = [p for p in pairs if p.specificity.get("rank") in ("A", "B")]
+            pairs = good or pairs        # fall back to all if none are specific
+        pairs = pairs[:a.candidates_per_target]
+        per_target[tid] = pairs
+        candidates.append((tid, [(p.forward, p.reverse) for p in pairs]))
+
+    selection = dimers.select_multiplex_set(candidates, dimer_params)
+    if selection is None:
+        raise SystemExit("multiplex-design: dimer analysis unavailable")
+
+    # describe the chosen set and re-check it every-vs-every for a final ΔG
+    chosen_primers: List[Tuple[str, str]] = []
+    enriched = []
+    for sel in selection["selection"]:
+        tid = sel["target"]
+        idx = sel.get("candidate_index")
+        if idx is None:
+            enriched.append({"target": tid, "assigned": False})
+            continue
+        pair = per_target[tid][idx]
+        chosen_primers += [(f"{tid}_F", pair.forward), (f"{tid}_R", pair.reverse)]
+        enriched.append({
+            "target": tid, "assigned": True, "candidate_index": idx,
+            "forward": pair.forward, "reverse": pair.reverse,
+            "product_size": pair.product_size,
+            "rank": pair.specificity.get("rank"),
+            "score": pair.specificity.get("score"),
+        })
+    pool = dimers.analyze_multiplex(chosen_primers, dimer_params) if chosen_primers else None
+
+    if a.format == "json":
+        out = {
+            "n_targets": selection["n_targets"],
+            "n_assigned": selection["n_assigned"],
+            "complete": selection["complete"],
+            "unassigned": selection["unassigned"],
+            "candidates_per_target": a.candidates_per_target,
+            "selection": enriched,
+            "pool_check": (None if pool is None else {
+                "compatible": pool["compatible"], "n_concerning": pool["n_concerning"],
+                "worst_dg": pool["worst_dg"],
+                "concerning": [{"a": s.a, "b": s.b, "tm": s.tm, "dg": s.dg}
+                               for s in pool["concerning"]],
+            }),
+        }
+        _emit(json.dumps(out, indent=2, default=str), a.out)
+        return 0
+
+    verdict = ("COMPLETE" if selection["complete"]
+               else f"PARTIAL ({selection['n_assigned']}/{selection['n_targets']} assigned)")
+    lines = [f"multiplex design: {selection['n_targets']} targets, "
+             f"up to {a.candidates_per_target} candidates each",
+             f"verdict: {verdict}"]
+    for e in enriched:
+        if not e["assigned"]:
+            lines.append(f"  {e['target']}: UNASSIGNED "
+                         f"(no candidate avoids cross-dimers with the rest)")
+        else:
+            lines.append(f"  {e['target']}: cand #{e['candidate_index']}  "
+                         f"{e['product_size']}bp  rank {e['rank']}  "
+                         f"F {e['forward']} / R {e['reverse']}")
+    if pool is not None:
+        lines.append(f"pool cross-dimer check: "
+                     f"{'COMPATIBLE' if pool['compatible'] else 'INCOMPATIBLE'} "
+                     f"({pool['n_concerning']} concerning; worst ΔG {pool['worst_dg']} kcal/mol)")
+        for s in pool["concerning"]:
+            lines.append(f"    {s.a} x {s.b}: Tm {s.tm} ΔG {s.dg} kcal/mol")
+    if selection["unassigned"]:
+        lines.append("note: raise --candidates-per-target or relax --product-size "
+                     "to give the selector more room.")
+    _emit("\n".join(lines), a.out)
+    return 0
+
+
+# --------------------------------------------------------------------------- #
 # tile
 # --------------------------------------------------------------------------- #
 def _cmd_tile(a) -> int:
@@ -496,6 +600,25 @@ def build_parser() -> argparse.ArgumentParser:
     _add_dimer_args(mx)
     _add_out_args(mx, formats=("text", "json"))
     mx.set_defaults(func=_cmd_multiplex)
+
+    # multiplex-design (design each target, then pick one mutually compatible pair each)
+    md = sub.add_parser(
+        "multiplex-design",
+        help="design primers for several targets and pick a compatible set (one pair each)")
+    _add_template_args(md)
+    md.add_argument("--product-size", default="80-300",
+                    help="range(s), e.g. '80-300' (short amplicons suit multiplex)")
+    md.add_argument("--num-return", type=int, default=10,
+                    help="pairs primer3 returns per target before specificity ranking")
+    md.add_argument("--candidates-per-target", type=int, default=5,
+                    help="top-ranked pairs per target offered to the set selector")
+    md.add_argument("--require-specific", action="store_true",
+                    help="offer only rank A/B (specific) candidates when any exist")
+    _add_design_knobs(md)
+    _add_spec_args(md)
+    _add_dimer_args(md)
+    _add_out_args(md, formats=("text", "json"))
+    md.set_defaults(func=_cmd_multiplex_design)
 
     # tile
     t = sub.add_parser("tile", help="cover a whole region with overlapping amplicons")

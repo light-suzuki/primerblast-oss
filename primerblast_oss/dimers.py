@@ -112,6 +112,91 @@ def analyze_pair(forward: str, reverse: str,
     }
 
 
+def select_multiplex_set(candidates: Sequence[Tuple[str, Sequence[Tuple[str, str]]]],
+                         dp: Optional[DimerParams] = None,
+                         max_steps: int = 200000) -> Optional[Dict]:
+    """Pick one primer pair per target so the whole set is multiplex-compatible.
+
+    `candidates` is a list of (target_name, [(fwd, rev), ...]) -- several
+    candidate pairs per target (e.g. the top design hits). Returns a chosen pair
+    per target such that no forward/reverse primer of any target forms a
+    concerning cross-dimer with a primer of another target. Uses backtracking to
+    find a fully compatible set; if none exists within the step budget, falls
+    back to a greedy partial selection and lists the targets left unassigned.
+
+    NCBI Primer-BLAST does not do this: it designs each amplicon independently.
+    """
+    if not _HAVE:
+        return None
+    dp = dp or DimerParams()
+    targets = [(name, list(pairs)) for name, pairs in candidates]
+    n = len(targets)
+    assignment: List[Optional[int]] = [None] * n
+    chosen: List[Tuple[str, str]] = []          # committed (label, seq)
+    conflicts: List[Structure] = []
+    steps = [0]
+
+    def compatible(new_primers: List[Tuple[str, str]]) -> bool:
+        for la, sa in new_primers:
+            for lb, sb in chosen:
+                s = cross_dimer(la, sa, lb, sb, dp)
+                if s is not None and s.concerning:
+                    conflicts.append(s)
+                    return False
+        return True
+
+    def dfs(i: int) -> bool:
+        if i == n:
+            return True
+        name, pairs = targets[i]
+        for idx, (fwd, rev) in enumerate(pairs):
+            steps[0] += 1
+            if steps[0] > max_steps:
+                return False
+            new_primers = [(f"{name}_F", fwd), (f"{name}_R", rev)]
+            if compatible(new_primers):
+                assignment[i] = idx
+                chosen.extend(new_primers)
+                if dfs(i + 1):
+                    return True
+                del chosen[-2:]
+                assignment[i] = None
+        return False
+
+    complete = dfs(0)
+
+    if not complete:
+        # greedy partial: keep whatever we can place, skip the rest
+        assignment = [None] * n
+        chosen = []
+        for i, (name, pairs) in enumerate(targets):
+            for idx, (fwd, rev) in enumerate(pairs):
+                new_primers = [(f"{name}_F", fwd), (f"{name}_R", rev)]
+                if compatible(new_primers):
+                    assignment[i] = idx
+                    chosen.extend(new_primers)
+                    break
+
+    selection = []
+    unassigned = []
+    for i, (name, pairs) in enumerate(targets):
+        idx = assignment[i]
+        if idx is None:
+            unassigned.append(name)
+            selection.append({"target": name, "pair": None, "candidate_index": None})
+        else:
+            fwd, rev = pairs[idx]
+            selection.append({"target": name, "forward": fwd, "reverse": rev,
+                              "candidate_index": idx})
+    return {
+        "n_targets": n,
+        "complete": complete and not unassigned,
+        "selection": selection,
+        "unassigned": unassigned,
+        "n_assigned": n - len(unassigned),
+    }
+
+
 def analyze_multiplex(primers: Sequence[Tuple[str, str]],
                       dp: Optional[DimerParams] = None) -> Optional[Dict]:
     """Every-primer-vs-every-primer cross-dimer scan for a multiplex pool.
