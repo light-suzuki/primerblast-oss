@@ -129,6 +129,37 @@ HinfI band by 23 bp — below the 25 bp default — and was correctly reported a
 *not* distinguishable, illustrating that the CAPS scan judges real gel
 resolvability rather than just "a site changed".
 
+## 7. Head-to-head vs PrimerServer2
+
+Genome: **Lotus japonicus MG20** (`lotja.MG20.gnm3`, ~455 Mbp, published), fresh
+BLAST db. Three primer pairs designed by primerblast-oss on `Lj1:20,000,000+`
+were run through **both** tools' specificity check against the same genome.
+[PrimerServer2](https://github.com/billzt/PrimerServer2) 2.0.0b19 uses the same
+core recipe (`blastn -task blastn-short -evalue 30000 -word_size 7`, then a
+primer3 Tm check; off-target if a site's Tm is within `--Tm-diff` 20 °C of the
+primer — matching our `--min-anneal-tm 40` floor).
+
+| pair | product | primerblast-oss (+thermo) | PrimerServer2 |
+|---|---|---|---|
+| 1 | 573 bp | 1 amplicon @ `Lj1:20,000,521-20,001,093` | 1 amplicon @ same |
+| 2 | 569 bp | 1 amplicon @ `Lj1:20,000,521-20,001,089` | 1 amplicon @ same |
+| 3 | 570 bp | 1 amplicon @ `Lj1:20,000,521-20,001,090` | 1 amplicon @ same |
+
+**Exact concordance** on amplicon count, coordinates and size for all three
+pairs. Pair 3 is the informative case: primerblast-oss's *mismatch-only* model
+flags 4 candidate off-targets, but **both tools' thermodynamic check drop them**
+as non-amplifying — i.e. the optional thermo gate brings primerblast-oss into
+agreement with PrimerServer2. Runtime for the check was a few seconds per tool.
+
+primerblast-oss adds, on top of this parity: multi-database screening, CAPS/dCAPS
+design, GFF3/VCF/QTL integration, whole-region tiling, and experimenter risk
+scoring. PrimerServer2 has features this lacks (notably multiplex primer-dimer
+checking and a mature hosted web server).
+
+*Reproducibility note:* PrimerServer2 needs `samtools`; where it was unavailable
+we supplied a tiny `samtools faidx` shim backed by the same `.fai` reader. The
+BLAST/primer3 computations are PrimerServer2's own.
+
 ## Reproduce
 
 ```bash
