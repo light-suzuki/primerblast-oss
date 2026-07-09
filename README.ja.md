@@ -47,20 +47,18 @@ NCBI Primer-BLAST は2つのことを行います:(1) Primer3 が候補プライ
 
 これは**ローカル・オフラインのワークフローへの適合**についての話であって、総合的に優れているという主張ではありません。NCBI Primer-BLAST には本ツールにない実利があります:キュレーションされ継続更新されるデータベース、成熟した熱力学モデル、より踏み込んだプライマーダイマー/ヘアピン解析です。[PrimerServer2](https://github.com/billzt/PrimerServer2) も強力なローカルツールでコアのレシピを多く共有しています。primerblast-oss がその上に足しているのは、領域全体のタイリング、ゲル分離性、1回実行のマルチDBスクリーニング、育種アッセイ(GFF3/VCF/CAPS/QTL/risk)、そしてダイマーの*チェック*だけでなく多重互換セットの*設計*です。複数列に ✅ がある場合、その能力が各側に存在することを意味するだけで、内部モデルが同一であるとか出力が一致することを意味しません。
 
-**ベンチマーク:** 公開ゲノムの *Lotus japonicus* で3ペアが PrimerServer2 と**完全一致**(アンプリコン数・サイズ・座標)。公開の Arabidopsis TAIR10 座位では、primerblast-oss はトップペアと3ペアの特異性(2産物ケースを含む)について **NCBI Primer-BLAST と PrimerServer2 の両方**と一致しました。詳細とコマンドは [`benchmarks/RESULTS.md`](benchmarks/RESULTS.md) §7–§8 にあります。
+**ベンチマーク(要約):** ランダムに配置した **40座位の Arabidopsis TAIR10** で、primerblast-oss と PrimerServer2 は**非反復座位の92%**で同一のアンプリコン集合(数・サイズ・座標)を予測しました。公開ゲノムの *Lotus japonicus* では手検証3ペアが完全一致し、Arabidopsisの1座位ではトップの新規設計ペアが PrimerServer2 と**ライブのNCBI Primer-BLAST**の両方と一致しました。手法・数値・残差の分析は [`benchmarks/RESULTS.md`](benchmarks/RESULTS.md) §7–§9 にあります。
 
-## 現在の検証状況
+## 検証状況
 
-短期目標は、ローカルでスクリプト可能なプライマーワークフローとしての **PrimerServer2-plus** です:ローカルゲノムで少なくとも同等の特異性挙動を示しつつ、マルチDBスクリーニング、タイリング、マーカー設計、育種アッセイ出力、オフライン再現性を加えること。
+短期目標は、ローカルでスクリプト可能なプライマー作業における **PrimerServer2 のスーパーセット**であること:ローカルゲノムでその特異性挙動に一致しつつ、マルチDBスクリーニング、タイリング、マーカー設計、育種アッセイ出力、オフライン再現性を加えること。現時点の根拠:
 
-現時点の根拠:
+- **PrimerServer2 との40座位自動対決(Arabidopsis TAIR10)。** パラメータを揃えた条件で、両ツールは**非反復座位 33/36(92%)**で予測アンプリコン集合が完全一致しました。残る不一致はすべて説明可能です:両ツールともプライマーを非特異と判定するが反復コピーの列挙が異なる反復座位と、プライマーの3'末端が完全には整合しないマージナルなサイト(primerblast-oss はこれを非プライミングとして棄却し、PrimerServer2 は二本鎖Tmで保持)です。実装エラーに起因するものはありません([`benchmarks/RESULTS.md`](benchmarks/RESULTS.md) §9)。
+- **PrimerServer2、*Lotus japonicus*。** 手検証3ペアがアンプリコン数・サイズ・座標で完全一致(§7)。
+- **NCBI Primer-BLAST(単一座位)。** 公開の Arabidopsis TAIR10 テンプレートで、トップの新規設計ペアはライブのNCBIサービスが返すペアと同一で、両者とも特異的と判定しました。これはスポットチェックであって系統的検証ではありません(§8)。
+- **継続的な回帰ベンチマーク。** CIが合成のFASTA/BLASTデータベースを構築し、Primer3設計、BLASTアンプリコンペアリング、重複/オフターゲット分類、熱力学ゲート、多重ダイマーチェックを毎プッシュで検査します。
 
-- **PrimerServer2 との直接対決:** 公開ゲノムの *Lotus japonicus* で、両ツールがチェックした3プライマーペアは、primerblast-oss をオプションの熱力学ゲート付きで実行したとき、アンプリコン数・座標・サイズが同一でした。[`benchmarks/RESULTS.md`](benchmarks/RESULTS.md) 参照。
-- **NCBI Primer-BLAST との直接対決(1座位):** 公開の Arabidopsis TAIR10 テンプレートで、primerblast-oss のトップの新規設計ペアは、ライブのNCBI Webサービスが返すペアと同一で、両者ともArabidopsisゲノムに対して特異的(単一産物)と判定しました。これは単一座位の確認であって網羅的検証ではありません — [`benchmarks/RESULTS.md`](benchmarks/RESULTS.md) §8 参照。
-- **合成の継続ベンチマーク:** CIが小さなFASTA/BLASTデータベースを構築し、Primer3設計、BLASTアンプリコンペアリング、重複/オフターゲット分類、F/F産物、オプションの熱力学ゲート、多重プライマーダイマー解析を検査します。
-- **ローカル育種ワークフローのカバレッジ:** 実際のエンドウゲノム例が、複数品種スクリーニング、in-silico PCR、領域全体のタイリング、GFF3/VCFベースのアッセイ、CAPS/dCAPS、リスク評価をカバーします。
-
-**NCBI Primer-BLAST** に対して、本プロジェクトはドロップイン等価を主張しません:NCBIは依然として、キュレーション済みデータベース、ホスト型UX、非公開で長年成熟した特異性モデルで優位です。primerblast-oss は、重要なデータがローカル・未公開・複数リファレンスである、あるいはスクリプトで再現可能に実行する必要がある場合に強みを発揮します。
+**NCBI Primer-BLAST** に対してはドロップイン等価を主張しません:NCBIはキュレーション済みで継続更新されるデータベース、ホスト型UX、非公開で長年成熟した特異性モデルで優位を保ちます。primerblast-oss は、重要なデータがローカル・未公開・複数リファレンスである、あるいはスクリプトで再現可能に実行する必要がある場合に、より強い選択肢です。
 
 ## 特異性の判定方法
 
@@ -321,6 +319,13 @@ python tests/test_integration.py      # 変異、保存性、リスク、CAPS
 ## ベンチマーク
 
 `benchmarks/run_benchmark.py` は、`.fai` インデックス付きゲノムから実領域を抽出し、プライマーを設計し、特異性をスクリーニングします — タイミングとペア毎の予測産物数を報告します。`export PBO_DBDIR=/path/to/blastdb` で自分のデータに向けられます。エンドウゲノムでの実行(設計、複数品種、in-silico PCR、タイリング、完全アッセイ、CAPS)は [`benchmarks/RESULTS.md`](benchmarks/RESULTS.md) にまとめています。
+
+`benchmarks/head_to_head_ps2.py` は [PrimerServer2](https://github.com/billzt/PrimerServer2) との自動一致ベンチマークです:ゲノム上のN個の窓それぞれでペアを設計し、条件を揃えて両ツールの予測アンプリコンを比較します([`benchmarks/RESULTS.md`](benchmarks/RESULTS.md) §9 参照)。
+
+```bash
+python benchmarks/head_to_head_ps2.py --genome tair10.fa --db tair10.fa \
+  --primertool /path/to/primertool --n-loci 40 --out h2h.json
+```
 
 `benchmarks/continuous_benchmark.py` はCIフレンドリーな回帰ベンチマークです:小さな合成FASTA/BLASTデータベースを構築し、Primer3設計、BLASTアンプリコンペアリング、重複/オフターゲット分類、オプションの熱力学ゲート、多重ダイマーチェックを走らせます。
 

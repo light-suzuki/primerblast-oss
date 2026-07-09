@@ -209,6 +209,50 @@ On this published Arabidopsis locus primerblast-oss **matches both NCBI
 Primer-BLAST and PrimerServer2** on the primer it picks and on the specificity
 verdict, while adding dimer thermodynamics and multiplex-set selection on top.
 
+## 9. Automated multi-locus concordance vs PrimerServer2 (40 Arabidopsis loci)
+
+The head-to-heads above use a handful of hand-checked pairs. To measure
+concordance at scale without cherry-picking, `benchmarks/head_to_head_ps2.py`
+selects **40 low-N 1,500 bp windows spread across all five TAIR10 chromosomes**,
+designs a Primer3 pair in each, and predicts that pair's amplicons with **both**
+tools against the same TAIR10 BLAST database. Parameters were matched on both
+sides: off-target size window **50–2,000 bp**, PrimerServer2 `--Tm-diff 20`
+against primerblast-oss's thermodynamic gate (primer3-py), and PrimerServer2's
+amplicon cap raised so neither tool truncates. Concordance is scored on the exact
+set of predicted amplicons (count, product size, and genomic coordinates).
+
+| locus set | n | exact-coordinate concordance |
+|---|---|---|
+| all designed loci | 40 | **33 / 40 (82 %)** |
+| non-repetitive loci (≤ 3 predicted amplicons) | 36 | **33 / 36 (92 %)** |
+| repetitive / multi-copy loci (> 3 amplicons) | 4 | 0 / 4 (see below) |
+
+The residual disagreements are **understood, not random**, and fall into two
+groups:
+
+- **Repetitive / multi-copy loci (4/40).** Both tools agree the primer is
+  non-specific (many products); they differ only in *how many* individual repeat
+  copies or tandem-repeat "ladder" rungs each enumerates. Any workflow would
+  reject these primers regardless, so the exact count is moot.
+- **Marginal 3'-end sites (3/36 non-repetitive loci).** In every case
+  PrimerServer2 reports **one extra off-target** that primerblast-oss does not,
+  and in every case that off-target depends on a primer binding site whose **3'
+  end is not fully aligned** — e.g. locus `4_18583553`, where the reverse primer
+  aligns only 18 of 20 bases (3'-terminal 2 nt unaligned), or `1_13830895`, where
+  the forward primer's 3' end is unaligned (both confirmed by `blastn-short`).
+  primerblast-oss's priming model **requires the 3' end to anchor** (terminal
+  match + limited 3'-window mismatch), so it treats such sites as non-amplifying;
+  PrimerServer2 keeps them because the overall duplex Tm is high enough. This is a
+  deliberate model difference, not a defect: primerblast-oss is the stricter side
+  on 3'-priming competence (biochemically the dominant factor for extension),
+  while PrimerServer2 is more conservative and flags more candidate off-targets.
+
+So on realistic, non-repetitive primers the two tools agree on **92 %** of loci
+exactly, and the ~8 % that differ do so for one explainable reason — the 3'-anchor
+vs Tm-window priming threshold — with primerblast-oss taking the stricter,
+extension-competent-only interpretation. No discordance traced to an
+implementation error.
+
 ## Reproduce
 
 ```bash
@@ -241,4 +285,9 @@ python -m primerblast_oss multiplex-design --template-fasta benchmarks/multi_tar
 # PrimerServer2 side of the Arabidopsis head-to-head (section 8), same TAIR10 db:
 #   printf "atA GACAAGGAATCAGCGGCTCT GCAGCGTTTTGTAGTGGGTG\n" > q.txt
 #   primertool check q.txt $DB/tair10.fa -t q.tsv        # PrimerServer2 2.0.0b19
+# Automated 40-locus concordance vs PrimerServer2 (section 9):
+python benchmarks/head_to_head_ps2.py \
+  --genome $DB/tair10.fa --db $DB/tair10.fa \
+  --primertool /path/to/primertool \
+  --n-loci 40 --check-size-min 50 --check-size-max 2000 --out h2h.json
 ```

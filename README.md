@@ -8,39 +8,38 @@
 
 **English** | [日本語](README.ja.md)
 
-A local, open-source Primer-BLAST-like **command-line tool** for plant breeding
-and genetics. Design PCR primers with **Primer3** and check
-their **specificity** entirely offline against local BLAST+ databases —
-including unpublished genomes and several cultivars at once — plus in-silico
-PCR, whole-region tiling, SNP-under-primer detection, amplicon conservation,
-CAPS/dCAPS marker design, and experimenter risk scoring.
+A local, open-source, Primer-BLAST-style **command-line tool** for plant breeding
+and genetics. It designs PCR primers with **Primer3** and verifies their
+**specificity** entirely offline against local BLAST+ databases — including
+unpublished genomes and several cultivars at once — and adds in-silico PCR,
+whole-region tiling, SNP-under-primer detection, amplicon conservation analysis,
+CAPS/dCAPS marker design, and an experimenter-facing risk score.
 
-> Pure-Python core (standard library only); shells out to `primer3_core` and
-> BLAST+. Unit tests need **no external tools or data**.
+> The core is pure Python (standard library only) and calls out to `primer3_core`
+> and BLAST+. The unit tests require **no external tools or data**.
 
 ## Why local and open source
 
-NCBI Primer-BLAST is excellent, but it is **not open source** and runs only as a
-hosted web service. In practice that means you can't audit, fork, or self-host
-it, you can't run it next to your data, and unpublished or embargoed genomes
-can't be submitted to it.
+NCBI Primer-BLAST is excellent, but it is **not open source** and exists only as a
+hosted web service. You therefore cannot audit, fork, or self-host it, cannot run
+it next to your data, and cannot submit unpublished or embargoed genomes to it.
 
-Relying on any external service also ties your pipeline to its availability and
-policies (rate limits, maintenance, occasional outages). Keeping the workflow
-**local and offline** removes that dependency and makes runs fully
-reproducible — pinned FASTA, GFF3, VCF, BLAST DB, and tool versions, with no
-queue or login. That matters most for the case the web tool can't serve anyway:
-local, unpublished, multi-cultivar genomes.
+Depending on an external service also binds a pipeline to that service's
+availability and policies — rate limits, maintenance windows, occasional outages.
+Running the workflow **locally and offline** removes that dependency and makes a
+run fully reproducible: pinned FASTA, GFF3, VCF, BLAST database, and tool
+versions, with no queue and no login. This matters most in precisely the case the
+hosted tool cannot serve: local, unpublished, multi-cultivar genomes.
 
 primerblast-oss is **MIT-licensed**, so anyone can read, run, and build on it.
 
 ## Why this exists
 
-NCBI Primer-BLAST does two things: (1) Primer3 designs candidate primers, and
+NCBI Primer-BLAST performs two steps: (1) Primer3 designs candidate primers, and
 (2) BLAST screens each primer against a database and **pairs the hits into
-predicted amplicons** to flag unintended PCR products. Most local "primer +
-BLAST" scripts only do a per-primer BLAST and miss step (2) — the part that
-actually detects off-target products.
+predicted amplicons**, flagging unintended PCR products. Most local "primer +
+BLAST" scripts perform only the per-primer BLAST and omit step (2) — the step
+that actually detects off-target products.
 
 `primerblast-oss` is an independent implementation of step (2) — using a
 BLAST-alignment-based priming model, not NCBI's exact algorithm — with a focus
@@ -76,44 +75,44 @@ rather than only dimer *checking*. A ✅ in more than one column means the capab
 exists on each side — not that the underlying models are identical or that outputs
 will match.
 
-**Benchmarks:** on a published *Lotus japonicus* genome, three pairs gave
-**exact concordance** with PrimerServer2 (amplicon count, size, coordinates); on a
-published Arabidopsis TAIR10 locus, primerblast-oss agreed with **both** NCBI
-Primer-BLAST **and** PrimerServer2 on the top pair and on the specificity of three
-pairs (including a two-product case). Details and commands in
-[`benchmarks/RESULTS.md`](benchmarks/RESULTS.md) §7–§8.
+**Benchmarks (summary):** across **40 randomly-placed Arabidopsis TAIR10 loci**,
+primerblast-oss and PrimerServer2 predict the same amplicon set (count, size,
+coordinates) on **92 % of non-repetitive loci**; on a published *Lotus japonicus*
+genome three hand-checked pairs matched exactly; and on one Arabidopsis locus the
+top de-novo pair agreed with **both** PrimerServer2 and the live NCBI
+Primer-BLAST service. Full method, numbers, and an analysis of the residual
+disagreements are in [`benchmarks/RESULTS.md`](benchmarks/RESULTS.md) §7–§9.
 
-## Current validation status
+## Validation status
 
-The short-term target is **PrimerServer2-plus** for local, scriptable primer
-workflows: at least comparable specificity behavior on local genomes, plus
-multi-database screening, tiling, marker design, breeding-assay outputs, and
-offline reproducibility.
+The short-term goal is to be a **superset of PrimerServer2** for local,
+scriptable primer work: matching its specificity behaviour on local genomes while
+adding multi-database screening, tiling, marker design, breeding-assay outputs,
+and offline reproducibility. The evidence to date:
 
-Current evidence:
+- **PrimerServer2, 40-locus automated head-to-head (Arabidopsis TAIR10).** With
+  matched parameters, the two tools agree on the exact predicted amplicon set for
+  **33 / 36 (92 %) non-repetitive loci**. Every residual disagreement is
+  accounted for: repetitive loci where both tools call the primer non-specific but
+  enumerate repeat copies differently, and marginal sites where a primer's 3' end
+  is not fully aligned — which primerblast-oss rejects as non-priming and
+  PrimerServer2 keeps on duplex Tm. None trace to an implementation error
+  ([`benchmarks/RESULTS.md`](benchmarks/RESULTS.md) §9).
+- **PrimerServer2, *Lotus japonicus*.** Three hand-checked pairs matched exactly
+  on amplicon count, size, and coordinates (§7).
+- **NCBI Primer-BLAST (single locus).** On a published Arabidopsis TAIR10
+  template, the top de-novo pair was identical to the pair the live NCBI service
+  returns, and both judged it specific. This is a spot check, not systematic
+  validation (§8).
+- **Continuous regression benchmark.** CI builds a synthetic FASTA/BLAST database
+  and exercises Primer3 design, BLAST amplicon pairing, duplicate/off-target
+  classification, thermodynamic gating, and multiplex dimer checks on every push.
 
-- **PrimerServer2 head-to-head:** on a published *Lotus japonicus* genome, three
-  primer pairs checked by both tools produced the same amplicon count,
-  coordinates, and size when primerblast-oss was run with optional thermodynamic
-  gating. See [`benchmarks/RESULTS.md`](benchmarks/RESULTS.md).
-- **NCBI Primer-BLAST head-to-head (one locus):** on a published Arabidopsis
-  TAIR10 template, primerblast-oss's top de-novo pair was identical to the pair
-  the live NCBI web service returns, and both call it specific (single product)
-  against the Arabidopsis genome. This is a single-locus check, not broad
-  validation — see [`benchmarks/RESULTS.md`](benchmarks/RESULTS.md) §8.
-- **Synthetic continuous benchmark:** CI builds a tiny FASTA/BLAST database and
-  checks Primer3 design, BLAST amplicon pairing, duplicate/off-target
-  classification, F/F products, optional thermodynamic gating, and multiplex
-  primer-dimer analysis.
-- **Local breeding workflow coverage:** real pea-genome examples cover
-  multi-cultivar screening, in-silico PCR, whole-region tiling, GFF3/VCF-based
-  assays, CAPS/dCAPS, and risk scoring.
-
-Against **NCBI Primer-BLAST**, this project is not claiming drop-in equivalence:
-NCBI still has the advantage in curated databases, hosted UX, and a private,
-long-matured specificity model. primerblast-oss is stronger when the important
-data are local, unpublished, multi-reference, or need to be run reproducibly in
-scripts.
+Against **NCBI Primer-BLAST**, no claim of drop-in equivalence is made: NCBI
+retains the advantage in curated, continuously-updated databases, hosted UX, and a
+private, long-matured specificity model. primerblast-oss is the stronger choice
+when the data that matter are local, unpublished, multi-reference, or must run
+reproducibly in scripts.
 
 ## How specificity is judged
 
@@ -451,6 +450,16 @@ number of predicted products per pair. Point it at your own data with
 `export PBO_DBDIR=/path/to/blastdb`. Real runs on a pea genome (design,
 multi-cultivar, in-silico PCR, tiling, full assay, CAPS) are written up in
 [`benchmarks/RESULTS.md`](benchmarks/RESULTS.md).
+
+`benchmarks/head_to_head_ps2.py` is the automated concordance benchmark against
+[PrimerServer2](https://github.com/billzt/PrimerServer2): it designs a pair in
+each of N windows across a genome and compares both tools' predicted amplicons
+under matched parameters (see [`benchmarks/RESULTS.md`](benchmarks/RESULTS.md) §9).
+
+```bash
+python benchmarks/head_to_head_ps2.py --genome tair10.fa --db tair10.fa \
+  --primertool /path/to/primertool --n-loci 40 --out h2h.json
+```
 
 `benchmarks/continuous_benchmark.py` is the CI-friendly regression benchmark:
 it builds a tiny synthetic FASTA/BLAST database and exercises Primer3 design,

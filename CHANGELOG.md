@@ -30,6 +30,12 @@ All notable changes to this project are documented here. The format follows
 - **NCBI Primer-BLAST head-to-head benchmark** (Arabidopsis TAIR10, published):
   on the same template, primerblast-oss's top de-novo pair and its specificity
   verdict match the live NCBI web service exactly (`benchmarks/RESULTS.md` §8).
+- **Automated multi-locus PrimerServer2 benchmark** (`benchmarks/head_to_head_ps2.py`):
+  designs a pair in each of N genome windows and compares both tools' predicted
+  amplicons under matched parameters. Across 40 TAIR10 loci the tools agree on the
+  exact amplicon set for 92% of non-repetitive loci; residual differences are the
+  3'-anchor-vs-Tm-window model difference and repeat-copy enumeration, none an
+  implementation error (`benchmarks/RESULTS.md` §9).
 - **Optional thermodynamic scoring** (`primer3-py`): each priming site gets a
   duplex Tm and 3'-end stability ΔG; thermodynamically non-viable sites are gated
   out of amplicon prediction. Enabled via `--genome-fasta` (automatic in
