@@ -6,8 +6,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://www.python.org/)
 
-A local, open-source Primer-BLAST-like workflow for plant breeding and
-genetics. Design PCR primers with **Primer3** and check
+A local, open-source Primer-BLAST-like **command-line tool** for plant breeding
+and genetics. Design PCR primers with **Primer3** and check
 their **specificity** entirely offline against local BLAST+ databases —
 including unpublished genomes and several cultivars at once — plus in-silico
 PCR, whole-region tiling, SNP-under-primer detection, amplicon conservation,
@@ -152,48 +152,40 @@ algorithm or database.
 ## Install
 
 ```bash
-pip install -e .        # provides the `primerblast-oss` command
+pip install -e .              # provides the `primerblast-oss` command
+pip install -e '.[thermo]'    # + optional primer3-py (thermodynamics & dimers)
 # or run without installing:
 python -m primerblast_oss --help
 ```
 
-## Web GUI (bilingual: English / 日本語)
+Both `primerblast-oss <subcommand>` (after install) and
+`python -m primerblast_oss <subcommand>` are equivalent; this README uses the
+`python -m` form so the examples work without installing.
 
-A local, browser-based front end wraps every subcommand — no cloud, no
-third-party Python dependencies (it is built on the standard-library
-`http.server`). Run it on the machine where `primer3_core`, `blastn`, and your
-BLAST databases live (e.g. inside WSL):
+## Quick start
 
 ```bash
-python -m primerblast_oss.webapp          # serves http://127.0.0.1:8799 and opens a browser
-python -m primerblast_oss.webapp --port 9000 --no-browser
+# 1. build a BLAST database from a genome FASTA (once)
+python -m primerblast_oss makedb genome.fa --out-db mydb
+
+# 2. design primers on a template and check them against that genome
+python -m primerblast_oss design \
+  --template-fasta my_gene.fa --product-size 150-500 --db mydb
+
+# 3. or just in-silico-PCR a pair you already have
+python -m primerblast_oss check \
+  --forward GACAAGGAATCAGCGGCTCT --reverse GCAGCGTTTTGTAGTGGGTG --db mydb
 ```
 
-Then use the tabs for **design / in-silico PCR / tiling / assay / QTL markers /
-build DB**. The interface:
-
-- Auto-discovers BLAST databases under `~/.codex/blast_databases`,
-  `~/blast_databases`, and `./databases`; you can also paste an absolute path.
-  Select one or more for multi-cultivar screening.
-- On the **design** tab you can supply the template either by pasting a
-  sequence/FASTA **or by gene name** — pick "By gene name", enter the gene ID (or
-  Name), a GFF3 annotation, and a `.fai`-indexed genome FASTA, and the region is
-  resolved and extracted automatically before design.
-- Runs each job in a background thread and polls for the result, so long BLAST
-  screens don't block the UI.
-- Renders ranked primer pairs, predicted products, off-target tables, and
-  (for assays) CAPS enzymes and risk levels, with one-click TSV/CSV/BED/JSON
-  and off-target-map downloads.
-- Switches between English and Japanese instantly via the button in the header;
-  the choice is remembered across sessions.
-
-The GUI binds to loopback (`127.0.0.1`) only. On WSL2, Windows browsers can
-reach it through the default localhost forwarding.
+A local browser GUI wrapping these subcommands also exists, but it is an
+optional extra — see [Web GUI (optional)](#web-gui-optional) near the end.
 
 ## Usage
 
-Subcommands: **design**, **check**, **multiplex**, **multiplex-design**,
-**tile**, **assay**, **markers**, **makedb**.
+primerblast-oss is a **CLI tool**. Subcommands: **design**, **check**,
+**multiplex**, **multiplex-design**, **tile**, **assay**, **markers**,
+**makedb**. Run `python -m primerblast_oss <subcommand> --help` for the full
+option list of any one.
 
 `multiplex` checks primer-dimer compatibility across a pool of primers (needs
 `primer3-py`) — every primer against every other, to pick sets you can run
@@ -382,10 +374,10 @@ Design/tile rank pairs **A–D**: **A** = single product in every database;
 Co-migrating off-targets are penalized heavily; size-resolvable ones only
 lightly — matching how such pairs are used in practice.
 
-## GUI-ready output
+## JSON output (scripting-friendly)
 
-`--format json` emits a stable schema intended to back a GUI. Every object
-carries what a UI needs to render without recomputation:
+`--format json` emits a stable schema for piping into other tools (or a GUI).
+Every object carries what a consumer needs without recomputation:
 
 - **primer**: `forward`/`reverse`, `tm_f`/`tm_r`, `gc_f`/`gc_r`, `left_start`/
   `right_start` (0-based template positions), `product_size`, `penalty`.
@@ -417,6 +409,26 @@ for a in res["products"]:
 tiles = design_tiling("gene", template_seq, ["/data/db/genome"],
                       amplicon_min=400, amplicon_max=700, overlap=60)
 ```
+
+## Web GUI (optional)
+
+The CLI is the primary interface. As a convenience, a **local browser front end**
+wraps every subcommand — no cloud, no third-party Python dependencies (it is built
+on the standard-library `http.server`). It is an extra, not the main tool. Run it
+on the machine where `primer3_core`, `blastn`, and your BLAST databases live (e.g.
+inside WSL):
+
+```bash
+python -m primerblast_oss.webapp             # serves http://127.0.0.1:8799, opens a browser
+python -m primerblast_oss.webapp --port 9000 --no-browser
+```
+
+It exposes tabs for design / in-silico PCR / tiling / assay / QTL markers / build
+DB, auto-discovers BLAST databases under `~/.codex/blast_databases`,
+`~/blast_databases` and `./databases`, runs each job in a background thread, and
+offers one-click TSV/CSV/BED/JSON downloads. English / 日本語 toggle in the header.
+It binds to loopback (`127.0.0.1`) only; on WSL2 Windows browsers reach it via the
+default localhost forwarding. Everything it does is also available from the CLI.
 
 ## Tests
 

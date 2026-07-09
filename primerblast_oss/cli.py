@@ -563,7 +563,10 @@ def _add_design_knobs(sp) -> None:
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
         prog="primerblast-oss",
-        description="Local Primer-BLAST: design, in-silico PCR, and region tiling, offline.")
+        description="Local, offline Primer-BLAST for plant breeding: primer design, "
+                    "in-silico PCR, multiplex-set design, region tiling, and full "
+                    "gene/interval/SNP assays with multi-reference specificity.",
+        epilog="Run 'primerblast-oss <subcommand> --help' for a subcommand's options.")
     ap.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
