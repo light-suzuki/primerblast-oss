@@ -378,6 +378,15 @@ number of predicted products per pair. Point it at your own data with
 multi-cultivar, in-silico PCR, tiling, full assay, CAPS) are written up in
 [`benchmarks/RESULTS.md`](benchmarks/RESULTS.md).
 
+`benchmarks/continuous_benchmark.py` is the CI-friendly regression benchmark:
+it builds a tiny synthetic FASTA/BLAST database and exercises Primer3 design,
+BLAST amplicon pairing, duplicate/off-target classification, optional
+thermodynamic gating, and multiplex dimer checks.
+
+```bash
+python benchmarks/continuous_benchmark.py --max-seconds 30
+```
+
 ## Contributing
 
 Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). Changes are
