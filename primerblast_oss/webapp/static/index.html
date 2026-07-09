@@ -1,0 +1,1249 @@
+<style>
+:root {
+  --bg: #f6f7f9;
+  --panel: #ffffff;
+  --ink: #1b2430;
+  --muted: #6b7686;
+  --line: #e2e6ec;
+  --accent: #2f6f4f;
+  --accent-ink: #ffffff;
+  --chip: #eef2f0;
+  --code-bg: #0f172a;
+  --code-ink: #e2e8f0;
+  --a: #1f7a4d; --b: #2f7fb0; --c: #b8860b; --d: #b23a48;
+  --low: #2f8f5b; --med: #c8891a; --high: #c0392b;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #12161c; --panel: #1b212b; --ink: #e7ecf3; --muted: #9aa6b6;
+    --line: #2b333f; --accent: #3f9d70; --chip: #232c38;
+    --code-bg: #0b1020; --code-ink: #d7e0ee;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 14px/1.5 system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif;
+}
+.app { max-width: 1120px; margin: 0 auto; padding: 16px; }
+
+.topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.brand { display: flex; gap: 12px; align-items: center; }
+.logo { font-size: 30px; }
+h1 { margin: 0; font-size: 20px; letter-spacing: .2px; }
+.subtitle { margin: 2px 0 0; color: var(--muted); font-size: 12.5px; }
+.topbar-right { display: flex; align-items: center; gap: 10px; }
+.status { font-size: 12px; padding: 4px 10px; border-radius: 999px; background: var(--chip); }
+.status-ok { color: var(--low); }
+.status-bad { color: var(--high); }
+.lang-btn { border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+  border-radius: 8px; padding: 6px 12px; cursor: pointer; font-weight: 600; }
+.lang-btn:hover { border-color: var(--accent); }
+
+.db-panel { margin-top: 14px; background: var(--panel); border: 1px solid var(--line);
+  border-radius: 12px; padding: 12px 14px; }
+.db-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.db-head .hint { color: var(--muted); font-size: 12px; }
+.db-count { color: var(--muted); font-size: 12px; margin-left: auto; }
+.db-list { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.db-list:empty::before { content: attr(data-empty); color: var(--muted); font-size: 12.5px; }
+.db-chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 13px;
+  border: 1.5px solid var(--line); border-radius: 999px; cursor: pointer; user-select: none;
+  background: var(--bg); font-size: 13px; font-weight: 600; transition: border-color .12s, background .12s; }
+.db-chip:hover { border-color: var(--accent); }
+.db-chip .tick { font-weight: 800; color: var(--muted); }
+.db-chip.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.db-chip.on .tick { color: var(--accent-ink); }
+.db-name { letter-spacing: .2px; }
+.db-custom { display: flex; gap: 8px; }
+.db-custom input { flex: 1; }
+.mini { border: 1px solid var(--line); background: var(--bg); color: var(--ink);
+  border-radius: 8px; padding: 5px 12px; cursor: pointer; font-size: 12.5px; }
+.mini:hover { border-color: var(--accent); }
+
+.req-tag { font-size: 10px; font-weight: 800; color: #fff; background: var(--high);
+  border-radius: 999px; padding: 2px 9px; letter-spacing: .4px; }
+.db-count.warn { color: var(--high); font-weight: 700; }
+
+.step-guide { margin: 12px 2px 2px; padding: 10px 14px; background: var(--chip); border: 1px solid var(--line);
+  border-radius: 10px; color: var(--ink); font-weight: 600; font-size: 13px; text-align: center; }
+
+.mode-intro { margin: 0 0 16px; padding: 12px 16px; border-left: 4px solid var(--accent);
+  background: var(--chip); border-radius: 0 10px 10px 0; }
+.mode-intro h2 { margin: 0 0 4px; font-size: 15.5px; color: var(--accent); }
+.mode-intro p { margin: 0; color: var(--ink); font-size: 12.5px; line-height: 1.6; }
+
+.tabs { display: flex; gap: 4px; margin: 16px 0 0; flex-wrap: wrap; }
+.tab { border: 1px solid transparent; background: transparent; color: var(--muted);
+  padding: 9px 14px; border-radius: 10px 10px 0 0; cursor: pointer; font-weight: 600; font-size: 13.5px; }
+.tab:hover { color: var(--ink); }
+.tab.active { color: var(--ink); background: var(--panel); border-color: var(--line); border-bottom-color: var(--panel); }
+
+.workspace { background: var(--panel); border: 1px solid var(--line); border-radius: 0 12px 12px 12px; padding: 16px; }
+.panel { display: none; }
+.panel.active { display: block; }
+fieldset { border: 1px solid var(--line); border-radius: 10px; margin: 0 0 14px; padding: 12px 14px 4px;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px 14px; }
+legend { font-weight: 700; font-size: 12.5px; color: var(--accent); padding: 0 6px; }
+label { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--muted); position: relative; }
+b.req { position: absolute; top: 0; right: 2px; color: var(--high); font-weight: 800; font-size: 14px; line-height: 1; }
+label.full { grid-column: 1 / -1; }
+label.check { flex-direction: row; align-items: center; gap: 8px; color: var(--ink); }
+label > span { font-weight: 600; }
+input, textarea, select { font: inherit; padding: 7px 9px; border: 1px solid var(--line);
+  border-radius: 8px; background: var(--bg); color: var(--ink); width: 100%; }
+input:focus, textarea:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: var(--accent); }
+textarea { resize: vertical; font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; }
+.hint { color: var(--muted); font-style: normal; font-size: 11px; }
+label.check input { width: auto; }
+
+.actions { display: flex; gap: 10px; margin-top: 4px; }
+.run { background: var(--accent); color: var(--accent-ink); border: none; border-radius: 9px;
+  padding: 10px 22px; font-weight: 700; cursor: pointer; font-size: 14px; }
+.run:disabled { opacity: .6; cursor: progress; }
+.ghost { background: transparent; border: 1px solid var(--line); color: var(--muted);
+  border-radius: 9px; padding: 10px 18px; cursor: pointer; }
+
+details.adv { grid-column: 1/-1; }
+details.adv > summary { cursor: pointer; font-weight: 700; color: var(--accent); font-size: 12.5px; padding: 4px 0; }
+details.adv .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px,1fr)); gap: 10px 14px; margin-top: 10px; }
+
+.results { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 16px; }
+.results-empty { color: var(--muted); text-align: center; padding: 24px; }
+.spinner { display: inline-block; width: 15px; height: 15px; border: 2px solid var(--line);
+  border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; vertical-align: -3px; margin-right: 8px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.err { background: color-mix(in srgb, var(--high) 12%, transparent); border: 1px solid var(--high);
+  color: var(--high); border-radius: 8px; padding: 12px 14px; white-space: pre-wrap;
+  font-family: ui-monospace, monospace; font-size: 12px; }
+
+.result-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.result-head h3 { margin: 0; font-size: 15px; }
+.result-head .meta { color: var(--muted); font-size: 12.5px; }
+
+table { border-collapse: collapse; width: 100%; font-size: 12.5px; margin: 6px 0 14px; }
+th, td { border-bottom: 1px solid var(--line); padding: 7px 9px; text-align: left; vertical-align: top; }
+th { color: var(--muted); font-weight: 700; font-size: 11.5px; text-transform: uppercase; letter-spacing: .3px; }
+tbody tr:hover { background: var(--chip); }
+.seqmono { font-family: ui-monospace, monospace; }
+.tbl-wrap { overflow-x: auto; }
+
+.badge { display: inline-block; padding: 2px 9px; border-radius: 999px; font-weight: 800; font-size: 11px; color: #fff; }
+.rank-A, .v-specific { background: var(--a); }
+.rank-B, .v-gel { background: var(--b); }
+.rank-C { background: var(--c); }
+.rank-D, .v-ambiguous { background: var(--d); }
+.risk-low { background: var(--low); } .risk-med { background: var(--med); } .risk-high { background: var(--high); }
+.badge.small { font-size: 10px; padding: 1px 7px; }
+
+.pair-card { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; }
+.pair-card > summary { cursor: pointer; list-style: none; }
+.pair-card > summary::-webkit-details-marker { display: none; }
+.pair-summary { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.pair-summary .grow { flex: 1; min-width: 160px; }
+.pair-summary .seqmono { font-size: 12px; }
+.subline { color: var(--muted); font-size: 11.5px; margin-top: 2px; }
+
+.legend { margin: 0 0 14px; background: var(--chip); border: 1px solid var(--line); border-radius: 10px; padding: 2px 14px; }
+.legend > summary { cursor: pointer; font-weight: 700; color: var(--accent); font-size: 12.5px; padding: 9px 0; }
+.legend > summary::before { content: "ⓘ "; }
+.legend p { margin: 2px 0 10px; color: var(--ink); font-size: 12px; line-height: 1.6; }
+.verdict-plain { margin: 8px 0 0; font-size: 12.5px; font-weight: 600; padding: 7px 11px; border-radius: 8px; }
+.pv-ok { background: color-mix(in srgb, var(--a) 14%, transparent); color: var(--a); }
+.pv-warn { background: color-mix(in srgb, var(--c) 18%, transparent); color: var(--c); }
+.pv-bad { background: color-mix(in srgb, var(--high) 14%, transparent); color: var(--high); }
+.meta [title], .badge[title] { cursor: help; }
+
+pre.ascii, pre.explain { background: var(--code-bg); color: var(--code-ink); border-radius: 8px;
+  padding: 12px 14px; overflow-x: auto; font-family: ui-monospace, monospace; font-size: 11.5px; line-height: 1.45; }
+
+.downloads { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 6px 0 16px; }
+.downloads strong { font-size: 12px; color: var(--muted); margin-right: 4px; }
+.dlbtn { border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 8px;
+  padding: 5px 12px; cursor: pointer; font-size: 12px; text-decoration: none; }
+.dlbtn:hover { border-color: var(--accent); color: var(--accent); }
+
+</style>
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">🧬</span>
+      <div>
+        <h1 data-i18n="app.title">primerblast-oss</h1>
+        <p class="subtitle" data-i18n="app.subtitle"></p>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <span id="tool-status" class="status status-checking" data-i18n="status.checking"></span>
+      <button id="lang-btn" class="lang-btn" data-i18n="lang.toggle">日本語</button>
+    </div>
+  </header>
+
+  <section class="db-panel">
+    <div class="db-head">
+      <strong data-i18n="db.legend"></strong>
+      <span class="req-tag" data-i18n="db.required"></span>
+      <span class="hint" data-i18n="db.hint"></span>
+      <button id="db-refresh" class="mini" data-i18n="db.refresh"></button>
+      <span id="db-count" class="db-count"></span>
+    </div>
+    <div id="db-list" class="db-list"></div>
+    <div class="db-custom">
+      <input id="db-custom-input" type="text" data-i18n-ph="db.custom" />
+      <button id="db-add" class="mini" data-i18n="db.add"></button>
+    </div>
+  </section>
+
+  <div class="step-guide" data-i18n="step.guide"></div>
+
+  <nav class="tabs" id="tabs">
+    <button class="tab active" data-tab="design" data-i18n="tab.design"></button>
+    <button class="tab" data-tab="check" data-i18n="tab.check"></button>
+    <button class="tab" data-tab="tile" data-i18n="tab.tile"></button>
+    <button class="tab" data-tab="assay" data-i18n="tab.assay"></button>
+    <button class="tab" data-tab="markers" data-i18n="tab.markers"></button>
+    <button class="tab" data-tab="makedb" data-i18n="tab.makedb"></button>
+  </nav>
+
+  <div class="workspace">
+    <!-- DESIGN -->
+    <form class="panel active" data-panel="design" data-mode="design">
+      <div class="mode-intro"><h2 data-i18n="intro.design.t"></h2><p data-i18n="intro.design.d"></p></div>
+      <fieldset><legend data-i18n="grp.template"></legend>
+        <label class="full"><span data-i18n="f.src"></span>
+          <select name="source" id="design-src">
+            <option value="sequence" data-i18n="f.src.seq"></option>
+            <option value="gene" data-i18n="f.src.gene"></option>
+          </select></label>
+        <label class="full" data-src="sequence"><span data-i18n="f.template"></span><b class="req" data-i18n="req.mark"></b>
+          <textarea name="template" rows="5" data-i18n-ph="f.template.ph"></textarea></label>
+        <label data-src="sequence"><span data-i18n="f.template_id"></span>
+          <input name="template_id" value="template" /></label>
+        <label data-src="gene"><span data-i18n="f.gene"></span><b class="req" data-i18n="req.mark"></b>
+          <input name="gene" placeholder="e.g. PsCIK2" /></label>
+        <label data-src="gene"><span data-i18n="f.gene_feature"></span>
+          <select name="gene_feature"><option>cds</option><option>gene</option><option>mrna</option><option>exon</option></select></label>
+        <label class="full" data-src="gene"><span data-i18n="f.gff3"></span><b class="req" data-i18n="req.mark"></b>
+          <input name="gff3" placeholder="/path/to/annotation.gff3" /></label>
+        <label class="full" data-src="gene"><span data-i18n="f.genome"></span><b class="req" data-i18n="req.mark"></b>
+          <input name="genome" placeholder="/path/to/genome.fa" /></label>
+        <label data-src="gene"><span data-i18n="f.flank"></span>
+          <input name="flank" type="number" value="0" /></label>
+        <label><span data-i18n="f.product_size"></span>
+          <input name="product_size" value="70-1000" />
+          <em class="hint" data-i18n="f.product_size.hint"></em></label>
+        <label><span data-i18n="f.num_return"></span>
+          <input name="num_return" type="number" value="10" /></label>
+        <label data-src="sequence"><span data-i18n="f.target"></span>
+          <input name="target" placeholder="e.g. 500,200" />
+          <em class="hint" data-i18n="f.target.hint"></em></label>
+      </fieldset>
+      <div data-knobs></div>
+      <div data-spec></div>
+      <div class="actions"><button type="submit" class="run" data-i18n="btn.run"></button>
+        <button type="reset" class="ghost" data-i18n="btn.reset"></button></div>
+    </form>
+
+    <!-- CHECK -->
+    <form class="panel" data-panel="check" data-mode="check">
+      <div class="mode-intro"><h2 data-i18n="intro.check.t"></h2><p data-i18n="intro.check.d"></p></div>
+      <fieldset><legend data-i18n="grp.template"></legend>
+        <label><span data-i18n="f.forward"></span><input name="forward" /></label>
+        <label><span data-i18n="f.reverse"></span><input name="reverse" /></label>
+        <label class="full"><span data-i18n="f.primers"></span>
+          <textarea name="primers" rows="3" placeholder="P3=ACGT...&#10;GGATCC..."></textarea></label>
+      </fieldset>
+      <div data-spec></div>
+      <div class="actions"><button type="submit" class="run" data-i18n="btn.run"></button>
+        <button type="reset" class="ghost" data-i18n="btn.reset"></button></div>
+    </form>
+
+    <!-- TILE -->
+    <form class="panel" data-panel="tile" data-mode="tile">
+      <div class="mode-intro"><h2 data-i18n="intro.tile.t"></h2><p data-i18n="intro.tile.d"></p></div>
+      <fieldset><legend data-i18n="grp.template"></legend>
+        <label class="full"><span data-i18n="f.template"></span><b class="req" data-i18n="req.mark"></b>
+          <textarea name="template" rows="4" data-i18n-ph="f.template.ph"></textarea></label>
+        <label><span data-i18n="f.template_id"></span><input name="template_id" value="template" /></label>
+        <label><span data-i18n="f.region"></span><input name="region" placeholder="0,2000" /></label>
+        <label><span data-i18n="f.amplicon_min"></span><input name="amplicon_min" type="number" value="400" /></label>
+        <label><span data-i18n="f.amplicon_max"></span><input name="amplicon_max" type="number" value="800" /></label>
+        <label><span data-i18n="f.overlap"></span><input name="overlap" type="number" value="40" /></label>
+        <label><span data-i18n="f.candidates_per_tile"></span><input name="candidates_per_tile" type="number" value="8" /></label>
+      </fieldset>
+      <div data-knobs></div>
+      <div data-spec></div>
+      <div class="actions"><button type="submit" class="run" data-i18n="btn.run"></button>
+        <button type="reset" class="ghost" data-i18n="btn.reset"></button></div>
+    </form>
+
+    <!-- ASSAY -->
+    <form class="panel" data-panel="assay" data-mode="assay">
+      <div class="mode-intro"><h2 data-i18n="intro.assay.t"></h2><p data-i18n="intro.assay.d"></p></div>
+      <fieldset><legend data-i18n="grp.target"></legend>
+        <label><span data-i18n="f.target_kind"></span>
+          <select name="target_kind" id="assay-kind">
+            <option value="gene" data-i18n="f.kind.gene"></option>
+            <option value="interval" data-i18n="f.kind.interval"></option>
+            <option value="snp" data-i18n="f.kind.snp"></option>
+          </select></label>
+        <label data-kind="gene"><span data-i18n="f.gene"></span><input name="gene" /></label>
+        <label data-kind="gene"><span data-i18n="f.gene_feature"></span>
+          <select name="gene_feature"><option>cds</option><option>gene</option><option>mrna</option><option>exon</option></select></label>
+        <label data-kind="gene" class="full"><span data-i18n="f.gff3"></span><input name="gff3" /></label>
+        <label data-kind="interval"><span data-i18n="f.interval"></span><input name="interval" placeholder="chr1:1000-3000" /></label>
+        <label data-kind="snp"><span data-i18n="f.snp"></span><input name="snp" placeholder="chr1:12345" /></label>
+        <label data-kind="snp"><span data-i18n="f.alt"></span><input name="alt" placeholder="T" /></label>
+        <label><span data-i18n="f.name"></span><input name="name" /></label>
+        <label class="full"><span data-i18n="f.genome"></span><b class="req" data-i18n="req.mark"></b><input name="genome" placeholder="/path/to/genome.fa" /></label>
+        <label class="full"><span data-i18n="f.vcf"></span><input name="vcf" /></label>
+        <label><span data-i18n="f.flank"></span><input name="flank" type="number" value="200" /></label>
+        <label><span data-i18n="f.product_size"></span><input name="product_size" value="100-800" /></label>
+        <label><span data-i18n="f.num_return"></span><input name="num_return" type="number" value="10" /></label>
+      </fieldset>
+      <div data-knobs></div>
+      <div data-spec></div>
+      <div class="actions"><button type="submit" class="run" data-i18n="btn.run"></button>
+        <button type="reset" class="ghost" data-i18n="btn.reset"></button></div>
+    </form>
+
+    <!-- MARKERS -->
+    <form class="panel" data-panel="markers" data-mode="markers">
+      <div class="mode-intro"><h2 data-i18n="intro.markers.t"></h2><p data-i18n="intro.markers.d"></p></div>
+      <fieldset><legend data-i18n="grp.target"></legend>
+        <label><span data-i18n="f.interval"></span><b class="req" data-i18n="req.mark"></b><input name="interval" placeholder="chr1:1000000-2000000" /></label>
+        <label class="full"><span data-i18n="f.genome"></span><b class="req" data-i18n="req.mark"></b><input name="genome" placeholder="/path/to/genome.fa" /></label>
+        <label><span data-i18n="f.name"></span><input name="name" /></label>
+        <label><span data-i18n="f.n_markers"></span><input name="n_markers" type="number" value="0" /></label>
+        <label><span data-i18n="f.spacing"></span><input name="spacing" type="number" value="0" /></label>
+        <label><span data-i18n="f.marker_flank"></span><input name="marker_flank" type="number" value="300" /></label>
+        <label><span data-i18n="f.product_size"></span><input name="product_size" value="100-500" /></label>
+        <label><span data-i18n="f.num_return"></span><input name="num_return" type="number" value="6" /></label>
+      </fieldset>
+      <div data-knobs></div>
+      <div data-spec></div>
+      <div class="actions"><button type="submit" class="run" data-i18n="btn.run"></button>
+        <button type="reset" class="ghost" data-i18n="btn.reset"></button></div>
+    </form>
+
+    <!-- MAKEDB -->
+    <form class="panel" data-panel="makedb" data-mode="makedb">
+      <div class="mode-intro"><h2 data-i18n="intro.makedb.t"></h2><p data-i18n="intro.makedb.d"></p></div>
+      <fieldset><legend data-i18n="grp.options"></legend>
+        <label class="full"><span data-i18n="f.infile"></span><b class="req" data-i18n="req.mark"></b><input name="infile" placeholder="/path/to/genome.fa" /></label>
+        <label class="full"><span data-i18n="f.out_db"></span><input name="out_db" /></label>
+        <label><span data-i18n="f.db_title"></span><input name="title" /></label>
+        <label class="check"><input name="no_parse_seqids" type="checkbox" /><span data-i18n="f.no_parse_seqids"></span></label>
+      </fieldset>
+      <div class="actions"><button type="submit" class="run" data-i18n="btn.run"></button>
+        <button type="reset" class="ghost" data-i18n="btn.reset"></button></div>
+    </form>
+
+    <section id="results" class="results">
+      <p class="results-empty" data-i18n="res.empty"></p>
+    </section>
+  </div>
+</div>
+<script>
+// Bilingual (English / Japanese) string table for the primerblast-oss GUI.
+// Every user-visible label lives here. HTML elements carry data-i18n /
+// data-i18n-ph / data-i18n-title attributes; app.js resolves them at load and
+// on every language switch. Dynamic (result) strings are fetched via t(key).
+
+const I18N = {
+  en: {
+    "app.title": "primerblast-oss",
+    "app.subtitle": "Local Primer-BLAST · design, in-silico PCR, breeding assays — fully offline",
+    "lang.toggle": "日本語",
+    "status.checking": "checking tools…",
+    "status.ok": "primer3 + BLAST+ ready",
+    "status.missing": "missing tools:",
+
+    "tab.design": "Design",
+    "tab.check": "In-silico PCR",
+    "tab.tile": "Tiling",
+    "tab.assay": "Assay (breeding)",
+    "tab.markers": "QTL markers",
+    "tab.makedb": "Build DB",
+
+    "step.guide": "① Pick database(s)　→　② Choose a mode　→　③ Fill in & Run",
+    "db.required": "required",
+    "db.pick": "⚠ Select at least one database to run.",
+    "req.mark": "*",
+
+    "intro.design.t": "Design primers",
+    "intro.design.d": "From a template sequence — or a gene name (with a GFF3 + genome) — design primer pairs and score how specific each one is against the selected databases.",
+    "intro.check.t": "In-silico PCR",
+    "intro.check.d": "Enter primer sequences; predict every PCR product they would make across the selected databases (orientation-independent).",
+    "intro.tile.t": "Region tiling",
+    "intro.tile.d": "Cover a whole region with overlapping amplicons — for sequencing or scanning a long locus end to end.",
+    "intro.assay.t": "Breeding assay",
+    "intro.assay.d": "From a gene, interval, or SNP: design primers, then check specificity, SNPs under the primers, CAPS enzymes, and an overall risk level.",
+    "intro.markers.t": "QTL markers",
+    "intro.markers.d": "Design evenly spaced genotyping markers spanning a QTL interval.",
+    "intro.makedb.t": "Build a BLAST database",
+    "intro.makedb.d": "Turn a FASTA file into a BLAST nucleotide database so it can be selected for specificity screening in the other tabs.",
+
+    "db.legend": "BLAST databases",
+    "db.hint": "Screened for specificity. Pick one or more (multi-DB = cross-cultivar screening).",
+    "db.refresh": "Rescan",
+    "db.none": "No databases found in the default folders. Add a path below.",
+    "db.custom": "Custom database path (prefix, without .nin)",
+    "db.add": "Add",
+    "db.selected": "selected",
+
+    "grp.template": "Template",
+    "grp.primer3": "Primer3 design",
+    "grp.spec": "Specificity (BLAST)",
+    "grp.target": "Target (choose one)",
+    "grp.options": "Options",
+
+    "f.template": "Template sequence or FASTA",
+    "f.template.ph": "Paste DNA (ACGT) or FASTA. Multiple >records allowed.",
+    "f.src": "Template source",
+    "f.src.seq": "Paste sequence / FASTA",
+    "f.src.gene": "By gene name (needs GFF3 + genome)",
+    "f.template_id": "Template ID",
+    "f.product_size": "Product size range(s)",
+    "f.product_size.hint": "e.g. 150-500 or 150-500,500-1000",
+    "f.num_return": "Max pairs",
+    "f.target": "Target region (start,length)",
+    "f.target.hint": "0-based, optional — force primers to flank this",
+    "f.size_tolerance": "Size tolerance (bp)",
+
+    "f.opt_size": "Opt length",
+    "f.min_size": "Min length",
+    "f.max_size": "Max length",
+    "f.opt_tm": "Opt Tm",
+    "f.min_tm": "Min Tm",
+    "f.max_tm": "Max Tm",
+    "f.min_gc": "Min GC%",
+    "f.max_gc": "Max GC%",
+
+    "f.max_total_mismatch": "Max total mismatch",
+    "f.max_3prime_mismatch": "Max 3′ mismatch",
+    "f.three_prime_window": "3′ window (bp)",
+    "f.min_product": "Min product",
+    "f.max_product": "Max product",
+    "f.gel_min_gap": "Gel resolving gap (bp)",
+    "f.word_size": "BLAST word size",
+    "f.no_3prime_terminal": "Do not require 3′-terminal match",
+
+    "f.forward": "Forward primer",
+    "f.reverse": "Reverse primer",
+    "f.primers": "Extra primers (one per line: NAME=SEQ or SEQ)",
+
+    "f.region": "Sub-region (start,end)",
+    "f.amplicon_min": "Amplicon min",
+    "f.amplicon_max": "Amplicon max",
+    "f.overlap": "Overlap (bp)",
+    "f.candidates_per_tile": "Candidates / tile",
+
+    "f.target_kind": "Target type",
+    "f.kind.gene": "Gene (needs GFF3)",
+    "f.kind.interval": "Interval",
+    "f.kind.snp": "SNP (CAPS)",
+    "f.gene": "Gene ID",
+    "f.gene_feature": "Feature",
+    "f.gff3": "GFF3 path",
+    "f.interval": "Interval (chrom:start-end)",
+    "f.snp": "SNP (chrom:pos)",
+    "f.alt": "Alt allele (enables CAPS)",
+    "f.name": "Name",
+    "f.genome": "Reference genome FASTA (.fai indexed)",
+    "f.vcf": "VCF of variants (optional)",
+    "f.flank": "Flank (bp)",
+
+    "f.n_markers": "Number of markers",
+    "f.spacing": "Spacing (bp)",
+    "f.marker_flank": "Marker flank (bp)",
+
+    "f.infile": "Input FASTA path",
+    "f.out_db": "Output DB prefix (optional)",
+    "f.db_title": "Title (optional)",
+    "f.no_parse_seqids": "Skip -parse_seqids",
+
+    "btn.run": "Run",
+    "btn.running": "Running…",
+    "btn.reset": "Reset",
+
+    "res.empty": "Pick database(s), fill in the form above, and press Run — results will appear here.",
+    "res.running": "Working… BLAST can take several seconds to minutes per database.",
+    "res.error": "Error",
+    "res.none": "No primer pairs / products found.",
+    "res.template": "Template",
+    "res.databases": "Databases",
+    "res.pairs": "primer pairs",
+    "res.rank": "Rank",
+    "res.score": "Score",
+    "res.verdict": "Verdict",
+    "res.primer": "Primer",
+    "res.seq": "Sequence",
+    "res.tm": "Tm",
+    "res.gc": "GC%",
+    "res.pos": "Position",
+    "res.product": "Product",
+    "res.ontarget": "On-target",
+    "res.offtarget": "Off-target",
+    "res.comigrating": "Co-migrating",
+    "res.risk": "Risk",
+    "res.caps": "CAPS enzyme",
+    "res.snp": "SNP in primer",
+    "res.subject": "Subject",
+    "res.size": "Size",
+    "res.mismatch": "Mismatch",
+    "res.orientation": "Orient.",
+    "res.products": "Predicted products",
+    "res.sites": "Priming sites / primer",
+    "res.tiles": "Tiles",
+    "res.covered": "Covered",
+    "res.marker": "Marker",
+    "res.anchor": "Anchor",
+    "res.forward": "Forward",
+    "res.reverse": "Reverse",
+    "res.nopair": "no pair found",
+    "res.explain": "Primer3 explain",
+
+    "verdict.specific": "SPECIFIC",
+    "verdict.gel": "GEL-RESOLVABLE",
+    "verdict.ambiguous": "AMBIGUOUS",
+    "risk.low": "low",
+    "risk.med": "medium",
+    "risk.high": "high",
+
+    "leg.title": "How to read these results",
+    "leg.rank": "Rank A–D — overall quality. A: one specific product in every database. B: extra bands, but separable on a gel. C/D: an off-target is close in size (risky).",
+    "leg.onoff": "On-target = the product you intended. Off-target = unintended products. Co-migrating = off-targets too close in size to separate on a gel.",
+    "leg.score": "Score 0–100 — higher is better (fewer / more distant off-targets, balanced Tm & GC).",
+    "leg.risk": "Risk low / medium / high — overall usability, combining specificity, SNPs under the primers, and Tm/GC balance.",
+    "pv.specific": "✓ One specific product in every selected database — ready to order.",
+    "pv.gel": "△ Extra products exist, but they differ enough in size to tell apart on a gel.",
+    "pv.ambiguous": "⚠ An off-target is close in size to the intended product (may co-migrate) — use with caution.",
+    "tip.rank": "Overall quality grade A–D",
+    "tip.verdict": "Specificity verdict across all selected databases",
+    "tip.score": "0–100; higher is better",
+    "tip.ontarget": "Intended products",
+    "tip.offtarget": "Unintended products",
+    "tip.comigrating": "Off-targets too close in size to separate on a gel",
+
+    "dl.title": "Downloads",
+    "dl.tsv": "TSV",
+    "dl.csv": "CSV",
+    "dl.order": "Order sheet",
+    "dl.bed": "BED",
+    "dl.json": "JSON",
+    "dl.ascii": "Off-target map",
+  },
+
+  ja: {
+    "app.title": "primerblast-oss",
+    "app.subtitle": "ローカル版 Primer-BLAST · プライマー設計・in-silico PCR・育種アッセイをオフラインで",
+    "lang.toggle": "English",
+    "status.checking": "ツール確認中…",
+    "status.ok": "primer3 + BLAST+ 利用可能",
+    "status.missing": "不足ツール:",
+
+    "tab.design": "設計",
+    "tab.check": "in-silico PCR",
+    "tab.tile": "タイリング",
+    "tab.assay": "アッセイ(育種)",
+    "tab.markers": "QTLマーカー",
+    "tab.makedb": "DB作成",
+
+    "step.guide": "① データベースを選ぶ　→　② モードを選ぶ　→　③ 入力して実行",
+    "db.required": "必須",
+    "db.pick": "⚠ 実行するにはデータベースを1つ以上選んでください。",
+    "req.mark": "*",
+
+    "intro.design.t": "プライマー設計",
+    "intro.design.d": "テンプレート配列、または遺伝子名(GFF3+ゲノム)からプライマーペアを設計し、選択したDBに対する特異性(オフターゲットの少なさ)を採点します。",
+    "intro.check.t": "in-silico PCR(電子PCR)",
+    "intro.check.d": "既知のプライマー配列を入力すると、選択したDB上で生じる全PCR産物を予測します(向きは自動判定)。",
+    "intro.tile.t": "領域タイリング",
+    "intro.tile.d": "領域全体を重なり合うアンプリコンで埋めます。長い領域を端から端までシーケンス/走査する用途に使います。",
+    "intro.assay.t": "育種アッセイ",
+    "intro.assay.d": "遺伝子・区間・SNPから設計し、特異性/プライマー結合部のSNP/CAPS酵素/総合リスクまで一括で評価します。",
+    "intro.markers.t": "QTLマーカー",
+    "intro.markers.d": "QTL区間をまたぐ等間隔のジェノタイピングマーカーを設計します。",
+    "intro.makedb.t": "BLAST DBの作成",
+    "intro.makedb.d": "FASTAをBLASTヌクレオチドDBに変換します。他のタブの特異性判定で選択できるようになります。",
+
+    "db.legend": "BLASTデータベース",
+    "db.hint": "特異性判定に使用。複数選択で品種横断スクリーニング。",
+    "db.refresh": "再スキャン",
+    "db.none": "既定フォルダにDBが見つかりません。下でパスを追加してください。",
+    "db.custom": "カスタムDBパス(接頭辞・.nin不要)",
+    "db.add": "追加",
+    "db.selected": "件選択中",
+
+    "grp.template": "テンプレート",
+    "grp.primer3": "Primer3 設計",
+    "grp.spec": "特異性(BLAST)",
+    "grp.target": "標的(いずれか一つ)",
+    "grp.options": "オプション",
+
+    "f.template": "テンプレート配列 / FASTA",
+    "f.template.ph": "DNA(ACGT)またはFASTAを貼付。複数レコード可。",
+    "f.src": "テンプレートの指定方法",
+    "f.src.seq": "配列 / FASTA を貼り付け",
+    "f.src.gene": "遺伝子名で指定(GFF3+ゲノム必要)",
+    "f.template_id": "テンプレートID",
+    "f.product_size": "産物長レンジ",
+    "f.product_size.hint": "例: 150-500 または 150-500,500-1000",
+    "f.num_return": "最大ペア数",
+    "f.target": "標的領域(start,length)",
+    "f.target.hint": "0-based・任意。プライマーをこの外側に固定",
+    "f.size_tolerance": "サイズ許容(bp)",
+
+    "f.opt_size": "最適長",
+    "f.min_size": "最小長",
+    "f.max_size": "最大長",
+    "f.opt_tm": "最適Tm",
+    "f.min_tm": "最小Tm",
+    "f.max_tm": "最大Tm",
+    "f.min_gc": "最小GC%",
+    "f.max_gc": "最大GC%",
+
+    "f.max_total_mismatch": "総ミスマッチ上限",
+    "f.max_3prime_mismatch": "3′ミスマッチ上限",
+    "f.three_prime_window": "3′ウィンドウ(bp)",
+    "f.min_product": "最小産物長",
+    "f.max_product": "最大産物長",
+    "f.gel_min_gap": "ゲル分離ギャップ(bp)",
+    "f.word_size": "BLAST word size",
+    "f.no_3prime_terminal": "3′末端一致を必須にしない",
+
+    "f.forward": "フォワードプライマー",
+    "f.reverse": "リバースプライマー",
+    "f.primers": "追加プライマー(1行に NAME=SEQ か SEQ)",
+
+    "f.region": "部分領域(start,end)",
+    "f.amplicon_min": "アンプリコン最小",
+    "f.amplicon_max": "アンプリコン最大",
+    "f.overlap": "オーバーラップ(bp)",
+    "f.candidates_per_tile": "タイルごと候補数",
+
+    "f.target_kind": "標的タイプ",
+    "f.kind.gene": "遺伝子(GFF3必要)",
+    "f.kind.interval": "区間",
+    "f.kind.snp": "SNP(CAPS)",
+    "f.gene": "遺伝子ID",
+    "f.gene_feature": "フィーチャー",
+    "f.gff3": "GFF3パス",
+    "f.interval": "区間(chrom:start-end)",
+    "f.snp": "SNP(chrom:pos)",
+    "f.alt": "Altアレル(CAPS有効化)",
+    "f.name": "名前",
+    "f.genome": "リファレンスゲノムFASTA(.fai必須)",
+    "f.vcf": "変異VCF(任意)",
+    "f.flank": "フランク(bp)",
+
+    "f.n_markers": "マーカー数",
+    "f.spacing": "間隔(bp)",
+    "f.marker_flank": "マーカーフランク(bp)",
+
+    "f.infile": "入力FASTAパス",
+    "f.out_db": "出力DB接頭辞(任意)",
+    "f.db_title": "タイトル(任意)",
+    "f.no_parse_seqids": "-parse_seqids を省略",
+
+    "btn.run": "実行",
+    "btn.running": "実行中…",
+    "btn.reset": "リセット",
+
+    "res.empty": "上でデータベースを選び、フォームに入力して[実行]を押すと、ここに結果が表示されます。",
+    "res.running": "処理中… BLASTはDBごとに数秒〜数分かかります。",
+    "res.error": "エラー",
+    "res.none": "プライマーペア / 産物が見つかりませんでした。",
+    "res.template": "テンプレート",
+    "res.databases": "データベース",
+    "res.pairs": "プライマーペア",
+    "res.rank": "ランク",
+    "res.score": "スコア",
+    "res.verdict": "判定",
+    "res.primer": "プライマー",
+    "res.seq": "配列",
+    "res.tm": "Tm",
+    "res.gc": "GC%",
+    "res.pos": "位置",
+    "res.product": "産物長",
+    "res.ontarget": "オンターゲット",
+    "res.offtarget": "オフターゲット",
+    "res.comigrating": "共泳動",
+    "res.risk": "リスク",
+    "res.caps": "CAPS酵素",
+    "res.snp": "プライマー内SNP",
+    "res.subject": "サブジェクト",
+    "res.size": "サイズ",
+    "res.mismatch": "ミスマッチ",
+    "res.orientation": "向き",
+    "res.products": "予測産物",
+    "res.sites": "プライミング部位/プライマー",
+    "res.tiles": "タイル",
+    "res.covered": "カバー範囲",
+    "res.marker": "マーカー",
+    "res.anchor": "アンカー",
+    "res.forward": "フォワード",
+    "res.reverse": "リバース",
+    "res.nopair": "ペアなし",
+    "res.explain": "Primer3 explain",
+
+    "verdict.specific": "特異的",
+    "verdict.gel": "ゲル分離可",
+    "verdict.ambiguous": "曖昧",
+    "risk.low": "低",
+    "risk.med": "中",
+    "risk.high": "高",
+
+    "leg.title": "結果の見方",
+    "leg.rank": "ランク A〜D — 総合品質。A: 全DBで単一・特異的な産物。B: 余分な産物はあるがゲルで分離可。C/D: 目的外産物がサイズ近接(注意)。",
+    "leg.onoff": "オンターゲット=狙った産物。オフターゲット=意図しない産物。共泳動=サイズが近くゲルで分離できないオフターゲット。",
+    "leg.score": "スコア 0〜100 — 高いほど良い(オフターゲットが少ない/離れている、Tm・GCが均衡)。",
+    "leg.risk": "リスク 低/中/高 — 総合的な使いやすさ。特異性・プライマー結合部のSNP・Tm/GC均衡を統合。",
+    "pv.specific": "✓ 選択した全DBで単一・特異的な産物。そのまま発注できます。",
+    "pv.gel": "△ 余分な産物はありますが、サイズが離れておりゲルで区別できます。",
+    "pv.ambiguous": "⚠ 目的外産物が目的産物とサイズ近接(共泳動の恐れ)。使用は注意。",
+    "tip.rank": "総合品質グレード A〜D",
+    "tip.verdict": "選択した全DBでの特異性判定",
+    "tip.score": "0〜100、高いほど良い",
+    "tip.ontarget": "狙った産物",
+    "tip.offtarget": "意図しない産物",
+    "tip.comigrating": "サイズが近くゲルで分離できないオフターゲット",
+
+    "dl.title": "ダウンロード",
+    "dl.tsv": "TSV",
+    "dl.csv": "CSV",
+    "dl.order": "発注表",
+    "dl.bed": "BED",
+    "dl.json": "JSON",
+    "dl.ascii": "オフターゲット図",
+  },
+};
+
+let LANG = localStorage.getItem("pb_lang") || "ja";
+
+function t(key) {
+  const table = I18N[LANG] || I18N.en;
+  return (key in table) ? table[key] : (I18N.en[key] ?? key);
+}
+
+function setLang(lang) {
+  LANG = (lang in I18N) ? lang : "en";
+  localStorage.setItem("pb_lang", LANG);
+  document.documentElement.lang = LANG;
+  applyI18n();
+}
+
+function applyI18n() {
+  document.querySelectorAll("[data-i18n]").forEach((el) => {
+    el.textContent = t(el.getAttribute("data-i18n"));
+  });
+  document.querySelectorAll("[data-i18n-ph]").forEach((el) => {
+    el.setAttribute("placeholder", t(el.getAttribute("data-i18n-ph")));
+  });
+  document.querySelectorAll("[data-i18n-title]").forEach((el) => {
+    el.setAttribute("title", t(el.getAttribute("data-i18n-title")));
+  });
+  if (typeof onLangChange === "function") onLangChange();
+}
+
+</script>
+<script>
+// Front-end controller for the primerblast-oss GUI.
+// Vanilla JS, no build step. Talks to the stdlib http.server backend.
+
+"use strict";
+
+const $ = (sel, root = document) => root.querySelector(sel);
+const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g,
+  (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+let selectedDbs = [];           // chosen database prefixes
+let customDbs = [];             // user-typed prefixes
+let lastResult = null;          // for re-render on language switch
+
+// --------------------------------------------------------------------------
+// shared advanced field groups (injected into every relevant form)
+// --------------------------------------------------------------------------
+function knobsHTML() {
+  const f = (n, v, step) =>
+    `<label><span data-i18n="f.${n}"></span><input name="${n}" type="number" step="${step || 1}" value="${v}"></label>`;
+  return `<details class="adv"><summary data-i18n="grp.primer3"></summary><div class="grid">
+    ${f("opt_size", 20)}${f("min_size", 18)}${f("max_size", 25)}
+    ${f("opt_tm", 60, "any")}${f("min_tm", 57, "any")}${f("max_tm", 63, "any")}
+    ${f("min_gc", 20, "any")}${f("max_gc", 80, "any")}
+    <label><span data-i18n="f.size_tolerance"></span><input name="size_tolerance" type="number" value="10"></label>
+  </div></details>`;
+}
+function specHTML() {
+  const f = (n, v, step) =>
+    `<label><span data-i18n="f.${n}"></span><input name="${n}" type="number" step="${step || 1}" value="${v}"></label>`;
+  return `<details class="adv"><summary data-i18n="grp.spec"></summary><div class="grid">
+    ${f("max_total_mismatch", 4)}${f("max_3prime_mismatch", 1)}${f("three_prime_window", 5)}
+    ${f("min_product", 40)}${f("max_product", 4000)}${f("gel_min_gap", 50)}${f("word_size", 7)}
+    <label class="check"><input name="no_3prime_terminal" type="checkbox"><span data-i18n="f.no_3prime_terminal"></span></label>
+  </div></details>`;
+}
+function injectGroups() {
+  $$("[data-knobs]").forEach((d) => { d.innerHTML = knobsHTML(); });
+  $$("[data-spec]").forEach((d) => { d.innerHTML = specHTML(); });
+}
+
+// --------------------------------------------------------------------------
+// databases
+// --------------------------------------------------------------------------
+async function loadDatabases() {
+  let discovered = [];
+  try {
+    const r = await fetch("/api/databases");
+    discovered = (await r.json()).databases || [];
+  } catch (e) { /* offline: keep custom only */ }
+  const all = [...discovered.map((d) => ({ name: d.name, path: d.path })),
+               ...customDbs.map((p) => ({ name: p.split("/").pop(), path: p }))];
+  const seen = new Set();
+  const list = $("#db-list");
+  list.innerHTML = "";
+  list.setAttribute("data-empty", t("db.none"));
+  all.forEach((d) => {
+    if (seen.has(d.path)) return;
+    seen.add(d.path);
+    const chip = document.createElement("span");
+    chip.className = "db-chip" + (selectedDbs.includes(d.path) ? " on" : "");
+    chip.innerHTML = `<span class="tick">${selectedDbs.includes(d.path) ? "✓" : "＋"}</span><span class="db-name">${esc(d.name)}</span>`;
+    chip.title = d.path;
+    chip.addEventListener("click", () => {
+      if (selectedDbs.includes(d.path)) selectedDbs = selectedDbs.filter((x) => x !== d.path);
+      else selectedDbs.push(d.path);
+      chip.classList.toggle("on");
+      chip.querySelector(".tick").textContent = chip.classList.contains("on") ? "✓" : "＋";
+      updateDbCount();
+    });
+    list.appendChild(chip);
+  });
+  updateDbCount();
+}
+function updateDbCount() {
+  const el = $("#db-count");
+  if (selectedDbs.length === 0) {
+    el.textContent = t("db.pick");
+    el.classList.add("warn");
+  } else {
+    el.textContent = `${selectedDbs.length} ${t("db.selected")}`;
+    el.classList.remove("warn");
+  }
+}
+
+// --------------------------------------------------------------------------
+// health
+// --------------------------------------------------------------------------
+async function loadHealth() {
+  const badge = $("#tool-status");
+  try {
+    const h = await (await fetch("/api/health")).json();
+    if (h.ok) {
+      badge.className = "status status-ok";
+      badge.textContent = t("status.ok");
+    } else {
+      const missing = Object.entries(h.tools).filter(([, v]) => !v).map(([k]) => k);
+      badge.className = "status status-bad";
+      badge.textContent = `${t("status.missing")} ${missing.join(", ")}`;
+    }
+  } catch (e) {
+    badge.className = "status status-bad";
+    badge.textContent = "backend offline";
+  }
+}
+
+// --------------------------------------------------------------------------
+// tabs
+// --------------------------------------------------------------------------
+function initTabs() {
+  $$(".tab").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      $$(".tab").forEach((b) => b.classList.remove("active"));
+      $$(".panel").forEach((p) => p.classList.remove("active"));
+      btn.classList.add("active");
+      $(`.panel[data-panel="${btn.dataset.tab}"]`).classList.add("active");
+    });
+  });
+}
+
+// --------------------------------------------------------------------------
+// assay: show only fields for the selected target kind
+// --------------------------------------------------------------------------
+function initAssayKind() {
+  const sel = $("#assay-kind");
+  if (!sel) return;
+  const sync = () => {
+    const kind = sel.value;
+    $$('[data-kind]', sel.closest("form")).forEach((el) => {
+      el.style.display = (el.dataset.kind === kind) ? "" : "none";
+    });
+  };
+  sel.addEventListener("change", sync);
+  sync();
+}
+
+// design tab: switch template source between pasted sequence and gene name
+function initDesignSrc() {
+  const sel = $("#design-src");
+  if (!sel) return;
+  const sync = () => {
+    const src = sel.value;
+    $$('[data-src]', sel.closest("form")).forEach((el) => {
+      el.style.display = (el.dataset.src === src) ? "" : "none";
+    });
+  };
+  sel.addEventListener("change", sync);
+  sync();
+}
+
+// --------------------------------------------------------------------------
+// form submit -> job -> poll -> render
+// --------------------------------------------------------------------------
+function formParams(form) {
+  const p = {};
+  $$("input,textarea,select", form).forEach((el) => {
+    if (!el.name) return;
+    if (el.type === "checkbox") p[el.name] = el.checked;
+    else p[el.name] = el.value;
+  });
+  return p;
+}
+
+function buildParams(mode, form) {
+  const p = formParams(form);
+  if (mode !== "makedb") p.db = selectedDbs.slice();
+  if (mode === "check") {
+    p.primers = (p.primers || "").split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+  }
+  if (mode === "assay") {
+    // keep only the fields for the chosen target kind
+    const kind = p.target_kind;
+    if (kind !== "gene") { p.gene = ""; p.gff3 = ""; }
+    if (kind !== "interval") { p.interval = ""; }
+    if (kind !== "snp") { p.snp = ""; p.alt = ""; }
+  }
+  return p;
+}
+
+async function runMode(mode, form) {
+  const btn = $(".run", form);
+  const results = $("#results");
+  if (mode !== "makedb" && selectedDbs.length === 0) {
+    results.innerHTML = `<div class="err">${esc(t("db.none"))}</div>`;
+    return;
+  }
+  btn.disabled = true;
+  const original = btn.textContent;
+  btn.textContent = t("btn.running");
+  results.innerHTML = `<p class="results-empty"><span class="spinner"></span>${esc(t("res.running"))}</p>`;
+
+  try {
+    const submit = await (await fetch(`/api/run/${mode}`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ params: buildParams(mode, form) }),
+    })).json();
+    if (submit.error) throw new Error(submit.error);
+    const job = await pollJob(submit.job_id);
+    if (job.status === "error") {
+      results.innerHTML = `<div class="err">${esc(t("res.error"))}: ${esc(job.error)}\n\n${esc(job.trace || "")}</div>`;
+    } else {
+      lastResult = job.result;
+      renderResult(job.result);
+    }
+  } catch (e) {
+    results.innerHTML = `<div class="err">${esc(t("res.error"))}: ${esc(e.message)}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = original;
+  }
+}
+
+function pollJob(jobId) {
+  return new Promise((resolve, reject) => {
+    const tick = async () => {
+      try {
+        const j = await (await fetch(`/api/job/${jobId}`)).json();
+        if (j.status === "running") setTimeout(tick, 1200);
+        else resolve(j);
+      } catch (e) { reject(e); }
+    };
+    tick();
+  });
+}
+
+// --------------------------------------------------------------------------
+// rendering
+// --------------------------------------------------------------------------
+function renderResult(data) {
+  const renderers = {
+    design: renderDesign, check: renderCheck, tile: renderTile,
+    assay: renderAssay, markers: renderMarkers, makedb: renderMakedb,
+  };
+  const fn = renderers[data.mode];
+  $("#results").innerHTML = fn ? fn(data) : `<pre class="explain">${esc(JSON.stringify(data, null, 2))}</pre>`;
+  wireDownloads();
+}
+
+function dbNames(dbs) { return (dbs || []).map((d) => String(d).split("/").pop()).join(", "); }
+
+function verdictBadge(spec) {
+  const tip = ` title="${esc(t("tip.verdict"))}"`;
+  if (spec.specific_all_db) return `<span class="badge v-specific"${tip}>${t("verdict.specific")}</span>`;
+  if (spec.gel_distinguishable) return `<span class="badge v-gel"${tip}>${t("verdict.gel")}</span>`;
+  return `<span class="badge v-ambiguous"${tip}>${t("verdict.ambiguous")}</span>`;
+}
+function riskBadge(level) {
+  const key = { low: "risk.low", medium: "risk.med", high: "risk.high" }[level] || "risk.med";
+  const cls = { low: "risk-low", medium: "risk-med", high: "risk-high" }[level] || "risk-med";
+  return `<span class="badge ${cls}">${t(key)}</span>`;
+}
+
+// one-line, plain-language reading of a design pair's specificity
+function plainVerdict(spec) {
+  if (spec.specific_all_db) return { cls: "pv-ok", text: t("pv.specific") };
+  if (spec.gel_distinguishable) return { cls: "pv-warn", text: t("pv.gel") };
+  return { cls: "pv-bad", text: t("pv.ambiguous") };
+}
+
+// collapsible glossary explaining the terms used in each result mode
+function legendHTML(kind) {
+  const rows = [];
+  if (kind === "design" || kind === "tile") { rows.push("leg.rank", "leg.onoff", "leg.score"); }
+  else if (kind === "check") { rows.push("leg.onoff"); }
+  else if (kind === "assay") { rows.push("leg.risk", "leg.onoff"); }
+  return `<details class="legend"><summary>${esc(t("leg.title"))}</summary>` +
+    rows.map((k) => `<p>${esc(t(k))}</p>`).join("") + `</details>`;
+}
+
+function offtargetTable(perDb) {
+  let rows = "";
+  perDb.forEach((db) => {
+    (db.off_target || []).forEach((a) => {
+      rows += `<tr><td>${esc(db.db.split("/").pop())}</td><td class="seqmono">${esc(a.subject)}:${a.start}-${a.end}</td>
+        <td>${a.size}</td><td class="seqmono">${esc(a.orientation)}</td><td>${a.fwd_mismatch}+${a.rev_mismatch}</td></tr>`;
+    });
+  });
+  if (!rows) return "";
+  return `<div class="tbl-wrap"><table><thead><tr>
+    <th>${t("res.databases")}</th><th>${t("res.subject")}</th><th>${t("res.size")}</th>
+    <th>${t("res.orientation")}</th><th>${t("res.mismatch")}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+function renderDesign(data) {
+  let html = legendHTML("design");
+  data.templates.forEach((tpl) => {
+    html += `<div class="result-head"><h3>${t("res.template")}: ${esc(tpl.template_id)}</h3>
+      <span class="meta">${tpl.template_len} bp · ${t("res.databases")}: ${esc(dbNames(tpl.databases))} · ${tpl.n_pairs} ${t("res.pairs")}</span></div>`;
+    html += `<div class="downloads"><strong>${t("dl.title")}</strong>
+      ${dl("tsv", `${tpl.template_id}.tsv`, tpl.tsv)}
+      ${dl("json", `${tpl.template_id}.json`, JSON.stringify(tpl, null, 2))}</div>`;
+    if (!tpl.pairs.length) { html += `<p class="results-empty">${t("res.none")}</p>`; return; }
+    tpl.pairs.forEach((p, i) => {
+      const s = p.specificity || {};
+      const fPos = `${p.left_start + 1}..${p.left_start + p.left_len}`;
+      const rPos = `${p.right_start - p.right_len + 2}..${p.right_start + 1}`;
+      const pv = plainVerdict(s);
+      html += `<details class="pair-card"${i === 0 ? " open" : ""}><summary>
+        <div class="pair-summary">
+          <span class="badge rank-${esc(s.rank)}" title="${esc(t("tip.rank"))}">${esc(s.rank)}</span>
+          ${verdictBadge(s)}
+          <div class="grow"><span class="seqmono">F 5′-${esc(p.forward)}-3′ / R 5′-${esc(p.reverse)}-3′</span>
+            <div class="subline">${t("res.product")} ${p.product_size} bp · Tm ${p.tm_f.toFixed(1)}/${p.tm_r.toFixed(1)} ·
+              GC ${p.gc_f.toFixed(0)}/${p.gc_r.toFixed(0)}% · ${t("res.pos")} F ${fPos} R ${rPos}</div></div>
+          <span class="meta"><span title="${esc(t("tip.score"))}">${t("res.score")} ${s.score}</span> ·
+            <span title="${esc(t("tip.ontarget"))}">${t("res.ontarget")} ${s.total_on_target}</span> ·
+            <span title="${esc(t("tip.offtarget"))}">${t("res.offtarget")} ${s.total_off_target}</span>
+            <span title="${esc(t("tip.comigrating"))}">(${t("res.comigrating")} ${s.total_comigrating})</span></span>
+        </div>
+        <p class="verdict-plain ${pv.cls}">${esc(pv.text)}</p></summary>
+        ${offtargetTable(s.per_db || [])}</details>`;
+    });
+    if (tpl.primer3_explain) {
+      html += `<details class="adv"><summary>${t("res.explain")}</summary><pre class="explain">${esc(tpl.primer3_explain)}</pre></details>`;
+    }
+  });
+  return html;
+}
+
+function renderCheck(data) {
+  let html = legendHTML("check") + `<div class="result-head"><h3>${t("tab.check")}</h3>
+    <span class="meta">${Object.entries(data.primers).map(([k, v]) => `${esc(k)}=${esc(v)}`).join(" · ")}</span></div>`;
+  html += `<div class="downloads"><strong>${t("dl.title")}</strong>${dl("json", "insilico.json", JSON.stringify(data, null, 2))}</div>`;
+  (data.results || []).forEach((db) => {
+    html += `<div class="result-head"><h3>${esc(db.db.split("/").pop())}</h3>
+      <span class="meta">${db.n_products} ${t("res.products")} · ${t("res.sites")}: ${esc(JSON.stringify(db.sites_per_primer))}</span></div>`;
+    if (!db.products.length) { html += `<p class="results-empty">${t("res.none")}</p>`; return; }
+    let rows = "";
+    db.products.forEach((a) => {
+      rows += `<tr><td class="seqmono">${esc(a.subject)}:${a.start}-${a.end}</td><td>${a.size}</td>
+        <td class="seqmono">${esc(a.orientation)}</td><td>${a.fwd_mismatch}+${a.rev_mismatch}</td>
+        <td>${a.on_target ? "✓" : ""}</td></tr>`;
+    });
+    html += `<div class="tbl-wrap"><table><thead><tr><th>${t("res.subject")}</th><th>${t("res.size")}</th>
+      <th>${t("res.orientation")}</th><th>${t("res.mismatch")}</th><th>${t("res.ontarget")}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  });
+  return html;
+}
+
+function renderTile(data) {
+  let html = legendHTML("tile");
+  data.templates.forEach((tpl) => {
+    html += `<div class="result-head"><h3>${t("res.template")}: ${esc(tpl.template_id)}</h3>
+      <span class="meta">${t("res.tiles")}: ${tpl.n_tiles} · ${t("res.databases")}: ${esc(dbNames(tpl.databases))}</span></div>`;
+    html += `<div class="downloads"><strong>${t("dl.title")}</strong>${dl("json", `${tpl.template_id}_tiles.json`, JSON.stringify(tpl, null, 2))}</div>`;
+    if (!tpl.tiles.length) { html += `<p class="results-empty">${t("res.none")}</p>`; return; }
+    let rows = "";
+    tpl.tiles.forEach((tl) => {
+      const s = tl.specificity || {};
+      rows += `<tr><td>${tl.index + 1}</td><td>${tl.covers[0]}–${tl.covers[1]}</td><td>${tl.product_size}</td>
+        <td class="seqmono">${esc(tl.forward)}</td><td class="seqmono">${esc(tl.reverse)}</td>
+        <td>${tl.tm_f}/${tl.tm_r}</td><td><span class="badge small rank-${esc(s.rank)}">${esc(s.rank || "?")}</span></td></tr>`;
+    });
+    html += `<div class="tbl-wrap"><table><thead><tr><th>#</th><th>${t("res.covered")}</th><th>${t("res.product")}</th>
+      <th>${t("res.forward")}</th><th>${t("res.reverse")}</th><th>${t("res.tm")}</th><th>${t("res.rank")}</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>`;
+  });
+  return html;
+}
+
+function renderAssay(data) {
+  const tg = data.target || {};
+  let html = legendHTML("assay") + `<div class="result-head"><h3>${esc(tg.name || "assay")}</h3>
+    <span class="meta">${esc(tg.chrom)}:${tg.start}-${tg.end} · ${data.template_len} bp ·
+      ${t("res.databases")}: ${esc(dbNames(data.databases))} · ${data.n_pairs} ${t("res.pairs")}</span></div>`;
+  const ex = data.exports || {};
+  html += `<div class="downloads"><strong>${t("dl.title")}</strong>
+    ${ex.csv ? dl("csv", `${tg.name || "assay"}.csv`, ex.csv) : ""}
+    ${ex.order ? dl("order", `${tg.name || "assay"}_order.txt`, ex.order) : ""}
+    ${ex.bed ? dl("bed", `${tg.name || "assay"}.bed`, ex.bed) : ""}
+    ${ex.ascii ? dl("ascii", `${tg.name || "assay"}_map.txt`, ex.ascii) : ""}
+    ${dl("json", `${tg.name || "assay"}.json`, JSON.stringify(data, null, 2))}</div>`;
+  if (!(data.pairs || []).length) return html + `<p class="results-empty">${t("res.none")}</p>`;
+  data.pairs.forEach((p, i) => {
+    html += `<details class="pair-card"${i === 0 ? " open" : ""}><summary>
+      <div class="pair-summary">${riskBadge(p.risk)}
+        <div class="grow"><span class="seqmono">F 5′-${esc(p.forward)}-3′ / R 5′-${esc(p.reverse)}-3′</span>
+          <div class="subline">${t("res.product")} ${p.product_size} bp · Tm ${p.tm_f}/${p.tm_r} · GC ${p.gc_f}/${p.gc_r}%</div></div>
+        <span class="meta">${t("res.offtarget")} ${p.n_off_target} (FR ${p.n_fr_offtarget}/FF ${p.n_ff}/RR ${p.n_rr})
+          ${p.caps_enzyme ? " · " + t("res.caps") + ": " + esc(p.caps_enzyme) : ""}
+          ${p.snp_in_primer ? " · " + t("res.snp") : ""}</span>
+      </div></summary>
+      <p class="subline">${esc((p.risk_reasons || []).join("; "))}</p>
+      ${p.products && p.products.length ? productsMini(p.products) : ""}</details>`;
+  });
+  if (ex.ascii) html += `<details class="adv"><summary>${t("dl.ascii")}</summary><pre class="ascii">${esc(ex.ascii)}</pre></details>`;
+  return html;
+}
+
+function productsMini(products) {
+  let rows = "";
+  products.forEach((a) => {
+    rows += `<tr><td class="seqmono">${esc(a.subject)}:${a.start}-${a.end}</td><td>${a.size}</td>
+      <td class="seqmono">${esc(a.orientation)}</td><td>${a.fwd_mismatch}+${a.rev_mismatch}</td>
+      <td>${a.on_target ? "✓" : ""}</td></tr>`;
+  });
+  return `<div class="tbl-wrap"><table><thead><tr><th>${t("res.subject")}</th><th>${t("res.size")}</th>
+    <th>${t("res.orientation")}</th><th>${t("res.mismatch")}</th><th>${t("res.ontarget")}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+function renderMarkers(data) {
+  let html = `<div class="result-head"><h3>${t("tab.markers")}</h3><span class="meta">${esc(data.interval || "")} · ${(data.markers || []).length}</span></div>`;
+  html += `<div class="downloads"><strong>${t("dl.title")}</strong>${dl("json", "markers.json", JSON.stringify(data, null, 2))}</div>`;
+  let rows = "";
+  (data.markers || []).forEach((m) => {
+    const p = (m.pairs || [])[0];
+    if (p) {
+      rows += `<tr><td>${esc(m.marker)}</td><td>${esc(m.anchor)}</td><td>${riskBadge(p.risk)}</td>
+        <td>${p.product_size}</td><td class="seqmono">${esc(p.forward)}</td><td class="seqmono">${esc(p.reverse)}</td></tr>`;
+    } else {
+      rows += `<tr><td>${esc(m.marker)}</td><td>${esc(m.anchor)}</td><td colspan="4" class="subline">${esc(m.error || t("res.nopair"))}</td></tr>`;
+    }
+  });
+  html += `<div class="tbl-wrap"><table><thead><tr><th>${t("res.marker")}</th><th>${t("res.anchor")}</th>
+    <th>${t("res.risk")}</th><th>${t("res.product")}</th><th>${t("res.forward")}</th><th>${t("res.reverse")}</th></tr></thead>
+    <tbody>${rows}</tbody></table></div>`;
+  return html;
+}
+
+function renderMakedb(data) {
+  return `<div class="result-head"><h3>${t("tab.makedb")}</h3></div>
+    <pre class="explain">${esc(data.message || JSON.stringify(data, null, 2))}</pre>`;
+}
+
+// --------------------------------------------------------------------------
+// downloads (client-side blobs)
+// --------------------------------------------------------------------------
+let _dlStore = [];
+function dl(kind, filename, text) {
+  if (text == null) return "";
+  const id = _dlStore.length;
+  _dlStore.push({ filename, text });
+  return `<button class="dlbtn" data-dl="${id}">${t("dl." + kind)}</button>`;
+}
+function wireDownloads() {
+  $$(".dlbtn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const { filename, text } = _dlStore[+btn.dataset.dl];
+      const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    });
+  });
+}
+
+// --------------------------------------------------------------------------
+// language change hook (called by applyI18n)
+// --------------------------------------------------------------------------
+function onLangChange() {
+  updateDbCount();
+  loadHealth();
+  $("#db-list").setAttribute("data-empty", t("db.none"));
+  if (lastResult) renderResult(lastResult);
+}
+
+// --------------------------------------------------------------------------
+// boot
+// --------------------------------------------------------------------------
+function boot() {
+  injectGroups();
+  applyI18n();
+  initTabs();
+  initAssayKind();
+  initDesignSrc();
+  loadHealth();
+  loadDatabases();
+
+  $("#lang-btn").addEventListener("click", () => setLang(LANG === "ja" ? "en" : "ja"));
+  $("#db-refresh").addEventListener("click", loadDatabases);
+  $("#db-add").addEventListener("click", () => {
+    const input = $("#db-custom-input");
+    const v = input.value.trim();
+    if (v && !customDbs.includes(v)) {
+      customDbs.push(v);
+      if (!selectedDbs.includes(v)) selectedDbs.push(v);
+      input.value = "";
+      loadDatabases();
+    }
+  });
+  $$(".panel[data-mode]").forEach((form) => {
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      runMode(form.dataset.mode, form);
+    });
+    form.addEventListener("reset", () => setTimeout(() => {
+      injectGroups(); applyI18n();
+      const ds = $("#design-src"); if (ds) ds.dispatchEvent(new Event("change"));
+      const ak = $("#assay-kind"); if (ak) ak.dispatchEvent(new Event("change"));
+    }, 0));
+  });
+}
+
+document.addEventListener("DOMContentLoaded", boot);
+
+</script>

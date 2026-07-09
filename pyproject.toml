@@ -39,7 +39,10 @@ primerblast-oss = "primerblast_oss.cli:main"
 dev = ["pytest"]
 
 [tool.setuptools]
-packages = ["primerblast_oss"]
+packages = ["primerblast_oss", "primerblast_oss.webapp"]
+
+[tool.setuptools.package-data]
+"primerblast_oss.webapp" = ["static/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

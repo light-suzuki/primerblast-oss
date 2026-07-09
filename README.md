@@ -7,8 +7,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://www.python.org/)
 
-A local, open-source reimplementation of [NCBI Primer-BLAST](https://www.ncbi.nlm.nih.gov/tools/primer-blast/)
-for plant breeding and genetics. Design PCR primers with **Primer3** and check
+A local, open-source Primer-BLAST-like workflow for plant breeding and
+genetics. Design PCR primers with **Primer3** and check
 their **specificity** entirely offline against local BLAST+ databases —
 including unpublished genomes and several cultivars at once — plus in-silico
 PCR, whole-region tiling, SNP-under-primer detection, amplicon conservation,
@@ -41,7 +41,7 @@ predicted amplicons** to flag unintended PCR products. Most local "primer +
 BLAST" scripts only do a per-primer BLAST and miss step (2) — the part that
 actually detects off-target products.
 
-`primerblast-oss` is an independent reimplementation of step (2) — using a
+`primerblast-oss` is an independent implementation of step (2) — using a
 BLAST-alignment-based priming model, not NCBI's exact algorithm — with a focus
 on things a local, breeding-oriented workflow needs:
 
@@ -87,6 +87,13 @@ For each primer pair and each database:
 Pairs are scored and ranked A–D by specificity, Tm balance, GC, and 3'-dimer
 strength.
 
+Use `--specificity-profile ncbi` to switch the mismatch thresholds to a
+NCBI-Primer-BLAST-like stringency profile: up to 5 total mismatches are kept as
+candidate priming sites, up to 1 mismatch is allowed within the 3'-terminal 5 bp,
+and a terminal-base mismatch is counted rather than rejected outright. This is a
+compatibility profile for threshold behavior; it is still not NCBI's private
+algorithm or database.
+
 ## Requirements
 
 - Python ≥ 3.8 (standard library only)
@@ -101,6 +108,39 @@ pip install -e .        # provides the `primerblast-oss` command
 # or run without installing:
 python -m primerblast_oss --help
 ```
+
+## Web GUI (bilingual: English / 日本語)
+
+A local, browser-based front end wraps every subcommand — no cloud, no
+third-party Python dependencies (it is built on the standard-library
+`http.server`). Run it on the machine where `primer3_core`, `blastn`, and your
+BLAST databases live (e.g. inside WSL):
+
+```bash
+python -m primerblast_oss.webapp          # serves http://127.0.0.1:8799 and opens a browser
+python -m primerblast_oss.webapp --port 9000 --no-browser
+```
+
+Then use the tabs for **design / in-silico PCR / tiling / assay / QTL markers /
+build DB**. The interface:
+
+- Auto-discovers BLAST databases under `~/.codex/blast_databases`,
+  `~/blast_databases`, and `./databases`; you can also paste an absolute path.
+  Select one or more for multi-cultivar screening.
+- On the **design** tab you can supply the template either by pasting a
+  sequence/FASTA **or by gene name** — pick "By gene name", enter the gene ID (or
+  Name), a GFF3 annotation, and a `.fai`-indexed genome FASTA, and the region is
+  resolved and extracted automatically before design.
+- Runs each job in a background thread and polls for the result, so long BLAST
+  screens don't block the UI.
+- Renders ranked primer pairs, predicted products, off-target tables, and
+  (for assays) CAPS enzymes and risk levels, with one-click TSV/CSV/BED/JSON
+  and off-target-map downloads.
+- Switches between English and Japanese instantly via the button in the header;
+  the choice is remembered across sessions.
+
+The GUI binds to loopback (`127.0.0.1`) only. On WSL2, Windows browsers can
+reach it through the default localhost forwarding.
 
 ## Usage
 
@@ -219,7 +259,7 @@ pairing, multi-threaded `blastn`, coordinate input) and NCBI Primer-BLAST.
 Honest scope, so you know what it does *not* do:
 
 - **Not validated against NCBI Primer-BLAST.** It is an independent
-  reimplementation; results are plausible and internally checked, not verified to
+  implementation; results are plausible and internally checked, not verified to
   match NCBI's output.
 - **Priming is judged by BLAST alignment + a mismatch/3'-anchor rule, not
   thermodynamics.** Off-target annealing temperature (Tm) is not computed, so a
@@ -243,10 +283,15 @@ Contributions toward any of these are welcome.
 | `--product-size` (design) | one or more ranges, e.g. `150-500,500-1000` | `70-1000` |
 | `--amplicon-min/--amplicon-max/--overlap` (tile) | tiling geometry | 400/800/40 |
 | `--opt-tm/--min-tm/--max-tm` | primer melting temperature window | 60/57/63 |
+| `--specificity-profile` | mismatch preset: `local-strict` or `ncbi` | `local-strict` |
 | `--max-total-mismatch` | mismatches allowed for an off-target to still prime | 4 |
 | `--max-3prime-mismatch` | mismatches allowed in the 3' window | 1 |
 | `--three-prime-window` | size of the 3' window | 5 |
 | `--max-product` | largest off-target amplicon considered amplifiable | 4000 |
+| `--max-target-seqs` | BLAST hit cap; raise for repetitive genomes | 5000 |
+| `--exhaustive` | convenience mode using a higher BLAST hit cap | off |
+| `--num-threads` | `blastn` worker threads | 4 |
+| `--high-copy-hit-threshold` | raw BLAST HSP count that triggers a repeat-sensitivity warning | 10000 |
 | `--gel-min-gap` | size gap (bp) to resolve two products on a gel | 50 |
 | `--no-3prime-terminal` | allow a mismatched 3' terminal base | off |
 | `--format` | `text` \| `json` \| `tsv` (design only) | text |

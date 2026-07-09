@@ -5,8 +5,10 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from primerblast_oss.genome import revcomp                                # noqa: E402
+from primerblast_oss.design import PrimerPair                             # noqa: E402
 from primerblast_oss.regions import GenomicRegion, tile_interval          # noqa: E402
 from primerblast_oss.specificity import Amplicon                          # noqa: E402
+from primerblast_oss.report import tiling_to_dict                         # noqa: E402
 from primerblast_oss.variants import (                                    # noqa: E402
     footprints_from_amplicon, snps_under_primers, amplicon_variants,
     conservation_from_per_db,
@@ -109,6 +111,27 @@ def test_caps_ecori_distinguishable():
     enz = [r for r in res if r.enzyme == "EcoRI"]
     assert enz and enz[0].distinguishable
     assert find_sites("GGGAATTCCC")  # sanity
+
+
+def test_tiling_json_keeps_amplicons_structured():
+    pair = PrimerPair(
+        index=0, template_id="t", forward="ACGT", reverse="TGCA",
+        left_start=0, left_len=4, right_start=99, right_len=4,
+        product_size=100, tm_f=60.0, tm_r=60.0, gc_f=50.0, gc_r=50.0,
+    )
+    amp = Amplicon("chr1", 1, 100, 100, "F", "R", 0, 0, on_target=True)
+    pair.specificity = {
+        "per_db": [{
+            "db": "/x/db", "on_target": [amp], "off_target": [],
+            "n_products": 1, "n_on_target": 1, "n_off_target": 0,
+            "n_comigrating": 0, "specific": True,
+        }]
+    }
+    out = tiling_to_dict([{"index": 1, "covers": (0, 99), "pair": pair}],
+                         "t", (0, 99), ["/x/db"])
+    product = out["tiles"][0]["specificity"]["per_db"][0]["on_target"][0]
+    assert product["subject"] == "chr1"
+    assert product["orientation"] == "F/R"
 
 
 if __name__ == "__main__":

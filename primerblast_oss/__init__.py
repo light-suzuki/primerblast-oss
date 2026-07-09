@@ -1,8 +1,9 @@
-"""primerblast-oss: a local, open-source reimplementation of NCBI Primer-BLAST.
+"""primerblast-oss: a local, open-source Primer-BLAST-like workflow.
 
 Design PCR primers with Primer3 and evaluate their specificity by pairing
-BLAST hits into predicted amplicons on each subject sequence -- exactly the
-step that distinguishes Primer-BLAST from a plain "BLAST each primer" check.
+BLAST hits into predicted amplicons on each subject sequence -- the pairing
+step that distinguishes Primer-BLAST-style screening from a plain "BLAST each
+primer" check.
 
 Runs fully offline against local BLAST+ databases (including unpublished
 genomes), and can screen against several databases at once.
@@ -13,7 +14,8 @@ __version__ = "0.2.0"
 from .design import PrimerPair, design_primers, read_fasta
 from .specificity import (
     PrimingSite, Amplicon, pair_specificity, in_silico_pcr,
-    enumerate_amplicons, screen_primers,
+    enumerate_amplicons, screen_primers, screen_primers_with_stats,
+    spec_params_for_profile,
 )
 from .pipeline import run_pipeline, PipelineResult
 from .tiling import design_tiling
@@ -33,6 +35,8 @@ __all__ = [
     "in_silico_pcr",
     "enumerate_amplicons",
     "screen_primers",
+    "screen_primers_with_stats",
+    "spec_params_for_profile",
     "run_pipeline",
     "PipelineResult",
     "design_tiling",

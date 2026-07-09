@@ -15,7 +15,9 @@ from typing import Dict, List, Tuple
 
 from . import __version__
 from .design import DesignParams, read_fasta
-from .specificity import SpecParams, in_silico_pcr
+from .specificity import (
+    SPECIFICITY_PROFILES, SpecParams, in_silico_pcr, spec_params_for_profile,
+)
 from .pipeline import run_pipeline
 from .tiling import design_tiling
 from .tools import make_blastdb
@@ -29,20 +31,42 @@ from . import outputs as OUT
 def _parse_size_ranges(text: str) -> List[Tuple[int, int]]:
     ranges = []
     for chunk in text.replace(",", " ").split():
-        lo, hi = chunk.split("-")
-        ranges.append((int(lo), int(hi)))
+        try:
+            lo, hi = chunk.split("-")
+            lo_i, hi_i = int(lo), int(hi)
+        except ValueError as exc:
+            raise ValueError(
+                f"invalid size range '{chunk}'; use LOW-HIGH, e.g. 150-500"
+            ) from exc
+        if lo_i <= 0 or hi_i < lo_i:
+            raise ValueError(
+                f"invalid size range '{chunk}'; require 0 < LOW <= HIGH"
+            )
+        ranges.append((lo_i, hi_i))
     return ranges
 
 
 def _spec_from_args(a) -> SpecParams:
-    return SpecParams(
+    max_target_seqs = a.max_target_seqs
+    if a.exhaustive and max_target_seqs is None:
+        max_target_seqs = 50000
+    return spec_params_for_profile(
+        a.specificity_profile,
         max_total_mismatch=a.max_total_mismatch,
         max_3prime_mismatch=a.max_3prime_mismatch,
         three_prime_window=a.three_prime_window,
-        require_3prime_terminal_match=not a.no_3prime_terminal,
+        require_3prime_terminal_match=(
+            False if a.no_3prime_terminal
+            else True if a.require_3prime_terminal
+            else None
+        ),
         min_product=a.min_product, max_product=a.max_product,
         gel_min_gap_bp=a.gel_min_gap,
         word_size=a.word_size,
+        evalue=a.evalue,
+        max_target_seqs=max_target_seqs,
+        num_threads=a.num_threads,
+        high_copy_hit_threshold=a.high_copy_hit_threshold,
     )
 
 
@@ -50,16 +74,30 @@ def _add_spec_args(ap: argparse.ArgumentParser) -> None:
     s = ap.add_argument_group("specificity (blast)")
     s.add_argument("--db", action="append", required=True,
                    help="BLAST nucleotide db path (repeatable for multi-db screening)")
-    s.add_argument("--max-total-mismatch", type=int, default=4)
-    s.add_argument("--max-3prime-mismatch", type=int, default=1)
-    s.add_argument("--three-prime-window", type=int, default=5)
+    s.add_argument("--specificity-profile", choices=sorted(SPECIFICITY_PROFILES),
+                   default="local-strict",
+                   help="preset mismatch model; individual options below override it")
+    s.add_argument("--max-total-mismatch", type=int)
+    s.add_argument("--max-3prime-mismatch", type=int)
+    s.add_argument("--three-prime-window", type=int)
     s.add_argument("--min-product", type=int, default=40)
     s.add_argument("--max-product", type=int, default=4000)
     s.add_argument("--gel-min-gap", type=int, default=50,
                    help="size gap (bp) needed to resolve two products on a gel")
     s.add_argument("--word-size", type=int, default=7)
+    s.add_argument("--evalue", type=float, default=30000.0)
+    s.add_argument("--max-target-seqs", type=int,
+                   help="BLAST -max_target_seqs; raise this for repetitive genomes")
+    s.add_argument("--num-threads", type=int, default=4,
+                   help="blastn worker threads")
+    s.add_argument("--high-copy-hit-threshold", type=int, default=10000,
+                   help="raw BLAST HSP count that triggers a high-copy primer warning")
+    s.add_argument("--exhaustive", action="store_true",
+                   help="use a higher BLAST hit cap (50000 unless --max-target-seqs is set)")
     s.add_argument("--no-3prime-terminal", action="store_true",
                    help="do not require the 3'-terminal base to match")
+    s.add_argument("--require-3prime-terminal", action="store_true",
+                   help="require the 3'-terminal base to match, overriding the profile")
     s.add_argument("--blastn-bin")
 
 
@@ -416,7 +454,10 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv=None) -> int:
     ap = build_parser()
     args = ap.parse_args(argv)
-    return args.func(args)
+    try:
+        return args.func(args)
+    except (ValueError, KeyError, RuntimeError) as exc:
+        ap.error(str(exc))
 
 
 if __name__ == "__main__":

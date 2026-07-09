@@ -16,9 +16,10 @@ from .pipeline import PipelineResult
 
 def _amp_dict(a) -> dict:
     d = asdict(a) if is_dataclass(a) else dict(a)
+    if hasattr(a, "__dict__"):
+        for key, val in a.__dict__.items():
+            d.setdefault(key, val)
     d["orientation"] = f"{d['fwd_primer']}/{d['rev_primer']}"
-    if hasattr(a, "__dict__") and "nearest_gap" in a.__dict__:
-        d["nearest_gap"] = a.__dict__["nearest_gap"]
     return d
 
 
@@ -30,14 +31,23 @@ def _enrich_amplicon(a: dict) -> dict:
     return a
 
 
+def _specificity_to_dict(spec: dict) -> dict:
+    d = dict(spec)
+    per_db = []
+    for db in spec.get("per_db", []):
+        dbd = dict(db)
+        for key in ("on_target", "off_target"):
+            dbd[key] = [_amp_dict(a) for a in db.get(key, [])]
+        per_db.append(dbd)
+    d["per_db"] = per_db
+    return d
+
+
 def to_dict(result: PipelineResult) -> dict:
     pairs = []
     for p in result.pairs:
         d = asdict(p)
-        # add the derived orientation label to every nested predicted product
-        for db in d.get("specificity", {}).get("per_db", []):
-            for key in ("on_target", "off_target"):
-                db[key] = [_enrich_amplicon(a) for a in db.get(key, [])]
+        d["specificity"] = _specificity_to_dict(p.specificity)
         pairs.append(d)
     return {
         "mode": "design",
@@ -105,6 +115,21 @@ def to_text(result: PipelineResult, max_offtarget_rows: int = 6) -> str:
                 tag = (f"{db['n_products']} products; nearest off-target size gap "
                        f"{db.get('nearest_offtarget_gap')} bp")
             out.append(f"      {db['db'].split('/')[-1]}: {tag}")
+            if db.get("near_blast_limit"):
+                hit_counts = db.get("raw_hits_per_primer", {})
+                subjects = db.get("unique_subjects_per_primer", {})
+                capped = ", ".join(
+                    f"{p} subjects={subjects.get(p, '?')} hits={hit_counts.get(p, '?')}"
+                    for p in db["near_blast_limit"])
+                limit = db.get("blast_limits", {}).get("max_target_seqs")
+                out.append(f"         warning: BLAST target list near limit ({capped}; "
+                           f"max_target_seqs={limit}); raise --max-target-seqs for exhaustive checks")
+            if db.get("high_copy_primers"):
+                hit_counts = db.get("raw_hits_per_primer", {})
+                copies = ", ".join(f"{p}={hit_counts.get(p, '?')}" for p in db["high_copy_primers"])
+                threshold = db.get("blast_limits", {}).get("high_copy_hit_threshold")
+                out.append(f"         warning: high-copy primer hit list ({copies}; "
+                           f"threshold={threshold}); treat specificity as repeat-sensitive")
             for a in db["off_target"][:max_offtarget_rows]:
                 out.append(
                     f"         off: {a.subject}:{a.start}-{a.end} "
@@ -125,6 +150,11 @@ def insilico_to_dict(results: List[Dict], primers: Dict[str, str]) -> dict:
         dbs.append({
             "db": r["db"],
             "sites_per_primer": r["sites_per_primer"],
+            "raw_hits_per_primer": r.get("raw_hits_per_primer", {}),
+            "unique_subjects_per_primer": r.get("unique_subjects_per_primer", {}),
+            "near_blast_limit": r.get("near_blast_limit", []),
+            "high_copy_primers": r.get("high_copy_primers", []),
+            "blast_limits": r.get("blast_limits", {}),
             "n_products": r["n_products"],
             "products": [_amp_dict(a) for a in r["products"]],
         })
@@ -143,6 +173,21 @@ def insilico_to_text(results: List[Dict], primers: Dict[str, str]) -> str:
         out.append("")
         out.append(f"# {name}: {r['n_products']} predicted product(s)   "
                    f"sites/primer: {r['sites_per_primer']}")
+        if r.get("near_blast_limit"):
+            hit_counts = r.get("raw_hits_per_primer", {})
+            subjects = r.get("unique_subjects_per_primer", {})
+            capped = ", ".join(
+                f"{p} subjects={subjects.get(p, '?')} hits={hit_counts.get(p, '?')}"
+                for p in r["near_blast_limit"])
+            limit = r.get("blast_limits", {}).get("max_target_seqs")
+            out.append(f"    warning: BLAST target list near limit ({capped}; "
+                       f"max_target_seqs={limit}); raise --max-target-seqs for exhaustive checks")
+        if r.get("high_copy_primers"):
+            hit_counts = r.get("raw_hits_per_primer", {})
+            copies = ", ".join(f"{p}={hit_counts.get(p, '?')}" for p in r["high_copy_primers"])
+            threshold = r.get("blast_limits", {}).get("high_copy_hit_threshold")
+            out.append(f"    warning: high-copy primer hit list ({copies}; "
+                       f"threshold={threshold}); treat specificity as repeat-sensitive")
         if not r["products"]:
             out.append("    (no products within the size window)")
             continue
@@ -174,7 +219,7 @@ def tiling_to_dict(tiles: List[Dict], template_id: str, region, databases) -> di
             "left_pos": [pair.left_start + 1, pair.left_3p + 1],
             "right_pos": [pair.right_3p + 1, pair.right_start + 1],
             "tm_f": round(pair.tm_f, 1), "tm_r": round(pair.tm_r, 1),
-            "specificity": pair.specificity,
+            "specificity": _specificity_to_dict(pair.specificity),
         })
     return {
         "mode": "tile",

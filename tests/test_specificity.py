@@ -6,7 +6,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from primerblast_oss.specificity import (  # noqa: E402
     PrimingSite, SpecParams, Amplicon, enumerate_amplicons,
-    _count_3prime_mismatch, _hit_to_site, nearest_size_gap,
+    _conservative_intended_products, _count_3prime_mismatch, _hit_to_site,
+    nearest_size_gap, priming_sites_with_stats, spec_params_for_profile,
 )
 
 
@@ -48,6 +49,16 @@ def test_ff_product_is_never_on_target():
 def test_perfect_wrong_size_is_off_target():
     a = Amplicon("chrX", 100, 900, 801, "F", "R", 0, 0)
     assert _classify(a, designed=368) is False
+
+
+def test_duplicate_perfect_products_are_conservative_offtargets():
+    a1 = Amplicon("chr1", 100, 467, 368, "F", "R", 0, 0, on_target=True)
+    a2 = Amplicon("chr2", 1000, 1367, 368, "F", "R", 0, 0, on_target=True)
+    on = _conservative_intended_products([a1, a2])
+    assert on == [a1]
+    assert a1.on_target is True
+    assert a2.on_target is False
+    assert a2.__dict__["ambiguous_intended_duplicate"] is True
 
 
 def test_single_product():
@@ -106,6 +117,30 @@ def test_3prime_mismatch_count():
     assert mm2 == 1
 
 
+def test_ncbi_profile_keeps_terminal_mismatch_as_candidate_hit():
+    q = "ACGTACGTACGTACGTACGT"
+    s = "ACGTACGTACGTACGTACGA"  # one mismatch at the 3'-terminal base
+    fields = ["primer", "chr1", "95.0", "20", "1", "0", "1", "20",
+              "500", "519", "1e-5", "35", "plus", q, s, "20"]
+    assert _hit_to_site(fields, "F", spec_params_for_profile("local-strict")) is None
+    site = _hit_to_site(fields, "F", spec_params_for_profile("ncbi"))
+    assert site is not None
+    assert site.total_mismatch == 1
+    assert site.tp_mismatch == 1
+
+
+def test_ncbi_profile_keeps_five_total_mismatches_but_not_six():
+    five_mm = ["primer", "chr1", "75.0", "20", "5", "0", "1", "20",
+               "500", "519", "1e-5", "20", "plus",
+               "AAAAACCCCCGGGGGTTTTT", "TTTTACCCCCGGGGGTTTTT", "20"]
+    six_mm = list(five_mm)
+    six_mm[4] = "6"
+    six_mm[14] = "TTTTTCCCGGGGGTTTTT"
+    sp = spec_params_for_profile("ncbi")
+    assert _hit_to_site(five_mm, "F", sp) is not None
+    assert _hit_to_site(six_mm, "F", sp) is None
+
+
 def test_hit_rejected_when_3prime_not_aligned():
     sp = SpecParams()
     # qend (7) != qlen (20): 3' end of primer not in alignment -> no priming
@@ -122,6 +157,35 @@ def test_hit_accepted_full_length_perfect():
     site = _hit_to_site(fields, "F", sp)
     assert site is not None
     assert site.strand == "+" and site.end3 == 519 and site.total_mismatch == 0
+
+
+def test_priming_site_stats_warn_high_copy_hits(monkeypatch=None):
+    class _Fake:
+        pass
+
+    def fake_run_blast(_primer, _db, _sp, _blastn):
+        q = "ACGTACGTACGTACGTACGT"
+        line = "\t".join([
+            "primer", "chr1", "100.0", "20", "0", "0", "1", "20",
+            "500", "519", "1e-5", "40", "plus", q, q, "20"
+        ])
+        return "\n".join([line, line])
+
+    import primerblast_oss.specificity as S
+    old = S._run_blast
+    S._run_blast = fake_run_blast
+    try:
+        sites, stats = priming_sites_with_stats(
+            "ACGTACGTACGTACGTACGT", "F", "db",
+            SpecParams(max_target_seqs=10, high_copy_hit_threshold=2), "blastn")
+    finally:
+        S._run_blast = old
+    assert len(sites) == 2
+    assert stats.raw_blast_hits == 2
+    assert stats.priming_sites == 2
+    assert stats.unique_subjects == 1
+    assert stats.near_target_limit is False
+    assert stats.high_copy is True
 
 
 if __name__ == "__main__":

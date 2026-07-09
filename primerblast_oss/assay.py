@@ -90,6 +90,23 @@ def analyze_pair(pair, per_db: Sequence[Dict], design_db: str,
             design_res, template.region.chrom, template.ext_start, template.ext_end,
             pair.product_size, gel_min_gap)
 
+    per_db_products = []
+    for db_res in per_db:
+        view = design_res if db_res["db"] == design_res["db"] else db_res
+        per_db_products.append({
+            "db": view["db"],
+            "n_products": view.get("n_products", 0),
+            "n_on_target": view.get("n_on_target", 0),
+            "n_off_target": view.get("n_off_target", 0),
+            "n_comigrating": view.get("n_comigrating", 0),
+            "specific": view.get("specific", False),
+            "gel_distinguishable": view.get("gel_distinguishable", True),
+            "nearest_offtarget_gap": view.get("nearest_offtarget_gap"),
+            "products": [_amp_dict(a) for a in (
+                list(view.get("on_target", [])) + list(view.get("off_target", []))
+            )],
+        })
+
     on = list(design_res.get("on_target", []))
     off = list(design_res.get("off_target", []))
     n_ff = sum(1 for a in off if _orientation_kind(a) == "FF")
@@ -146,6 +163,7 @@ def analyze_pair(pair, per_db: Sequence[Dict], design_db: str,
         "caps_enzyme": (caps_info or {}).get("best_enzyme"),
         "caps": caps_info,
         "gel_distinguishable": design_res.get("gel_distinguishable", True),
+        "per_db_products": per_db_products,
         "products": [_amp_dict(a) for a in on + off],
     }
 

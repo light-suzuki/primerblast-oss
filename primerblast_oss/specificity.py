@@ -1,10 +1,11 @@
-"""Specificity / in-silico PCR: the core Primer-BLAST-equivalent step.
+"""Specificity / in-silico PCR: the core Primer-BLAST-like step.
 
 We BLAST each primer, turn hits into 3'-anchored *priming sites*, then pair a
 plus-strand site with a downstream minus-strand site on the same subject to
-enumerate every predicted PCR product within the size window -- regardless of
-which primer plays forward or reverse (F/R, R/F, F/F, R/R). This is exactly
-what NCBI Primer-BLAST does and what a per-primer BLAST check omits.
+enumerate predicted PCR products within the size window -- regardless of which
+primer plays forward or reverse (F/R, R/F, F/F, R/R). This models the
+Primer-BLAST pairing step that a per-primer BLAST check omits, but it is not
+NCBI's private implementation.
 
 The primer pool is generic: pass any number of named primers and get back all
 products they would make together, each with its size -- so a caller can judge
@@ -36,12 +37,47 @@ class SpecParams:
     word_size: int = 7
     evalue: float = 30000.0
     max_target_seqs: int = 5000
+    high_copy_hit_threshold: int = 10000
     dust: str = "no"
     reward: int = 1
     penalty: int = -1
     gapopen: int = 5
     gapextend: int = 2
     num_threads: int = 4             # blastn threads (throughput, per PrimerServer2)
+
+
+SPECIFICITY_PROFILES = {
+    "local-strict": {
+        "max_total_mismatch": 4,
+        "max_3prime_mismatch": 1,
+        "three_prime_window": 5,
+        "require_3prime_terminal_match": True,
+    },
+    # NCBI Primer-BLAST exposes this as a stringency rule for rejecting
+    # unintended targets: at least 2 total mismatches, including at least 2
+    # within the last 5 bp, and ignore targets with 6+ total mismatches. In this
+    # implementation that maps to accepting priming sites with <=5 total
+    # mismatches and <=1 mismatch in the 3' 5 bp window.
+    "ncbi": {
+        "max_total_mismatch": 5,
+        "max_3prime_mismatch": 1,
+        "three_prime_window": 5,
+        "require_3prime_terminal_match": False,
+    },
+}
+
+
+def spec_params_for_profile(profile: str = "local-strict", **overrides) -> SpecParams:
+    if profile not in SPECIFICITY_PROFILES:
+        names = ", ".join(sorted(SPECIFICITY_PROFILES))
+        raise ValueError(f"unknown specificity profile '{profile}'; choose one of: {names}")
+    params = SpecParams()
+    for key, value in SPECIFICITY_PROFILES[profile].items():
+        setattr(params, key, value)
+    for key, value in overrides.items():
+        if value is not None:
+            setattr(params, key, value)
+    return params
 
 
 @dataclass
@@ -69,6 +105,16 @@ class PrimingSite:
         return (f"{self.primer} binds {self.subject} {self.strand} strand, "
                 f"5'={self.end5} 3'={self.end3}, extends {self.extends}, "
                 f"mm total={self.total_mismatch} 3'5bp={self.tp5_mismatch}")
+
+
+@dataclass
+class PrimerHitStats:
+    primer: str
+    raw_blast_hits: int
+    priming_sites: int
+    unique_subjects: int
+    near_target_limit: bool
+    high_copy: bool
 
 
 @dataclass
@@ -169,18 +215,37 @@ def _hit_to_site(fields: List[str], primer_id: str, sp: SpecParams) -> Optional[
     )
 
 
-def priming_sites(primer: str, primer_id: str, db: str, sp: SpecParams, blastn: str) -> List[PrimingSite]:
+def priming_sites_with_stats(
+    primer: str, primer_id: str, db: str, sp: SpecParams, blastn: str
+) -> Tuple[List[PrimingSite], PrimerHitStats]:
     out = _run_blast(primer, db, sp, blastn)
     sites: List[PrimingSite] = []
+    raw_hits = 0
+    subjects = set()
     for line in out.splitlines():
         if not line.strip():
             continue
+        raw_hits += 1
         fields = line.split("\t")
         if len(fields) < 16:
             continue
+        subjects.add(fields[1])
         site = _hit_to_site(fields, primer_id, sp)
         if site is not None:
             sites.append(site)
+    stats = PrimerHitStats(
+        primer=primer_id,
+        raw_blast_hits=raw_hits,
+        priming_sites=len(sites),
+        unique_subjects=len(subjects),
+        near_target_limit=len(subjects) >= max(1, int(sp.max_target_seqs * 0.95)),
+        high_copy=raw_hits >= sp.high_copy_hit_threshold,
+    )
+    return sites, stats
+
+
+def priming_sites(primer: str, primer_id: str, db: str, sp: SpecParams, blastn: str) -> List[PrimingSite]:
+    sites, _stats = priming_sites_with_stats(primer, primer_id, db, sp, blastn)
     return sites
 
 
@@ -190,6 +255,18 @@ def screen_primers(primers: Dict[str, str], db: str, sp: SpecParams, blastn: str
     for name, seq in primers.items():
         sites.extend(priming_sites(seq, name, db, sp, blastn))
     return sites
+
+
+def screen_primers_with_stats(
+    primers: Dict[str, str], db: str, sp: SpecParams, blastn: str
+) -> Tuple[List[PrimingSite], Dict[str, PrimerHitStats]]:
+    sites: List[PrimingSite] = []
+    stats: Dict[str, PrimerHitStats] = {}
+    for name, seq in primers.items():
+        primer_sites, primer_stats = priming_sites_with_stats(seq, name, db, sp, blastn)
+        sites.extend(primer_sites)
+        stats[name] = primer_stats
+    return sites, stats
 
 
 def enumerate_amplicons(sites: Sequence[PrimingSite], sp: SpecParams) -> List[Amplicon]:
@@ -233,6 +310,25 @@ def nearest_size_gap(size: int, others: Sequence[int]) -> Optional[int]:
     return min(gaps) if gaps else None
 
 
+def _conservative_intended_products(amplicons: Sequence[Amplicon]) -> List[Amplicon]:
+    """Return at most one generic intended product.
+
+    Without a genomic anchor, a template-designed primer pair cannot prove which
+    perfect same-size product is the intended locus. Treat all additional
+    perfect products as off-targets so duplicated/paralogous loci are never
+    reported as clean.
+    """
+    candidates = [a for a in amplicons if a.on_target]
+    if len(candidates) <= 1:
+        return candidates
+
+    for a in candidates[1:]:
+        a.on_target = False
+        a.__dict__["ambiguous_intended_duplicate"] = True
+    candidates[0].__dict__["generic_intended_candidate"] = True
+    return candidates[:1]
+
+
 def in_silico_pcr(
     primers: Dict[str, str],
     db: str,
@@ -246,7 +342,7 @@ def in_silico_pcr(
     """
     sp = sp or SpecParams()
     blastn = _detect_blastn(blastn_bin)
-    sites = screen_primers(primers, db, sp, blastn)
+    sites, hit_stats = screen_primers_with_stats(primers, db, sp, blastn)
     amplicons = enumerate_amplicons(sites, sp)
 
     sizes = [a.size for a in amplicons]
@@ -260,6 +356,17 @@ def in_silico_pcr(
         "db": db,
         "primers": {k: v for k, v in primers.items()},
         "sites_per_primer": per_primer,
+        "raw_hits_per_primer": {k: v.raw_blast_hits for k, v in hit_stats.items()},
+        "unique_subjects_per_primer": {k: v.unique_subjects for k, v in hit_stats.items()},
+        "near_blast_limit": [k for k, v in hit_stats.items() if v.near_target_limit],
+        "high_copy_primers": [k for k, v in hit_stats.items() if v.high_copy],
+        "blast_limits": {
+            "max_target_seqs": sp.max_target_seqs,
+            "evalue": sp.evalue,
+            "word_size": sp.word_size,
+            "num_threads": sp.num_threads,
+            "high_copy_hit_threshold": sp.high_copy_hit_threshold,
+        },
         "n_products": len(amplicons),
         "products": amplicons,
     }
@@ -283,7 +390,7 @@ def pair_specificity(
     """
     sp = sp or SpecParams()
     blastn = _detect_blastn(blastn_bin)
-    sites = screen_primers({"F": forward, "R": reverse}, db, sp, blastn)
+    sites, hit_stats = screen_primers_with_stats({"F": forward, "R": reverse}, db, sp, blastn)
     amplicons = enumerate_amplicons(sites, sp)
 
     for a in amplicons:
@@ -291,6 +398,8 @@ def pair_specificity(
         proper_pair = {a.fwd_primer, a.rev_primer} == {"F", "R"}
         size_ok = designed_size is None or abs(a.size - designed_size) <= size_tolerance
         a.on_target = perfect and proper_pair and size_ok
+
+    _conservative_intended_products(amplicons)
 
     on = [a for a in amplicons if a.on_target]
     off = [a for a in amplicons if not a.on_target]
@@ -307,6 +416,17 @@ def pair_specificity(
         "db": db,
         "n_forward_sites": sum(1 for s in sites if s.primer == "F"),
         "n_reverse_sites": sum(1 for s in sites if s.primer == "R"),
+        "raw_hits_per_primer": {k: v.raw_blast_hits for k, v in hit_stats.items()},
+        "unique_subjects_per_primer": {k: v.unique_subjects for k, v in hit_stats.items()},
+        "near_blast_limit": [k for k, v in hit_stats.items() if v.near_target_limit],
+        "high_copy_primers": [k for k, v in hit_stats.items() if v.high_copy],
+        "blast_limits": {
+            "max_target_seqs": sp.max_target_seqs,
+            "evalue": sp.evalue,
+            "word_size": sp.word_size,
+            "num_threads": sp.num_threads,
+            "high_copy_hit_threshold": sp.high_copy_hit_threshold,
+        },
         "n_products": len(amplicons),
         "n_on_target": len(on),
         "n_off_target": len(off),
