@@ -44,27 +44,42 @@ actually detects off-target products.
 BLAST-alignment-based priming model, not NCBI's exact algorithm — with a focus
 on things a local, breeding-oriented workflow needs:
 
-| | NCBI Primer-BLAST | primerblast-oss |
-|---|---|---|
-| Primer3 design | ✅ | ✅ |
-| Pairs BLAST hits into predicted amplicons | ✅ | ✅ |
-| Off-target products from either primer as F/F, R/R, F/R | ✅ | ✅ |
-| 3'-end-aware priming model | ✅ | ✅ |
-| Runs offline on **unpublished / local** genomes | hard | ✅ |
-| Screen against **multiple databases** in one run | — | ✅ |
-| **In-silico PCR** from pasted primers (orientation-free) | — | ✅ |
-| **Tile a whole region** with overlapping amplicons | — | ✅ |
-| Gel-resolvability of off-targets (size-gap aware) | — | ✅ |
-| Thermodynamic off-target scoring (Tm + 3'-end ΔG) | ✅ | optional (primer3-py) |
-| **Multiplex** primer-dimer compatibility of a pool | — | ✅ |
-| Scriptable CLI + library, no queue/login | limited | ✅ |
+| | NCBI Primer-BLAST | PrimerServer2 | primerblast-oss |
+|---|---|---|---|
+| Primer3 design | ✅ | ✅ | ✅ |
+| Pairs BLAST hits into predicted amplicons | ✅ | ✅ | ✅ |
+| Off-target products from either primer as F/F, R/R, F/R | ✅ | ✅ | ✅ |
+| 3'-end-aware priming model | ✅ | ✅ (`--use-3-end`) | ✅ |
+| Runs offline on **unpublished / local** genomes | hard | ✅ | ✅ |
+| Thermodynamic off-target scoring (Tm-based) | ✅ | ✅ (core model) | optional (primer3-py) |
+| **Multiplex** primer-dimer *checking* of a pool | — | ✅ | ✅ |
+| **Multiplex** compatible-set *design* (one pair/target) | — | — | ✅ |
+| Screen against **multiple databases** in one run | — | partial | ✅ |
+| **In-silico PCR** from pasted primers (orientation-free) | — | ✅ | ✅ |
+| **Tile a whole region** with overlapping amplicons | — | — | ✅ |
+| Gel-resolvability of off-targets (size-gap aware) | — | — | ✅ |
+| Breeding assay: GFF3/VCF/CAPS/QTL + risk | — | — | ✅ |
+| Scriptable CLI + library, no queue/login | limited | ✅ | ✅ |
+| Curated, continuously-updated databases | ✅ | — | — |
+| Mature hosted web server | ✅ | ✅ | local GUI only |
 
 This is about **fit for a local, offline workflow**, not a claim of being better
 overall. NCBI Primer-BLAST has real advantages this tool does not: curated,
 continuously updated databases, a mature thermodynamic model, and deeper
-primer-dimer / hairpin analysis. A ✅ in both columns means the capability
-exists on each side — not that the underlying models are identical or that
-outputs will match.
+primer-dimer / hairpin analysis. [PrimerServer2](https://github.com/billzt/PrimerServer2)
+is also a strong local tool and shares much of the core recipe; primerblast-oss's
+additions over it are whole-region tiling, gel-resolvability, one-run multi-database
+screening, the breeding assay (GFF3/VCF/CAPS/QTL/risk), and multiplex-set *design*
+rather than only dimer *checking*. A ✅ in more than one column means the capability
+exists on each side — not that the underlying models are identical or that outputs
+will match.
+
+**Benchmarks:** on a published *Lotus japonicus* genome, three pairs gave
+**exact concordance** with PrimerServer2 (amplicon count, size, coordinates); on a
+published Arabidopsis TAIR10 locus, primerblast-oss agreed with **both** NCBI
+Primer-BLAST **and** PrimerServer2 on the top pair and on the specificity of three
+pairs (including a two-product case). Details and commands in
+[`benchmarks/RESULTS.md`](benchmarks/RESULTS.md) §7–§8.
 
 ## Current validation status
 

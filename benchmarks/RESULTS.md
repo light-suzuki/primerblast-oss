@@ -161,37 +161,53 @@ hosted web server, which this does not.
 we supplied a tiny `samtools faidx` shim backed by the same `.fai` reader. The
 BLAST/primer3 computations are PrimerServer2's own.
 
-## 8. Head-to-head vs NCBI Primer-BLAST (Arabidopsis)
+## 8. Three-way head-to-head — NCBI Primer-BLAST **and** PrimerServer2 (Arabidopsis)
 
-Genome: **Arabidopsis thaliana** (published TAIR10). Template `At1_5Mb` = a
-1,501 bp window at `chr1:5,000,000`. The **same template** was submitted to the
-live [NCBI Primer-BLAST](https://www.ncbi.nlm.nih.gov/tools/primer-blast/) web
-service (database *Genomes for selected eukaryotic organisms*, organism limited
-to *Arabidopsis thaliana* — taxid 3702) and to primerblast-oss against a local
-TAIR10 BLAST db, on 2026-07-09 (NCBI job `TUeQPRoBF6kwk4eWivajpPDtspbd_qmL3A`).
+Genome: **Arabidopsis thaliana** (published TAIR10). Template `At1_5Mb`
+([`benchmarks/at1_5mb.fa`](at1_5mb.fa)) = a 1,501 bp window at `chr1:5,000,000`.
+The **same template / primers** were run through three tools on 2026-07-09:
 
-**Top pair — identical in both tools:**
+- the live [NCBI Primer-BLAST](https://www.ncbi.nlm.nih.gov/tools/primer-blast/)
+  web service (database *Genomes for selected eukaryotic organisms*, organism
+  limited to *Arabidopsis thaliana* — taxid 3702; job `TUeQPRoBF6kwk4eWivajpPDtspbd_qmL3A`),
+- [PrimerServer2](https://github.com/billzt/PrimerServer2) 2.0.0b19
+  `primertool check` against a local TAIR10 db, and
+- primerblast-oss `design` / `check` against the same local TAIR10 db.
 
-| | forward | reverse | product | Tm (F/R) | GC | specificity |
-|---|---|---|---|---|---|---|
-| NCBI Primer-BLAST | `GACAAGGAATCAGCGGCTCT` | `GCAGCGTTTTGTAGTGGGTG` | 342 bp | 60.11 / 60.04 | 55 / 55 | specific (no other targets) |
-| primerblast-oss | `GACAAGGAATCAGCGGCTCT` | `GCAGCGTTTTGTAGTGGGTG` | 342 bp | 60.1 / 60.0 | 55 / 55 | rank A, single product |
+**Top de-novo pair — byte-for-byte identical across all three tools:**
 
-- **Design parity:** primerblast-oss's #1 de-novo pair is byte-for-byte the pair
-  NCBI returns as its Primer pair 1 (positions 422..441 / 744..763; product 342 bp).
-- **Specificity concordance:** NCBI reports *"specific to input template as no
-  other targets were found"* in the Arabidopsis genome; primerblast-oss's
-  in-silico PCR against TAIR10 returns exactly **1 product** at `chr1:5,000,421-
-  5,000,762`, 0+0 mismatches, Tm 60/60 — the same call.
-- **Beyond NCBI:** for the same pair primerblast-oss additionally reports the
-  forward×reverse primer-dimer / hairpin ΔG (F×R ΔG −2.89 kcal/mol, worst
-  −4.82 — OK), which Primer-BLAST does not evaluate; and, unlike Primer-BLAST, it
-  can pick a mutually compatible *multiplex* set across several targets
-  (`multiplex-design`).
+| | forward | reverse | product | Tm (F/R) | specificity |
+|---|---|---|---|---|---|
+| NCBI Primer-BLAST | `GACAAGGAATCAGCGGCTCT` | `GCAGCGTTTTGTAGTGGGTG` | 342 bp | 60.11 / 60.04 | specific (no other targets) |
+| PrimerServer2 | `GACAAGGAATCAGCGGCTCT` | `GCAGCGTTTTGTAGTGGGTG` | 342 bp | 60.11 / 60.04 | 1 amplicon `1:5000421-5000762` |
+| primerblast-oss | `GACAAGGAATCAGCGGCTCT` | `GCAGCGTTTTGTAGTGGGTG` | 342 bp | 60.1 / 60.0 | rank A, 1 product `1:5000421-5000762` |
 
-On this published Arabidopsis locus primerblast-oss **matches NCBI Primer-BLAST**
-on the primer it picks and on the specificity verdict, while adding dimer
-thermodynamics and multiplex-set selection on top.
+**Specificity concordance across three primer pairs** (primerblast-oss `check` vs
+PrimerServer2 `check`, same TAIR10 db, both with their thermodynamic model):
+
+| pair | forward / reverse | PrimerServer2 | primerblast-oss |
+|---|---|---|---|
+| atA | `GACAAGGAATCAGCGGCTCT` / `GCAGCGTTTTGTAGTGGGTG` | 1× 342 bp `1:5000421-5000762` | 1× 342 bp `1:5000421-5000762` |
+| atB | `GGACGAAGCAGGAGATGGAG` / `GCAGCGTTTTGTAGTGGGTG` | 1× 317 bp `1:5000446-5000762` | 1× 317 bp `1:5000446-5000762` |
+| atC | `GGACGAAGCAGGAGATGGAG` / `TGATCCTCCTTACACGCAGC` | 2× (332 bp `…777`, 356 bp `…801`) | 2× (332 bp `…777`, 356 bp `…801`) |
+
+**Exact concordance** on amplicon count, size, and genomic coordinates for every
+pair — including the two-product `atC` case, where both tools independently find
+the same pair of co-migrating-ish amplicons (332 / 356 bp). PrimerServer2's Tm
+values match NCBI's to the second decimal (both use primer3 `oligotm`); the
+predicted amplicon coordinates match primerblast-oss exactly.
+
+- **Design parity:** primerblast-oss's #1 de-novo pair is the pair NCBI returns as
+  its Primer pair 1 (template positions 422..441 / 744..763; product 342 bp).
+- **Beyond both:** for the same pair primerblast-oss additionally reports the
+  forward×reverse primer-dimer / hairpin ΔG (F×R ΔG −2.89 kcal/mol, worst −4.82 —
+  OK), and can pick a mutually compatible *multiplex* set across several targets
+  (`multiplex-design`) — PrimerServer2 offers multiplex-dimer *checking*, and NCBI
+  neither.
+
+On this published Arabidopsis locus primerblast-oss **matches both NCBI
+Primer-BLAST and PrimerServer2** on the primer it picks and on the specificity
+verdict, while adding dimer thermodynamics and multiplex-set selection on top.
 
 ## Reproduce
 
@@ -222,4 +238,7 @@ python -m primerblast_oss design --template-fasta benchmarks/at1_5mb.fa \
 python -m primerblast_oss multiplex-design --template-fasta benchmarks/multi_targets.fa \
   --product-size 80-300 --candidates-per-target 5 --require-specific \
   --db $DB/tair10 --genome-fasta $DB/tair10.fa
+# PrimerServer2 side of the Arabidopsis head-to-head (section 8), same TAIR10 db:
+#   printf "atA GACAAGGAATCAGCGGCTCT GCAGCGTTTTGTAGTGGGTG\n" > q.txt
+#   primertool check q.txt $DB/tair10.fa -t q.tsv        # PrimerServer2 2.0.0b19
 ```
