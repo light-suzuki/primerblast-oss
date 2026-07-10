@@ -47,7 +47,8 @@ a { color: var(--accent); }
   border-radius: var(--radius); color: #fff; box-shadow: var(--shadow);
 }
 .brand { display: flex; gap: 14px; align-items: center; min-width: 0; }
-.logo { font-size: 34px; line-height: 1; filter: drop-shadow(0 2px 4px rgba(0,0,0,.2)); }
+.logo { display: inline-flex; align-items: center; line-height: 0; }
+.logo svg { width: 34px; height: 34px; }
 h1 { margin: 0; font-size: 21px; letter-spacing: .2px; font-weight: 800; color: #fff; }
 .subtitle { margin: 3px 0 0; color: rgba(255,255,255,.86); font-size: 12.5px; font-weight: 500; }
 .topbar-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
@@ -57,6 +58,22 @@ h1 { margin: 0; font-size: 21px; letter-spacing: .2px; font-weight: 800; color: 
 .lang-btn { border: 1px solid rgba(255,255,255,.4); background: rgba(255,255,255,.14); color: #fff;
   border-radius: 9px; padding: 6px 13px; cursor: pointer; font-weight: 700; font-size: 13px; transition: background .15s; }
 .lang-btn:hover { background: rgba(255,255,255,.28); }
+.mode-switch { display: inline-flex; background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.35);
+  border-radius: 9px; padding: 2px; gap: 2px; }
+.ms-btn { border: none; background: transparent; color: rgba(255,255,255,.85); font: inherit; font-weight: 700;
+  font-size: 12.5px; padding: 5px 11px; border-radius: 7px; cursor: pointer; white-space: nowrap; transition: background .15s, color .15s; }
+.ms-btn:hover { color: #fff; }
+.ms-btn.on { background: #fff; color: var(--accent); }
+
+/* professional (dense) mode — drop the hand-holding, expose every knob */
+:root[data-ui="pro"] .mode-intro,
+:root[data-ui="pro"] .example-btn,
+:root[data-ui="pro"] .legend,
+:root[data-ui="pro"] .verdict-plain { display: none; }
+:root[data-ui="pro"] .workspace { padding: 16px; }
+:root[data-ui="pro"] fieldset { gap: 10px 14px; padding: 12px 14px 4px; margin-bottom: 12px; }
+:root[data-ui="pro"] .pair-card { padding: 11px 13px; margin-bottom: 9px; }
+:root[data-ui="pro"] details.adv > summary { color: var(--muted); }
 
 /* ---------- database panel ---------- */
 .db-panel { margin-top: 14px; background: var(--panel); border: 1px solid var(--line);
@@ -88,7 +105,6 @@ h1 { margin: 0; font-size: 21px; letter-spacing: .2px; font-weight: 800; color: 
 .tab { border: 1px solid transparent; background: transparent; color: var(--muted);
   padding: 9px 15px; border-radius: 10px 10px 0 0; cursor: pointer; font-weight: 600; font-size: 13.5px;
   display: inline-flex; align-items: center; gap: 6px; transition: color .12s, background .12s; }
-.tab .ti { font-size: 15px; }
 .tab:hover { color: var(--ink); background: var(--bg-2); }
 .tab.active { color: var(--accent); background: var(--panel); border-color: var(--line);
   border-bottom-color: var(--panel); font-weight: 700; }
@@ -182,7 +198,6 @@ tbody tr:hover { background: var(--bg-2); }
 
 .legend { margin: 0 0 16px; background: var(--accent-soft); border: 1px solid var(--line); border-radius: 10px; padding: 2px 15px; }
 .legend > summary { cursor: pointer; font-weight: 700; color: var(--accent); font-size: 12.5px; padding: 10px 0; }
-.legend > summary::before { content: "ⓘ "; }
 .legend p { margin: 2px 0 10px; color: var(--ink); font-size: 12px; line-height: 1.65; }
 .verdict-plain { margin: 8px 0 0; font-size: 12.5px; font-weight: 600; padding: 8px 12px; border-radius: 9px; }
 .pv-ok { background: color-mix(in srgb, var(--a) 14%, transparent); color: var(--a); }
@@ -202,8 +217,9 @@ pre.ascii, pre.explain { background: var(--code-bg); color: var(--code-ink); bor
 .guide-hero { text-align: center; padding: 8px 0 22px; }
 .guide-hero h2 { margin: 0 0 8px; font-size: 24px; font-weight: 800; letter-spacing: .2px; }
 .guide-hero p { margin: 0 auto; max-width: 640px; color: var(--muted); font-size: 14px; line-height: 1.7; }
-.guide h3 { font-size: 16.5px; margin: 30px 0 12px; padding-bottom: 8px; border-bottom: 2px solid var(--accent-soft); font-weight: 800; }
-.guide h3 .gi { margin-right: 8px; }
+.guide h3 { font-size: 16.5px; margin: 30px 0 12px; padding-bottom: 8px; border-bottom: 2px solid var(--accent-soft);
+  font-weight: 800; display: flex; align-items: center; }
+.guide h3::before { content: ""; width: 3px; height: 16px; background: var(--accent); border-radius: 2px; margin-right: 10px; }
 
 .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
 .step { position: relative; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 16px 16px 14px; }
@@ -216,8 +232,9 @@ pre.ascii, pre.explain { background: var(--code-bg); color: var(--code-ink); bor
 .mode-card { text-align: left; background: var(--bg); border: 1px solid var(--line); border-radius: 12px;
   padding: 16px; cursor: pointer; transition: border-color .14s, transform .06s, box-shadow .14s; font: inherit; color: inherit; }
 .mode-card:hover { border-color: var(--accent); box-shadow: var(--shadow-sm); transform: translateY(-2px); }
-.mode-card .mc-top { display: flex; align-items: center; gap: 9px; margin-bottom: 7px; }
-.mode-card .mc-ico { font-size: 22px; }
+.mode-card .mc-top { display: flex; align-items: baseline; gap: 9px; margin-bottom: 7px; }
+.mode-card .mc-cmd { font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; font-size: 11px;
+  color: var(--accent); background: var(--accent-soft); border-radius: 5px; padding: 1px 7px; font-weight: 700; }
 .mode-card .mc-name { font-weight: 800; font-size: 14.5px; }
 .mode-card .mc-when { display: inline-block; font-size: 10.5px; font-weight: 700; color: var(--accent);
   background: var(--accent-soft); border-radius: 999px; padding: 2px 9px; margin-bottom: 8px; }
@@ -261,7 +278,14 @@ pre.ascii, pre.explain { background: var(--code-bg); color: var(--code-ink); bor
 <div class="app">
   <header class="topbar">
     <div class="brand">
-      <span class="logo">🧬</span>
+      <span class="logo" aria-hidden="true"><svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+        <rect width="40" height="40" rx="9" fill="rgba(255,255,255,.16)"/>
+        <path d="M14 8 C26 15 14 25 26 32" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+        <path d="M26 8 C14 15 26 25 14 32" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+        <line x1="17" y1="12.5" x2="23" y2="12.5" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/>
+        <line x1="16" y1="20" x2="24" y2="20" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/>
+        <line x1="17" y1="27.5" x2="23" y2="27.5" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/>
+      </svg></span>
       <div>
         <h1 data-i18n="app.title">primerblast-oss</h1>
         <p class="subtitle" data-i18n="app.subtitle"></p>
@@ -269,6 +293,10 @@ pre.ascii, pre.explain { background: var(--code-bg); color: var(--code-ink); bor
     </div>
     <div class="topbar-right">
       <span id="tool-status" class="status status-checking" data-i18n="status.checking"></span>
+      <div class="mode-switch" id="mode-switch" title="">
+        <button type="button" class="ms-btn" data-ui-set="beginner" data-i18n="ui.beginner"></button>
+        <button type="button" class="ms-btn" data-ui-set="pro" data-i18n="ui.pro"></button>
+      </div>
       <button id="lang-btn" class="lang-btn" data-i18n="lang.toggle">日本語</button>
     </div>
   </header>
@@ -289,13 +317,13 @@ pre.ascii, pre.explain { background: var(--code-bg); color: var(--code-ink); bor
   </section>
 
   <nav class="tabs" id="tabs">
-    <button class="tab tab-guide active" data-tab="guide"><span class="ti">📖</span><span data-i18n="tab.guide"></span></button>
-    <button class="tab" data-tab="design"><span class="ti">🎯</span><span data-i18n="tab.design"></span></button>
-    <button class="tab" data-tab="check"><span class="ti">🧪</span><span data-i18n="tab.check"></span></button>
-    <button class="tab" data-tab="tile"><span class="ti">🧱</span><span data-i18n="tab.tile"></span></button>
-    <button class="tab" data-tab="assay"><span class="ti">🌱</span><span data-i18n="tab.assay"></span></button>
-    <button class="tab" data-tab="markers"><span class="ti">📍</span><span data-i18n="tab.markers"></span></button>
-    <button class="tab" data-tab="makedb"><span class="ti">🗄️</span><span data-i18n="tab.makedb"></span></button>
+    <button class="tab tab-guide active" data-tab="guide"><span data-i18n="tab.guide"></span></button>
+    <button class="tab" data-tab="design"><span data-i18n="tab.design"></span></button>
+    <button class="tab" data-tab="check"><span data-i18n="tab.check"></span></button>
+    <button class="tab" data-tab="tile"><span data-i18n="tab.tile"></span></button>
+    <button class="tab" data-tab="assay"><span data-i18n="tab.assay"></span></button>
+    <button class="tab" data-tab="markers"><span data-i18n="tab.markers"></span></button>
+    <button class="tab" data-tab="makedb"><span data-i18n="tab.makedb"></span></button>
   </nav>
 
   <div class="workspace">
@@ -306,48 +334,48 @@ pre.ascii, pre.explain { background: var(--code-bg); color: var(--code-ink); bor
         <p data-i18n="g.hero.d"></p>
       </div>
 
-      <h3><span class="gi">🚦</span><span data-i18n="g.steps.t"></span></h3>
+      <h3><span data-i18n="g.steps.t"></span></h3>
       <div class="steps">
         <div class="step"><span class="num">1</span><h4 data-i18n="g.step1.t"></h4><p data-i18n="g.step1.d"></p></div>
         <div class="step"><span class="num">2</span><h4 data-i18n="g.step2.t"></h4><p data-i18n="g.step2.d"></p></div>
         <div class="step"><span class="num">3</span><h4 data-i18n="g.step3.t"></h4><p data-i18n="g.step3.d"></p></div>
       </div>
 
-      <h3><span class="gi">🧭</span><span data-i18n="g.modes.t"></span></h3>
+      <h3><span data-i18n="g.modes.t"></span></h3>
       <div class="mode-grid">
         <button class="mode-card" data-goto="design">
-          <div class="mc-top"><span class="mc-ico">🎯</span><span class="mc-name" data-i18n="tab.design"></span></div>
+          <div class="mc-top"><span class="mc-cmd">design</span><span class="mc-name" data-i18n="tab.design"></span></div>
           <span class="mc-when" data-i18n="g.m.design.when"></span>
           <p data-i18n="g.m.design.d"></p><div class="mc-go" data-i18n="g.open"></div>
         </button>
         <button class="mode-card" data-goto="check">
-          <div class="mc-top"><span class="mc-ico">🧪</span><span class="mc-name" data-i18n="tab.check"></span></div>
+          <div class="mc-top"><span class="mc-cmd">check</span><span class="mc-name" data-i18n="tab.check"></span></div>
           <span class="mc-when" data-i18n="g.m.check.when"></span>
           <p data-i18n="g.m.check.d"></p><div class="mc-go" data-i18n="g.open"></div>
         </button>
         <button class="mode-card" data-goto="tile">
-          <div class="mc-top"><span class="mc-ico">🧱</span><span class="mc-name" data-i18n="tab.tile"></span></div>
+          <div class="mc-top"><span class="mc-cmd">tile</span><span class="mc-name" data-i18n="tab.tile"></span></div>
           <span class="mc-when" data-i18n="g.m.tile.when"></span>
           <p data-i18n="g.m.tile.d"></p><div class="mc-go" data-i18n="g.open"></div>
         </button>
         <button class="mode-card" data-goto="assay">
-          <div class="mc-top"><span class="mc-ico">🌱</span><span class="mc-name" data-i18n="tab.assay"></span></div>
+          <div class="mc-top"><span class="mc-cmd">assay</span><span class="mc-name" data-i18n="tab.assay"></span></div>
           <span class="mc-when" data-i18n="g.m.assay.when"></span>
           <p data-i18n="g.m.assay.d"></p><div class="mc-go" data-i18n="g.open"></div>
         </button>
         <button class="mode-card" data-goto="markers">
-          <div class="mc-top"><span class="mc-ico">📍</span><span class="mc-name" data-i18n="tab.markers"></span></div>
+          <div class="mc-top"><span class="mc-cmd">markers</span><span class="mc-name" data-i18n="tab.markers"></span></div>
           <span class="mc-when" data-i18n="g.m.markers.when"></span>
           <p data-i18n="g.m.markers.d"></p><div class="mc-go" data-i18n="g.open"></div>
         </button>
         <button class="mode-card" data-goto="makedb">
-          <div class="mc-top"><span class="mc-ico">🗄️</span><span class="mc-name" data-i18n="tab.makedb"></span></div>
+          <div class="mc-top"><span class="mc-cmd">makedb</span><span class="mc-name" data-i18n="tab.makedb"></span></div>
           <span class="mc-when" data-i18n="g.m.makedb.when"></span>
           <p data-i18n="g.m.makedb.d"></p><div class="mc-go" data-i18n="g.open"></div>
         </button>
       </div>
 
-      <h3><span class="gi">✅</span><span data-i18n="g.need.t"></span></h3>
+      <h3><span data-i18n="g.need.t"></span></h3>
       <div class="info-cols">
         <div class="info-box">
           <h4 data-i18n="g.need.tools.t"></h4>
@@ -367,7 +395,7 @@ pre.ascii, pre.explain { background: var(--code-bg); color: var(--code-ink); bor
         </div>
       </div>
 
-      <h3><span class="gi">📚</span><span data-i18n="g.gloss.t"></span></h3>
+      <h3><span data-i18n="g.gloss.t"></span></h3>
       <dl class="glossary">
         <div class="gl"><dt data-i18n="g.gl.primer.t"></dt><dd data-i18n="g.gl.primer.d"></dd></div>
         <div class="gl"><dt data-i18n="g.gl.amplicon.t"></dt><dd data-i18n="g.gl.amplicon.d"></dd></div>
@@ -379,7 +407,7 @@ pre.ascii, pre.explain { background: var(--code-bg); color: var(--code-ink); bor
         <div class="gl"><dt data-i18n="g.gl.caps.t"></dt><dd data-i18n="g.gl.caps.d"></dd></div>
       </dl>
 
-      <h3><span class="gi">💡</span><span data-i18n="g.faq.t"></span></h3>
+      <h3><span data-i18n="g.faq.t"></span></h3>
       <div class="faq">
         <details><summary data-i18n="g.faq.1.q"></summary><p data-i18n-html="g.faq.1.a"></p></details>
         <details><summary data-i18n="g.faq.2.q"></summary><p data-i18n-html="g.faq.2.a"></p></details>
@@ -548,6 +576,8 @@ const I18N = {
     "app.title": "primerblast-oss",
     "app.subtitle": "Local Primer-BLAST · design, in-silico PCR & breeding assays — fully offline",
     "lang.toggle": "日本語",
+    "ui.beginner": "Beginner",
+    "ui.pro": "Pro",
     "status.checking": "checking tools…",
     "status.ok": "primer3 + BLAST+ ready",
     "status.missing": "missing tools:",
@@ -561,7 +591,7 @@ const I18N = {
     "tab.makedb": "Build DB",
 
     "db.required": "required",
-    "db.pick": "⚠ Select at least one database to run.",
+    "db.pick": "Select at least one database to run.",
     "req.mark": "*",
 
     // ---- guide page ----
@@ -778,9 +808,9 @@ const I18N = {
     "leg.onoff": "On-target = the product you intended. Off-target = unintended products. Co-migrating = off-targets too close in size to separate on a gel.",
     "leg.score": "Score 0–100 — higher is better (fewer / more distant off-targets, balanced Tm & GC).",
     "leg.risk": "Risk low / medium / high — overall usability, combining specificity, SNPs under the primers, and Tm/GC balance.",
-    "pv.specific": "✓ One specific product in every selected database — ready to order.",
-    "pv.gel": "△ Extra products exist, but they differ enough in size to tell apart on a gel.",
-    "pv.ambiguous": "⚠ An off-target is close in size to the intended product (may co-migrate) — use with caution.",
+    "pv.specific": "One specific product in every selected database — ready to order.",
+    "pv.gel": "Extra products exist, but they differ enough in size to tell apart on a gel.",
+    "pv.ambiguous": "An off-target is close in size to the intended product (may co-migrate) — use with caution.",
     "tip.rank": "Overall quality grade A–D",
     "tip.verdict": "Specificity verdict across all selected databases",
     "tip.score": "0–100; higher is better",
@@ -801,6 +831,8 @@ const I18N = {
     "app.title": "primerblast-oss",
     "app.subtitle": "ローカル版 Primer-BLAST · プライマー設計・in-silico PCR・育種アッセイをオフラインで",
     "lang.toggle": "English",
+    "ui.beginner": "初心者",
+    "ui.pro": "プロ",
     "status.checking": "ツール確認中…",
     "status.ok": "primer3 + BLAST+ 利用可能",
     "status.missing": "不足ツール:",
@@ -814,7 +846,7 @@ const I18N = {
     "tab.makedb": "DB作成",
 
     "db.required": "必須",
-    "db.pick": "⚠ 実行するにはデータベースを1つ以上選んでください。",
+    "db.pick": "実行するにはデータベースを1つ以上選んでください。",
     "req.mark": "*",
 
     // ---- guide page ----
@@ -1031,9 +1063,9 @@ const I18N = {
     "leg.onoff": "オンターゲット=狙った産物。オフターゲット=意図しない産物。共泳動=サイズが近くゲルで分離できないオフターゲット。",
     "leg.score": "スコア 0〜100 — 高いほど良い(オフターゲットが少ない/離れている、Tm・GCが均衡)。",
     "leg.risk": "リスク 低/中/高 — 総合的な使いやすさ。特異性・プライマー結合部のSNP・Tm/GC均衡を統合。",
-    "pv.specific": "✓ 選択した全DBで単一・特異的な産物。そのまま発注できます。",
-    "pv.gel": "△ 余分な産物はありますが、サイズが離れておりゲルで区別できます。",
-    "pv.ambiguous": "⚠ 目的外産物が目的産物とサイズ近接(共泳動の恐れ)。使用は注意。",
+    "pv.specific": "選択した全DBで単一・特異的な産物。そのまま発注できます。",
+    "pv.gel": "余分な産物はありますが、サイズが離れておりゲルで区別できます。",
+    "pv.ambiguous": "目的外産物が目的産物とサイズ近接(共泳動の恐れ)。使用は注意。",
     "tip.rank": "総合品質グレード A〜D",
     "tip.verdict": "選択した全DBでの特異性判定",
     "tip.score": "0〜100、高いほど良い",
@@ -1095,6 +1127,22 @@ const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g,
 let selectedDbs = [];           // chosen database prefixes
 let customDbs = [];             // user-typed prefixes
 let lastResult = null;          // for re-render on language switch
+
+// Beginner vs Pro. Pro strips the intros / examples / legends / plain
+// verdicts (via CSS on :root[data-ui]) and expands every advanced group.
+// Set the attribute immediately so pro users don't flash the beginner UI.
+let UI = localStorage.getItem("pb_ui") || "beginner";
+document.documentElement.setAttribute("data-ui", UI);
+function syncUI() {
+  document.documentElement.setAttribute("data-ui", UI);
+  $$("#mode-switch .ms-btn").forEach((b) => b.classList.toggle("on", b.dataset.uiSet === UI));
+  $$("details.adv").forEach((d) => { d.open = (UI === "pro"); });
+}
+function setUI(mode) {
+  UI = (mode === "pro") ? "pro" : "beginner";
+  localStorage.setItem("pb_ui", UI);
+  syncUI();
+}
 
 // --------------------------------------------------------------------------
 // example data (so a first-timer can press Run immediately)
@@ -1579,6 +1627,11 @@ function boot() {
   loadDatabases();
 
   $("#lang-btn").addEventListener("click", () => setLang(LANG === "ja" ? "en" : "ja"));
+  $$("#mode-switch .ms-btn").forEach((b) =>
+    b.addEventListener("click", () => setUI(b.dataset.uiSet)));
+  syncUI();
+  // First-time landing: beginners start on the guide, pros go straight to work.
+  showTab(UI === "pro" ? "design" : "guide");
   $("#db-refresh").addEventListener("click", loadDatabases);
   $("#db-add").addEventListener("click", () => {
     const input = $("#db-custom-input");
@@ -1603,7 +1656,7 @@ function boot() {
       runMode(form.dataset.mode, form);
     });
     form.addEventListener("reset", () => setTimeout(() => {
-      injectGroups(); applyI18n();
+      injectGroups(); applyI18n(); syncUI();
       const ds = $("#design-src"); if (ds) ds.dispatchEvent(new Event("change"));
       const ak = $("#assay-kind"); if (ak) ak.dispatchEvent(new Event("change"));
     }, 0));
