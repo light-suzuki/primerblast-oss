@@ -15,29 +15,12 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.head_ref }}
-      - name: Extract audit patch
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          workflow = Path('.github/workflows/ci.yml').read_text().splitlines()
-          start = next(i for i, line in enumerate(workflow)
-                       if "python - <<'PY'" in line) + 1
-          end = next(i for i in range(start, len(workflow))
-                     if workflow[i].strip() == 'PY')
-          lines = workflow[start:end]
-          script = '\n'.join(
-              line[10:] if line.startswith('          ') else line
-              for line in lines
-          ) + '\n'
-          Path('/tmp/post_integration_audit.py').write_text(script)
-          PY
       - name: Apply audit patch
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set +e
-          python /tmp/post_integration_audit.py > /tmp/audit.log 2>&1
+          python .github/scripts/post_integration_audit.py > /tmp/audit.log 2>&1
           status=$?
           cat /tmp/audit.log
           if [ "$status" -ne 0 ]; then
