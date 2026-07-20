@@ -15,7 +15,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.head_ref }}
-      - name: Extract and apply audit patch
+      - name: Extract audit patch
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -29,7 +29,24 @@ jobs:
           script = textwrap.dedent('\n'.join(workflow[start:end])) + '\n'
           Path('/tmp/post_integration_audit.py').write_text(script)
           PY
-          python /tmp/post_integration_audit.py
+      - name: Apply audit patch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          python /tmp/post_integration_audit.py > /tmp/audit.log 2>&1
+          status=$?
+          cat /tmp/audit.log
+          if [ "$status" -ne 0 ]; then
+            {
+              echo '### Post-integration audit patch failure'
+              echo '```text'
+              cat /tmp/audit.log
+              echo '```'
+            } > /tmp/audit-comment.md
+            gh pr comment "${{ github.event.pull_request.number }}" --body-file /tmp/audit-comment.md
+          fi
+          exit "$status"
       - name: Commit audit fixes
         run: |
           git config user.name "github-actions[bot]"
