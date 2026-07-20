@@ -1,299 +1,97 @@
-"""Restriction-enzyme / CAPS-dCAPS analysis for primerblast-oss.
+"""Restriction-enzyme, CAPS and dCAPS analysis.
 
-Self-contained module (Python 3.8+, standard library only). No third-party
-dependencies and no imports from other ``primerblast_oss`` modules.
+The module is standard-library-only and keeps the historical ``ENZYMES`` mapping
+for compatibility. New code uses structured :class:`RestrictionEnzyme` records
+with strand-aware top/bottom cleavage offsets and PCR-substrate suitability.
 
-Purpose
--------
-Design CAPS (Cleaved Amplified Polymorphic Sequence) and dCAPS markers used in
-plant breeding. Given a PCR amplicon that carries a SNP differing between two
-alleles/parents, we look for restriction enzymes whose digestion pattern differs
-between the two alleles, so the SNP can be scored on an agarose gel.
+Cut offsets are boundary coordinates measured from the first recognition base as
+written 5'->3'. For example EcoRI ``G/AATTC`` is ``top_cut=1`` and
+``bottom_cut=5``. Type IIS offsets may lie outside the recognition sequence;
+BsaI ``GGTCTC(1/5)`` is represented as 7/11.
 
-Coordinate / cut conventions (documented assumptions)
------------------------------------------------------
-* Sites are found by matching an enzyme's recognition sequence (IUPAC aware) on
-  BOTH strands of a plain-ACGT template.
-* We use the *start of the recognition match on the plus strand* as a proxy cut
-  coordinate. Real enzymes cut at a defined offset inside/around the site, but
-  for CAPS/dCAPS marker discovery the question is only "does the cut pattern
-  differ between the two alleles", and the recognition-start proxy answers that
-  faithfully as long as it is applied consistently to both alleles. Fragment
-  sizes are therefore approximate but internally consistent.
+The curated recognition and cleavage notation follows the New England Biolabs
+recognition-specificity chart and product documentation, curated 2026-07-20.
 """
-
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from dataclasses import asdict, dataclass
+from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple, Union
 
-# ---------------------------------------------------------------------------
-# IUPAC nucleotide handling
-# ---------------------------------------------------------------------------
 
-# Map each IUPAC ambiguity code to the set of plain bases it matches.
 IUPAC_CODES: Dict[str, str] = {
-    "A": "A",
-    "C": "C",
-    "G": "G",
-    "T": "T",
-    "R": "AG",   # puRine
-    "Y": "CT",   # pYrimidine
-    "S": "GC",   # Strong
-    "W": "AT",   # Weak
-    "K": "GT",   # Keto
-    "M": "AC",   # aMino
-    "B": "CGT",  # not A
-    "D": "AGT",  # not C
-    "H": "ACT",  # not G
-    "V": "ACG",  # not T
-    "N": "ACGT",  # aNy
+    "A": "A", "C": "C", "G": "G", "T": "T",
+    "R": "AG", "Y": "CT", "S": "GC", "W": "AT",
+    "K": "GT", "M": "AC", "B": "CGT", "D": "AGT",
+    "H": "ACT", "V": "ACG", "N": "ACGT",
 }
-
-# IUPAC-aware complement table (covers ambiguity codes too).
 _COMPLEMENT: Dict[str, str] = {
-    "A": "T",
-    "T": "A",
-    "C": "G",
-    "G": "C",
-    "R": "Y",
-    "Y": "R",
-    "S": "S",
-    "W": "W",
-    "K": "M",
-    "M": "K",
-    "B": "V",
-    "D": "H",
-    "H": "D",
-    "V": "B",
-    "N": "N",
+    "A": "T", "T": "A", "C": "G", "G": "C",
+    "R": "Y", "Y": "R", "S": "S", "W": "W",
+    "K": "M", "M": "K", "B": "V", "D": "H",
+    "H": "D", "V": "B", "N": "N",
 }
 
 
-def iupac_match(recognition: str, seq_window: str) -> bool:
-    """Return True if ``seq_window`` (plain ACGT) matches ``recognition``.
-
-    ``recognition`` may contain IUPAC ambiguity codes. Comparison is
-    case-insensitive. Lengths must be equal.
-    """
+def iupac_match(recognition: str, sequence_window: str) -> bool:
     recognition = recognition.upper()
-    seq_window = seq_window.upper()
-    if len(recognition) != len(seq_window):
+    sequence_window = sequence_window.upper()
+    if len(recognition) != len(sequence_window):
         return False
-    for r, s in zip(recognition, seq_window):
-        allowed = IUPAC_CODES.get(r)
-        if allowed is None:
-            # Unknown symbol in the recognition site -> cannot match.
-            return False
-        if s not in allowed:
-            return False
-    return True
+    return all(
+        base in IUPAC_CODES.get(code, "")
+        for code, base in zip(recognition, sequence_window)
+    )
 
 
-def revcomp(seq: str) -> str:
-    """Reverse complement of ``seq`` (IUPAC aware, case-insensitive input).
-
-    Output is upper-case. Unknown characters are passed through as 'N'.
-    """
-    seq = seq.upper()
-    return "".join(_COMPLEMENT.get(base, "N") for base in reversed(seq))
+def revcomp(sequence: str) -> str:
+    return "".join(
+        _COMPLEMENT.get(base, "N") for base in reversed(sequence.upper()))
 
 
-# ---------------------------------------------------------------------------
-# Enzyme table (~40 common commercially available enzymes)
-# NAME -> recognition site (5'->3', plus strand). Recognition-based finding.
-# ---------------------------------------------------------------------------
-
-ENZYMES: Dict[str, str] = {
-    "EcoRI": "GAATTC",
-    "HindIII": "AAGCTT",
-    "BamHI": "GGATCC",
-    "XbaI": "TCTAGA",
-    "XhoI": "CTCGAG",
-    "PstI": "CTGCAG",
-    "SacI": "GAGCTC",
-    "KpnI": "GGTACC",
-    "SmaI": "CCCGGG",
-    "NcoI": "CCATGG",
-    "NdeI": "CATATG",
-    "SalI": "GTCGAC",
-    "NotI": "GCGGCCGC",
-    "SpeI": "ACTAGT",
-    "EcoRV": "GATATC",
-    "DraI": "TTTAAA",
-    "HpaI": "GTTAAC",
-    "ScaI": "AGTACT",
-    "StuI": "AGGCCT",
-    "AluI": "AGCT",
-    "HaeIII": "GGCC",
-    "RsaI": "GTAC",
-    "TaqI": "TCGA",
-    "MseI": "TTAA",
-    "MboI": "GATC",
-    "HinfI": "GANTC",
-    "DdeI": "CTNAG",
-    "BsaI": "GGTCTC",
-    "BstNI": "CCWGG",
-    "MspI": "CCGG",
-    "HhaI": "GCGC",
-    "Sau3AI": "GATC",
-    "NlaIII": "CATG",
-    "DpnI": "GATC",
-    "TseI": "GCWGC",
-    "ApaI": "GGGCCC",
-    "BglII": "AGATCT",
-    "ClaI": "ATCGAT",
-    "NheI": "GCTAGC",
-    "MfeI": "CAATTG",
-}
+_METADATA_SOURCE = (
+    "NEB recognition-specificity chart and product documentation; "
+    "curated 2026-07-20"
+)
 
 
-# ---------------------------------------------------------------------------
-# Site finding
-# ---------------------------------------------------------------------------
+@dataclass(frozen=True)
+class RestrictionEnzyme:
+    name: str
+    recognition: str
+    top_cut: int
+    bottom_cut: int
+    pcr_compatible: bool = True
+    recommendable: bool = True
+    methylation_note: str = ""
+    cut_model: str = "verified"
+    source: str = _METADATA_SOURCE
 
-@dataclass
+    @property
+    def palindrome(self) -> bool:
+        return revcomp(self.recognition) == self.recognition.upper()
+
+
+@dataclass(frozen=True)
 class Site:
-    """A single restriction recognition match on a template.
-
-    Attributes
-    ----------
-    enzyme : str
-        Enzyme name.
-    recognition : str
-        Recognition sequence (may contain IUPAC codes).
-    pos : int
-        0-based start of the recognition match, expressed in plus-strand
-        coordinates of the input sequence.
-    strand : str
-        '+' if the recognition site was found on the plus strand, '-' if the
-        recognition site matched on the minus (reverse-complement) strand.
-    """
-
     enzyme: str
     recognition: str
     pos: int
     strand: str
 
 
-def _is_palindrome(recognition: str) -> bool:
-    """True if a recognition site equals its own IUPAC reverse complement.
+@dataclass(frozen=True)
+class CutEvent:
+    enzyme: str
+    recognition: str
+    site_pos: int
+    site_strand: str
+    top_cut: int
+    bottom_cut: int
+    complete: bool
 
-    Palindromic sites (e.g. GAATTC) match at the same locus on both strands and
-    would otherwise be double-counted.
-    """
-    return revcomp(recognition) == recognition.upper()
-
-
-def find_sites(seq: str, enzymes: Optional[Dict[str, str]] = None) -> List[Site]:
-    """Scan ``seq`` on BOTH strands for every enzyme's recognition site.
-
-    Returns a list of :class:`Site` objects. Palindromic recognition sites are
-    reported once (plus-strand) to avoid double-counting the same locus.
-    Results are sorted by (pos, enzyme, strand) for determinism.
-    """
-    if enzymes is None:
-        enzymes = ENZYMES
-    seq = seq.upper()
-    n = len(seq)
-    sites: List[Site] = []
-
-    for name, recognition in enzymes.items():
-        rec = recognition.upper()
-        rlen = len(rec)
-        if rlen == 0 or rlen > n:
-            continue
-        palindrome = _is_palindrome(rec)
-        rec_rc = revcomp(rec)
-
-        for i in range(n - rlen + 1):
-            window = seq[i:i + rlen]
-            # Plus-strand match.
-            if iupac_match(rec, window):
-                sites.append(Site(name, recognition, i, "+"))
-            # Minus-strand match: the recognition site appears on the minus
-            # strand when the plus-strand window matches the reverse complement
-            # of the recognition sequence. Skip for palindromes (same locus).
-            if not palindrome and iupac_match(rec_rc, window):
-                sites.append(Site(name, recognition, i, "-"))
-
-    sites.sort(key=lambda s: (s.pos, s.enzyme, s.strand))
-    return sites
-
-
-def cut_positions(seq: str, recognition: str) -> List[int]:
-    """Sorted, de-duplicated cut coordinates for one recognition site.
-
-    We use the recognition-site start (plus-strand coordinate) as the proxy cut
-    point (see module docstring). Both strands are scanned; palindromic sites
-    are counted once per locus.
-    """
-    seq = seq.upper()
-    rec = recognition.upper()
-    rlen = len(rec)
-    n = len(seq)
-    if rlen == 0 or rlen > n:
-        return []
-    palindrome = _is_palindrome(rec)
-    rec_rc = revcomp(rec)
-
-    positions = set()
-    for i in range(n - rlen + 1):
-        window = seq[i:i + rlen]
-        if iupac_match(rec, window):
-            positions.add(i)
-        elif not palindrome and iupac_match(rec_rc, window):
-            positions.add(i)
-    return sorted(positions)
-
-
-def digest_fragment_sizes(seq: str, recognition: str, circular: bool = False) -> List[int]:
-    """Fragment lengths from cutting ``seq`` at all recognition sites.
-
-    Returns sizes sorted descending. If there are no sites, returns
-    ``[len(seq)]`` (linear) or ``[len(seq)]`` (circular, single uncut circle).
-
-    Cutting model: we cut at each proxy cut coordinate (recognition start).
-    * Linear: cuts partition the sequence into successive intervals.
-    * Circular: the region after the last cut wraps to the first cut.
-    """
-    n = len(seq)
-    cuts = cut_positions(seq, recognition)
-    if not cuts:
-        return [n]
-
-    if not circular:
-        fragments: List[int] = []
-        prev = 0
-        for c in cuts:
-            fragments.append(c - prev)
-            prev = c
-        fragments.append(n - prev)
-        # A cut at position 0 yields a leading zero-length fragment; drop
-        # non-positive fragments as they are not physical bands.
-        fragments = [f for f in fragments if f > 0]
-        return sorted(fragments, reverse=True)
-
-    # Circular: fragment between consecutive cuts, last wraps around.
-    fragments = []
-    for idx in range(len(cuts)):
-        start = cuts[idx]
-        end = cuts[(idx + 1) % len(cuts)]
-        length = (end - start) % n
-        if length == 0:
-            length = n
-        fragments.append(length)
-    return sorted(fragments, reverse=True)
-
-
-# ---------------------------------------------------------------------------
-# CAPS scanning
-# ---------------------------------------------------------------------------
 
 @dataclass
 class CapsResult:
-    """Result of comparing one enzyme's digest between two alleles."""
-
     enzyme: str
     recognition: str
     allele_a_fragments: List[int]
@@ -301,319 +99,564 @@ class CapsResult:
     distinguishable: bool
     min_gel_gap: int
     note: str = ""
+    allele_a_cuts: List[CutEvent] = None  # type: ignore[assignment]
+    allele_b_cuts: List[CutEvent] = None  # type: ignore[assignment]
+    top_cut_offset: Optional[int] = None
+    bottom_cut_offset: Optional[int] = None
+    pcr_compatible: bool = True
+    recommendation_eligible: bool = True
+    methylation_note: str = ""
+    cut_model: str = "verified"
+    metadata_source: str = _METADATA_SOURCE
+
+    def __post_init__(self) -> None:
+        if self.allele_a_cuts is None:
+            self.allele_a_cuts = []
+        if self.allele_b_cuts is None:
+            self.allele_b_cuts = []
 
 
-def _multiset_diff_min_gap(frags_a: List[int], frags_b: List[int]) -> int:
-    """Smallest fragment-size difference that lets you tell A from B.
-
-    Heuristic (documented): sort both fragment lists descending and pad the
-    shorter with zeros so they align by band rank. The per-rank absolute size
-    differences are the candidate "gaps"; we return the *largest* such gap,
-    because on a gel you only need ONE clearly resolvable band-size difference
-    to distinguish the alleles. When the two patterns are identical the value is
-    0. Returns 0 for identical patterns.
-    """
-    a = sorted(frags_a, reverse=True)
-    b = sorted(frags_b, reverse=True)
-    length = max(len(a), len(b))
-    a += [0] * (length - len(a))
-    b += [0] * (length - len(b))
-    diffs = [abs(x - y) for x, y in zip(a, b)]
-    return max(diffs) if diffs else 0
+def _enzyme(name: str, recognition: str, top: int, bottom: int,
+            **kwargs) -> RestrictionEnzyme:
+    return RestrictionEnzyme(name, recognition, top, bottom, **kwargs)
 
 
-def caps_scan(
-    amplicon_a: str,
-    amplicon_b: str,
-    enzymes: Optional[Dict[str, str]] = None,
-    gel_min_gap: int = 25,
-) -> List[CapsResult]:
-    """Compare digests of two alleles for every enzyme.
+# Cleavage notation is encoded explicitly. DpnI is retained for discovery and
+# provenance but is not recommended for ordinary unmethylated PCR products.
+ENZYME_METADATA: Dict[str, RestrictionEnzyme] = {
+    "EcoRI": _enzyme("EcoRI", "GAATTC", 1, 5),
+    "HindIII": _enzyme("HindIII", "AAGCTT", 1, 5),
+    "BamHI": _enzyme("BamHI", "GGATCC", 1, 5),
+    "XbaI": _enzyme("XbaI", "TCTAGA", 1, 5),
+    "XhoI": _enzyme("XhoI", "CTCGAG", 1, 5),
+    "PstI": _enzyme("PstI", "CTGCAG", 5, 1),
+    "SacI": _enzyme("SacI", "GAGCTC", 5, 1),
+    "KpnI": _enzyme("KpnI", "GGTACC", 5, 1),
+    "SmaI": _enzyme("SmaI", "CCCGGG", 3, 3),
+    "NcoI": _enzyme("NcoI", "CCATGG", 1, 5),
+    "NdeI": _enzyme("NdeI", "CATATG", 2, 4),
+    "SalI": _enzyme("SalI", "GTCGAC", 1, 5),
+    "NotI": _enzyme("NotI", "GCGGCCGC", 2, 6),
+    "SpeI": _enzyme("SpeI", "ACTAGT", 1, 5),
+    "EcoRV": _enzyme("EcoRV", "GATATC", 3, 3),
+    "DraI": _enzyme("DraI", "TTTAAA", 3, 3),
+    "HpaI": _enzyme("HpaI", "GTTAAC", 3, 3),
+    "ScaI": _enzyme("ScaI", "AGTACT", 3, 3),
+    "StuI": _enzyme("StuI", "AGGCCT", 3, 3),
+    "AluI": _enzyme("AluI", "AGCT", 2, 2),
+    "HaeIII": _enzyme("HaeIII", "GGCC", 2, 2),
+    "RsaI": _enzyme("RsaI", "GTAC", 2, 2),
+    "TaqI": _enzyme("TaqI", "TCGA", 1, 3),
+    "MseI": _enzyme("MseI", "TTAA", 1, 3),
+    "MboI": _enzyme(
+        "MboI", "GATC", 0, 4,
+        methylation_note=(
+            "blocked by dam methylation; ordinary PCR products are generally "
+            "unmethylated and therefore digestible")),
+    "HinfI": _enzyme("HinfI", "GANTC", 1, 4),
+    "DdeI": _enzyme("DdeI", "CTNAG", 1, 4),
+    "BsaI": _enzyme("BsaI", "GGTCTC", 7, 11),
+    "BstNI": _enzyme("BstNI", "CCWGG", 2, 3),
+    "MspI": _enzyme("MspI", "CCGG", 1, 3),
+    "HhaI": _enzyme("HhaI", "GCGC", 3, 1),
+    "Sau3AI": _enzyme(
+        "Sau3AI", "GATC", 0, 4,
+        methylation_note="not blocked by dam methylation"),
+    "NlaIII": _enzyme("NlaIII", "CATG", 4, 0),
+    "DpnI": _enzyme(
+        "DpnI", "GATC", 2, 2,
+        pcr_compatible=False,
+        recommendable=False,
+        methylation_note=(
+            "requires adenine-methylated GATC; ordinary PCR products are "
+            "unmethylated and are not a substrate")),
+    "TseI": _enzyme("TseI", "GCWGC", 1, 4),
+    "ApaI": _enzyme("ApaI", "GGGCCC", 5, 1),
+    "BglII": _enzyme("BglII", "AGATCT", 1, 5),
+    "ClaI": _enzyme("ClaI", "ATCGAT", 2, 4),
+    "NheI": _enzyme("NheI", "GCTAGC", 1, 5),
+    "MfeI": _enzyme("MfeI", "CAATTG", 1, 5),
+}
 
-    For each enzyme, digest both alleles and report the enzyme when the
-    fragment-size multiset differs. ``distinguishable`` is True when there is a
-    band-size difference >= ``gel_min_gap`` between the two patterns (i.e. a
-    difference resolvable on a typical agarose gel). Results are sorted best
-    (largest gap) first.
-    """
-    if enzymes is None:
-        enzymes = ENZYMES
+# Historical public API.
+ENZYMES: Dict[str, str] = {
+    name: enzyme.recognition for name, enzyme in ENZYME_METADATA.items()
+}
 
-    results: List[CapsResult] = []
-    for name, recognition in enzymes.items():
-        frags_a = digest_fragment_sizes(amplicon_a, recognition)
-        frags_b = digest_fragment_sizes(amplicon_b, recognition)
 
-        # Only interesting when the fragment patterns actually differ.
-        if sorted(frags_a) == sorted(frags_b):
+EnzymeInput = Optional[Mapping[str, Union[str, RestrictionEnzyme]]]
+
+
+def _coerce_enzyme(name: str,
+                   value: Union[str, RestrictionEnzyme]) -> RestrictionEnzyme:
+    if isinstance(value, RestrictionEnzyme):
+        return value
+    recognition = str(value).upper()
+    known = ENZYME_METADATA.get(name)
+    if known is not None and known.recognition == recognition:
+        return known
+    # Unknown custom enzymes remain searchable, but are excluded from automatic
+    # experimental recommendations until cleavage metadata is supplied.
+    return RestrictionEnzyme(
+        name=name,
+        recognition=recognition,
+        top_cut=0,
+        bottom_cut=0,
+        pcr_compatible=False,
+        recommendable=False,
+        cut_model="recognition_start_fallback",
+        source="user-supplied recognition sequence; cleavage metadata absent",
+    )
+
+
+def enzyme_records(enzymes: EnzymeInput = None,
+                   recommended_only: bool = False) -> List[RestrictionEnzyme]:
+    mapping: Mapping[str, Union[str, RestrictionEnzyme]] = (
+        ENZYME_METADATA if enzymes is None else enzymes)
+    records = [_coerce_enzyme(name, value) for name, value in mapping.items()]
+    if recommended_only:
+        records = [
+            record for record in records
+            if record.recommendable and record.pcr_compatible
+            and record.cut_model == "verified"
+        ]
+    return records
+
+
+def _is_palindrome(recognition: str) -> bool:
+    return revcomp(recognition) == recognition.upper()
+
+
+def find_sites(sequence: str, enzymes: EnzymeInput = None) -> List[Site]:
+    sequence = sequence.upper()
+    sites: List[Site] = []
+    for enzyme in enzyme_records(enzymes):
+        recognition = enzyme.recognition.upper()
+        length = len(recognition)
+        if length == 0 or length > len(sequence):
             continue
+        reverse_recognition = revcomp(recognition)
+        for start in range(len(sequence) - length + 1):
+            window = sequence[start:start + length]
+            if iupac_match(recognition, window):
+                sites.append(Site(enzyme.name, recognition, start, "+"))
+            if (not enzyme.palindrome
+                    and iupac_match(reverse_recognition, window)):
+                sites.append(Site(enzyme.name, recognition, start, "-"))
+    sites.sort(key=lambda site: (site.pos, site.enzyme, site.strand))
+    return sites
 
-        gap = _multiset_diff_min_gap(frags_a, frags_b)
-        distinguishable = gap >= gel_min_gap
 
-        n_a = len(frags_a)
-        n_b = len(frags_b)
-        if n_a != n_b:
-            note = "cut-count differs (%d vs %d sites+1)" % (n_a, n_b)
-        else:
-            note = "same band count, sizes differ"
+def cut_event_for_site(site: Site, enzyme: RestrictionEnzyme,
+                       sequence_length: int) -> CutEvent:
+    recognition_length = len(enzyme.recognition)
+    if site.strand == "+":
+        top_cut = site.pos + enzyme.top_cut
+        bottom_cut = site.pos + enzyme.bottom_cut
+    else:
+        # The recognition strand is the genomic minus strand. Convert offsets
+        # back to plus-strand boundary coordinates and swap strand roles.
+        top_cut = site.pos + recognition_length - enzyme.bottom_cut
+        bottom_cut = site.pos + recognition_length - enzyme.top_cut
+    complete = (
+        0 <= top_cut <= sequence_length
+        and 0 <= bottom_cut <= sequence_length
+    )
+    return CutEvent(
+        enzyme=enzyme.name,
+        recognition=enzyme.recognition,
+        site_pos=site.pos,
+        site_strand=site.strand,
+        top_cut=top_cut,
+        bottom_cut=bottom_cut,
+        complete=complete,
+    )
 
-        results.append(
-            CapsResult(
-                enzyme=name,
-                recognition=recognition,
-                allele_a_fragments=frags_a,
-                allele_b_fragments=frags_b,
-                distinguishable=distinguishable,
-                min_gel_gap=gap,
-                note=note,
-            )
+
+def cut_events(sequence: str,
+               enzyme: Union[str, RestrictionEnzyme],
+               name: Optional[str] = None) -> List[CutEvent]:
+    if isinstance(enzyme, RestrictionEnzyme):
+        record = enzyme
+    else:
+        recognition = enzyme.upper()
+        record = next((
+            candidate for candidate in ENZYME_METADATA.values()
+            if candidate.recognition == recognition and candidate.recommendable
+        ), None)
+        if record is None:
+            record = RestrictionEnzyme(
+                name or "custom", recognition, 0, 0,
+                pcr_compatible=False, recommendable=False,
+                cut_model="recognition_start_fallback",
+                source="recognition-only compatibility fallback")
+    sites = find_sites(sequence, {record.name: record})
+    return [cut_event_for_site(site, record, len(sequence)) for site in sites]
+
+
+def cut_positions(sequence: str,
+                  recognition: Union[str, RestrictionEnzyme]) -> List[int]:
+    """Return complete top-strand cleavage boundaries.
+
+    Passing a known recognition string resolves to curated metadata. Unknown
+    recognition-only inputs retain the historical recognition-start fallback.
+    """
+    return sorted(set(
+        event.top_cut for event in cut_events(sequence, recognition)
+        if event.complete
+    ))
+
+
+def digest_fragment_sizes(sequence: str,
+                          recognition: Union[str, RestrictionEnzyme],
+                          circular: bool = False) -> List[int]:
+    sequence_length = len(sequence)
+    cuts = sorted(set(
+        cut for cut in cut_positions(sequence, recognition)
+        if 0 < cut < sequence_length
+    ))
+    if not cuts:
+        return [sequence_length]
+    if not circular:
+        boundaries = [0] + cuts + [sequence_length]
+        return sorted([
+            high - low for low, high in zip(boundaries, boundaries[1:])
+            if high > low
+        ], reverse=True)
+    fragments = []
+    for index, start in enumerate(cuts):
+        end = cuts[(index + 1) % len(cuts)]
+        length = (end - start) % sequence_length
+        fragments.append(sequence_length if length == 0 else length)
+    return sorted(fragments, reverse=True)
+
+
+def _multiset_diff_min_gap(fragments_a: List[int],
+                           fragments_b: List[int]) -> int:
+    first = sorted(fragments_a, reverse=True)
+    second = sorted(fragments_b, reverse=True)
+    length = max(len(first), len(second))
+    first += [0] * (length - len(first))
+    second += [0] * (length - len(second))
+    differences = [abs(a - b) for a, b in zip(first, second)]
+    return max(differences) if differences else 0
+
+
+def caps_scan(amplicon_a: str, amplicon_b: str,
+              enzymes: EnzymeInput = None,
+              gel_min_gap: int = 25,
+              include_nonrecommended: bool = False) -> List[CapsResult]:
+    records = enzyme_records(enzymes, recommended_only=not include_nonrecommended)
+    results: List[CapsResult] = []
+    for enzyme in records:
+        events_a = cut_events(amplicon_a, enzyme)
+        events_b = cut_events(amplicon_b, enzyme)
+        fragments_a = digest_fragment_sizes(amplicon_a, enzyme)
+        fragments_b = digest_fragment_sizes(amplicon_b, enzyme)
+        if sorted(fragments_a) == sorted(fragments_b):
+            continue
+        gap = _multiset_diff_min_gap(fragments_a, fragments_b)
+        incomplete = any(not event.complete for event in events_a + events_b)
+        eligible = (
+            enzyme.pcr_compatible and enzyme.recommendable
+            and enzyme.cut_model == "verified" and not incomplete
         )
-
-    # Best first: distinguishable enzymes first, then by largest gel gap.
-    results.sort(key=lambda r: (r.distinguishable, r.min_gel_gap), reverse=True)
+        distinguishable = eligible and gap >= gel_min_gap
+        note_parts = []
+        if len(fragments_a) != len(fragments_b):
+            note_parts.append("cut-count differs")
+        else:
+            note_parts.append("same band count, sizes differ")
+        if incomplete:
+            note_parts.append("one or more cleavage positions lie outside amplicon")
+        if not enzyme.pcr_compatible:
+            note_parts.append("not compatible with ordinary PCR substrate")
+        if enzyme.methylation_note:
+            note_parts.append(enzyme.methylation_note)
+        results.append(CapsResult(
+            enzyme=enzyme.name,
+            recognition=enzyme.recognition,
+            allele_a_fragments=fragments_a,
+            allele_b_fragments=fragments_b,
+            distinguishable=distinguishable,
+            min_gel_gap=gap,
+            note="; ".join(note_parts),
+            allele_a_cuts=events_a,
+            allele_b_cuts=events_b,
+            top_cut_offset=enzyme.top_cut,
+            bottom_cut_offset=enzyme.bottom_cut,
+            pcr_compatible=enzyme.pcr_compatible,
+            recommendation_eligible=eligible,
+            methylation_note=enzyme.methylation_note,
+            cut_model=enzyme.cut_model,
+            metadata_source=enzyme.source,
+        ))
+    results.sort(key=lambda result: (
+        result.distinguishable,
+        result.recommendation_eligible,
+        result.min_gel_gap,
+    ), reverse=True)
     return results
 
 
-def enzymes_gained_lost(
-    seq_ref: str,
-    seq_alt: str,
-    enzymes: Optional[Dict[str, str]] = None,
-) -> Dict[str, List[str]]:
-    """Enzymes whose site count changes between reference and alternate allele.
-
-    Returns ``{'gained': [...], 'lost': [...]}`` where:
-      * 'gained' = enzymes with MORE sites in ``seq_alt`` than ``seq_ref``
-        (site created by the variant).
-      * 'lost'   = enzymes with FEWER sites in ``seq_alt`` than ``seq_ref``
-        (site destroyed by the variant).
-
-    This is the core of CAPS marker discovery: an enzyme that gains or loses a
-    site between the two alleles cleaves them differently.
-    """
-    if enzymes is None:
-        enzymes = ENZYMES
-
+def enzymes_gained_lost(seq_ref: str, seq_alt: str,
+                        enzymes: EnzymeInput = None,
+                        include_nonrecommended: bool = False) -> Dict[str, List[str]]:
+    records = enzyme_records(enzymes, recommended_only=not include_nonrecommended)
     gained: List[str] = []
     lost: List[str] = []
-    for name, recognition in enzymes.items():
-        n_ref = len(cut_positions(seq_ref, recognition))
-        n_alt = len(cut_positions(seq_alt, recognition))
-        if n_alt > n_ref:
-            gained.append(name)
-        elif n_alt < n_ref:
-            lost.append(name)
+    for enzyme in records:
+        reference_count = len(cut_events(seq_ref, enzyme))
+        alternate_count = len(cut_events(seq_alt, enzyme))
+        if alternate_count > reference_count:
+            gained.append(enzyme.name)
+        elif alternate_count < reference_count:
+            lost.append(enzyme.name)
     return {"gained": sorted(gained), "lost": sorted(lost)}
 
 
-# ---------------------------------------------------------------------------
-# dCAPS (best-effort)
-# ---------------------------------------------------------------------------
+def _pattern_orientations(enzyme: RestrictionEnzyme) -> List[Tuple[str, str]]:
+    patterns = [("+", enzyme.recognition.upper())]
+    reverse = revcomp(enzyme.recognition)
+    if reverse != enzyme.recognition.upper():
+        patterns.append(("-", reverse))
+    return patterns
 
-def dcaps_candidates(
-    seq: str,
-    snp_index: int,
-    ref_base: str,
-    alt_base: str,
-    enzymes: Optional[Dict[str, str]] = None,
-    max_primer_mismatch: int = 2,
-) -> List[dict]:
-    """Best-effort dCAPS candidate finder.
 
-    dCAPS (derived CAPS) is used when a SNP does not by itself create or destroy
-    a restriction site. A primer is designed with a few deliberate mismatches
-    near the SNP so that, combined with one of the two SNP alleles, an enzyme
-    site is created for exactly one allele.
+def dcaps_candidates(sequence: str, snp_index: int, ref_base: str,
+                     alt_base: str, enzymes: EnzymeInput = None,
+                     max_primer_mismatch: int = 2,
+                     include_nonrecommended: bool = False) -> List[dict]:
+    """Find allele-specific recognition frames on both strands.
 
-    Implementation / assumptions
-    ----------------------------
-    We search, within a window spanning any recognition site that overlaps
-    ``snp_index``, for enzymes where introducing up to ``max_primer_mismatch``
-    base changes in the bases *around* the SNP (excluding the SNP position
-    itself) can produce a recognition site that is present for one SNP allele
-    but not the other. Only the enzyme's recognition length is considered
-    (fixed-length sites); IUPAC codes in the recognition are honoured. The SNP
-    base itself is the discriminating position and is not counted as a primer
-    mismatch.
-
-    Returns a list of dict candidates:
-        {
-          'enzyme': name,
-          'recognition': site,
-          'window_start': int,       # 0-based start of the recognition frame
-          'ref_context': str,        # engineered window for the ref allele
-          'alt_context': str,        # engineered window for the alt allele
-          'mismatches': int,         # engineered primer mismatches used
-          'present_in': 'ref'|'alt', # which allele carries the created site
-        }
+    Engineered changes are returned as absolute plus-strand coordinates. The SNP
+    itself is never counted as a primer mismatch and is not overwritten.
     """
-    if enzymes is None:
-        enzymes = ENZYMES
-
-    seq = seq.upper()
+    sequence = sequence.upper()
     ref_base = ref_base.upper()
     alt_base = alt_base.upper()
-    n = len(seq)
-    if not (0 <= snp_index < n):
+    if not (0 <= snp_index < len(sequence)):
         return []
-
-    # Two allele templates that differ only at the SNP position.
-    ref_seq = seq[:snp_index] + ref_base + seq[snp_index + 1:]
-    alt_seq = seq[:snp_index] + alt_base + seq[snp_index + 1:]
-
+    reference_sequence = (
+        sequence[:snp_index] + ref_base + sequence[snp_index + 1:])
+    alternate_sequence = (
+        sequence[:snp_index] + alt_base + sequence[snp_index + 1:])
+    records = enzyme_records(enzymes, recommended_only=not include_nonrecommended)
     candidates: List[dict] = []
     seen = set()
 
-    for name, recognition in enzymes.items():
-        rec = recognition.upper()
-        rlen = len(rec)
-        if rlen == 0 or rlen > n:
+    for enzyme in records:
+        recognition_length = len(enzyme.recognition)
+        if recognition_length == 0 or recognition_length > len(sequence):
             continue
-
-        # Consider every recognition frame that overlaps the SNP position.
-        frame_start_min = max(0, snp_index - rlen + 1)
-        frame_start_max = min(n - rlen, snp_index)
-        for start in range(frame_start_min, frame_start_max + 1):
-            rel = snp_index - start  # SNP offset within the frame
-            if not (0 <= rel < rlen):
-                continue
-
-            for allele_seq, present_in, other_seq in (
-                (alt_seq, "alt", ref_seq),
-                (ref_seq, "ref", alt_seq),
-            ):
-                window = allele_seq[start:start + rlen]
-                other_window = other_seq[start:start + rlen]
-
-                # Count how many positions (excluding the SNP) must be changed
-                # so that this window matches the recognition site. The SNP base
-                # is free (it is the discriminator, not a primer mismatch).
-                mism = 0
-                feasible = True
-                for j in range(rlen):
-                    if j == rel:
-                        # SNP position must be compatible with the site for the
-                        # allele that is supposed to CARRY the created site.
-                        if window[j] not in IUPAC_CODES.get(rec[j], ""):
+        minimum_start = max(0, snp_index - recognition_length + 1)
+        maximum_start = min(len(sequence) - recognition_length, snp_index)
+        for orientation, pattern in _pattern_orientations(enzyme):
+            for start in range(minimum_start, maximum_start + 1):
+                relative_snp = snp_index - start
+                for present_sequence, present_in, other_sequence in (
+                    (alternate_sequence, "alt", reference_sequence),
+                    (reference_sequence, "ref", alternate_sequence),
+                ):
+                    window = present_sequence[start:start + recognition_length]
+                    other_window = other_sequence[start:start + recognition_length]
+                    if window[relative_snp] not in IUPAC_CODES.get(
+                            pattern[relative_snp], ""):
+                        continue
+                    if other_window[relative_snp] in IUPAC_CODES.get(
+                            pattern[relative_snp], ""):
+                        continue
+                    changes = []
+                    feasible = True
+                    for offset, (base, code) in enumerate(zip(window, pattern)):
+                        if offset == relative_snp:
+                            continue
+                        allowed = IUPAC_CODES.get(code, "")
+                        if not allowed:
                             feasible = False
                             break
+                        if base not in allowed:
+                            changes.append({
+                                "position": start + offset,
+                                "from": base,
+                                "to": allowed[0],
+                            })
+                    if not feasible or len(changes) > max_primer_mismatch:
                         continue
-                    if window[j] not in IUPAC_CODES.get(rec[j], ""):
-                        mism += 1
-                if not feasible or mism > max_primer_mismatch:
-                    continue
 
-                # The engineered site must be ALLELE-SPECIFIC: with the same
-                # engineered primer bases, the OTHER allele must NOT form the
-                # site (its SNP base breaks it).
-                other_forms = other_window[rel] in IUPAC_CODES.get(rec[rel], "")
-                if other_forms:
-                    continue
-
-                # Build the engineered contexts (primer bases forced to match).
-                eng_ref = list(ref_seq[start:start + rlen])
-                eng_alt = list(alt_seq[start:start + rlen])
-                for j in range(rlen):
-                    if j == rel:
+                    engineered_ref = list(
+                        reference_sequence[start:start + recognition_length])
+                    engineered_alt = list(
+                        alternate_sequence[start:start + recognition_length])
+                    for change in changes:
+                        offset = change["position"] - start
+                        engineered_ref[offset] = change["to"]
+                        engineered_alt[offset] = change["to"]
+                    ref_context = "".join(engineered_ref)
+                    alt_context = "".join(engineered_alt)
+                    present_context = (
+                        ref_context if present_in == "ref" else alt_context)
+                    other_context = (
+                        alt_context if present_in == "ref" else ref_context)
+                    if not iupac_match(pattern, present_context):
                         continue
-                    if window[j] not in IUPAC_CODES.get(rec[j], ""):
-                        # Force a concrete base that satisfies the site.
-                        forced = IUPAC_CODES[rec[j]][0]
-                        eng_ref[j] = forced
-                        eng_alt[j] = forced
-                ref_context = "".join(eng_ref)
-                alt_context = "".join(eng_alt)
-
-                key = (name, start, present_in, mism)
-                if key in seen:
-                    continue
-                seen.add(key)
-
-                candidates.append(
-                    {
-                        "enzyme": name,
-                        "recognition": recognition,
+                    if iupac_match(pattern, other_context):
+                        continue
+                    key = (
+                        enzyme.name, start, orientation, present_in,
+                        tuple((change["position"], change["to"])
+                              for change in changes),
+                    )
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    candidates.append({
+                        "enzyme": enzyme.name,
+                        "recognition": enzyme.recognition,
+                        "recognition_oriented": pattern,
+                        "orientation": orientation,
                         "window_start": start,
+                        "window_end": start + recognition_length - 1,
+                        "snp_index": snp_index,
+                        "snp_offset": relative_snp,
                         "ref_context": ref_context,
                         "alt_context": alt_context,
-                        "mismatches": mism,
+                        "mismatches": len(changes),
+                        "engineered_changes": changes,
                         "present_in": present_in,
-                    }
-                )
-
-    # Fewest engineered mismatches first (easier primer to build).
-    candidates.sort(key=lambda c: (c["mismatches"], c["enzyme"], c["window_start"]))
+                        "top_cut_offset": enzyme.top_cut,
+                        "bottom_cut_offset": enzyme.bottom_cut,
+                        "pcr_compatible": enzyme.pcr_compatible,
+                        "methylation_note": enzyme.methylation_note,
+                        "metadata_source": enzyme.source,
+                    })
+    candidates.sort(key=lambda candidate: (
+        candidate["mismatches"], candidate["enzyme"],
+        candidate["window_start"], candidate["orientation"],
+    ))
     return candidates
 
 
-# ---------------------------------------------------------------------------
-# Self-test
-# ---------------------------------------------------------------------------
+def materialize_dcaps_primers(sequence: str, snp_index: int,
+                              candidates: Sequence[dict],
+                              min_size: int = 18, opt_size: int = 20,
+                              max_size: int = 25) -> List[dict]:
+    """Turn recognition-frame candidates into orderable one-sided primers.
+
+    The SNP is deliberately left outside the primer footprint so its allele is
+    retained in the PCR product. A forward dCAPS primer ends immediately before
+    the SNP; a reverse dCAPS primer ends immediately after it. Candidates whose
+    engineered changes fall on both sides of the SNP require two modified
+    primers and are rejected.
+    """
+    sequence = sequence.upper()
+    output: List[dict] = []
+    seen = set()
+    for candidate in candidates:
+        changes = list(candidate.get("engineered_changes", []))
+        if not changes:
+            continue  # natural CAPS, not dCAPS
+        positions = [int(change["position"]) for change in changes]
+        roles = []
+        if all(position < snp_index for position in positions):
+            roles.append("F")
+        if all(position > snp_index for position in positions):
+            roles.append("R")
+        for role in roles:
+            if role == "F":
+                end_exclusive = snp_index
+                required_start = min(positions)
+                length = max(min_size, opt_size, end_exclusive - required_start)
+                if length > max_size:
+                    continue
+                start = end_exclusive - length
+                end = end_exclusive - 1
+                if start < 0:
+                    continue
+                plus_bases = list(sequence[start:end_exclusive])
+                for change in changes:
+                    plus_bases[change["position"] - start] = change["to"]
+                primer_sequence = "".join(plus_bases)
+            else:
+                start = snp_index + 1
+                required_end = max(positions) + 1
+                length = max(min_size, opt_size, required_end - start)
+                if length > max_size:
+                    continue
+                end_exclusive = start + length
+                end = end_exclusive - 1
+                if end_exclusive > len(sequence):
+                    continue
+                plus_bases = list(sequence[start:end_exclusive])
+                for change in changes:
+                    plus_bases[change["position"] - start] = change["to"]
+                primer_sequence = revcomp("".join(plus_bases))
+            if not set(primer_sequence) <= set("ACGT"):
+                continue
+            key = (candidate["enzyme"], role, primer_sequence,
+                   candidate["present_in"])
+            if key in seen:
+                continue
+            seen.add(key)
+            materialized = dict(candidate)
+            materialized.update({
+                "primer_role": role,
+                "primer_sequence": primer_sequence,
+                "primer_start": start,
+                "primer_end": end,
+                "primer_length": len(primer_sequence),
+                "three_prime_distance_to_snp": 1,
+                "orderable": True,
+            })
+            output.append(materialized)
+    output.sort(key=lambda candidate: (
+        candidate["mismatches"], candidate["primer_length"],
+        candidate["enzyme"], candidate["primer_role"],
+    ))
+    return output
+
+
+def apply_engineered_changes(sequence: str, changes: Sequence[dict]) -> str:
+    bases = list(sequence.upper())
+    for change in changes:
+        position = int(change["position"])
+        if 0 <= position < len(bases):
+            bases[position] = str(change["to"]).upper()
+    return "".join(bases)
+
+
+def result_to_dict(result: CapsResult) -> dict:
+    return asdict(result)
+
 
 if __name__ == "__main__":
-    # (a) EcoRI found at the right position in GGGAATTCCC.
-    #     GAATTC starts at index 2 (G G G A A T T C C C -> GAATTC at 2..7).
     demo = "GGGAATTCCC"
-    all_sites = find_sites(demo)
-    ecori_sites = [s for s in all_sites if s.enzyme == "EcoRI"]
-    print("=== (a) find_sites('GGGAATTCCC') EcoRI ===")
-    for s in ecori_sites:
-        print("  EcoRI at pos %d strand %s" % (s.pos, s.strand))
-    assert any(s.pos == 2 for s in ecori_sites), "EcoRI should be found at pos 2"
-    print("  OK: EcoRI found at position 2")
-    print()
+    eco_sites = [site for site in find_sites(demo) if site.enzyme == "EcoRI"]
+    assert any(site.pos == 2 for site in eco_sites)
+    eco_events = cut_events(demo, ENZYME_METADATA["EcoRI"])
+    assert eco_events[0].top_cut == 3
+    assert eco_events[0].bottom_cut == 7
 
-    # (b) Two 200 bp alleles differing by one SNP that creates/destroys EcoRI.
-    #     Build a random-ish but deterministic 200 bp backbone with NO EcoRI
-    #     site, then place a GAATTC in allele A and break it in allele B.
-    import random
+    allele_a = "A" * 100 + "GAATTC" + "A" * 94
+    allele_b = "A" * 100 + "GACTTC" + "A" * 94
+    eco_result = next(
+        result for result in caps_scan(allele_a, allele_b)
+        if result.enzyme == "EcoRI")
+    assert eco_result.distinguishable
+    assert sum(eco_result.allele_a_fragments) == len(allele_a)
+    assert sum(eco_result.allele_b_fragments) == len(allele_b)
 
-    rng = random.Random(42)
-    bases = "ACGT"
-    backbone = "".join(rng.choice(bases) for _ in range(200))
+    reverse_candidates = dcaps_candidates(
+        "GAGACT", 5, "C", "T",
+        enzymes={"BsaI": ENZYME_METADATA["BsaI"]},
+        max_primer_mismatch=0,
+    )
+    assert any(
+        candidate["orientation"] == "-"
+        and candidate["present_in"] == "ref"
+        for candidate in reverse_candidates)
 
-    # Ensure the backbone has no accidental EcoRI site by rebuilding until clean.
-    while "GAATTC" in backbone or "GAATTC" in revcomp(backbone):
-        backbone = "".join(rng.choice(bases) for _ in range(200))
-
-    # Insert an EcoRI site at position 100 in allele A.
-    site_pos = 100
-    allele_a = backbone[:site_pos] + "GAATTC" + backbone[site_pos + 6:]
-    # Allele B: single SNP breaks the EcoRI site (GAATTC -> GACTTC), i.e. the
-    # SNP is at site_pos+2 (A->C).
-    allele_b = backbone[:site_pos] + "GACTTC" + backbone[site_pos + 6:]
-
-    assert len(allele_a) == 200 and len(allele_b) == 200
-    assert allele_a[:site_pos] == allele_b[:site_pos]
-    # Exactly one base differs.
-    diffs = [i for i in range(200) if allele_a[i] != allele_b[i]]
-    assert diffs == [site_pos + 2], "alleles must differ by exactly one SNP"
-
-    print("=== (b) caps_scan on 200 bp alleles (EcoRI SNP) ===")
-    results = caps_scan(allele_a, allele_b, gel_min_gap=25)
-    ecori_result = next((r for r in results if r.enzyme == "EcoRI"), None)
-    assert ecori_result is not None, "EcoRI must appear as a CAPS-distinguishing enzyme"
-    print("  EcoRI recognition       : %s" % ecori_result.recognition)
-    print("  Allele A fragment sizes : %s" % ecori_result.allele_a_fragments)
-    print("  Allele B fragment sizes : %s" % ecori_result.allele_b_fragments)
-    print("  Distinguishable         : %s" % ecori_result.distinguishable)
-    print("  Min gel gap (bp)        : %s" % ecori_result.min_gel_gap)
-    print("  Note                    : %s" % ecori_result.note)
-    assert ecori_result.distinguishable, "EcoRI should distinguish the two alleles"
-    print("  Top CAPS enzymes (best first):")
-    for r in results[:5]:
-        print("    %-8s dist=%-5s gap=%-4d A=%s B=%s"
-              % (r.enzyme, r.distinguishable, r.min_gel_gap,
-                 r.allele_a_fragments, r.allele_b_fragments))
-    print()
-
-    # (c) enzymes_gained_lost for the same pair (ref = A, alt = B).
-    print("=== (c) enzymes_gained_lost(ref=alleleA, alt=alleleB) ===")
-    gl = enzymes_gained_lost(allele_a, allele_b)
-    print("  gained (site present only in alt): %s" % gl["gained"])
-    print("  lost   (site present only in ref): %s" % gl["lost"])
-    assert "EcoRI" in gl["lost"], "EcoRI site is lost going A -> B"
-    print("  OK: EcoRI correctly reported as lost")
-    print()
-
+    assert all(
+        result.enzyme != "DpnI"
+        for result in caps_scan("GATC", "AATC"))
     print("All self-tests passed.")
