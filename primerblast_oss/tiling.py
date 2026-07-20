@@ -35,7 +35,8 @@ def _evaluate(pair: PrimerPair, databases: Sequence[str], sp: SpecParams,
             thermo_gate=thermo_gate,
         )
         result.update(thermo_metadata(
-            database_genome, thermo_params, thermo_gate, association))
+                database_genome, thermo_params, thermo_gate, association,
+                result.get("thermo_site_stats")))
         per_db.append(result)
 
     from . import dimers as dimer_module

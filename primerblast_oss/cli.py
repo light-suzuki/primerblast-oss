@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from pathlib import Path
 from typing import Dict, List, Mapping, Optional, Tuple
 
 from . import __version__
@@ -167,12 +168,24 @@ def _thermo_setup(arguments, design_genome=None):
     fasta_by_db = _parse_db_genome_specs(
         getattr(arguments, "db_genome", []), databases)
     genomes_by_db: Dict[str, object] = {}
-    if design_genome is not None and databases:
-        genomes_by_db[databases[0]] = design_genome
 
     legacy_fasta = getattr(arguments, "genome_fasta", None)
     if legacy_fasta and databases and databases[0] not in fasta_by_db:
         fasta_by_db[databases[0]] = legacy_fasta
+
+    if design_genome is not None and databases:
+        design_database = databases[0]
+        requested_design_fasta = fasta_by_db.get(design_database)
+        if requested_design_fasta is not None:
+            actual = Path(str(design_genome.fasta)).resolve()
+            requested = Path(requested_design_fasta).resolve()
+            if requested != actual:
+                raise ValueError(
+                    "the first/design DB FASTA must match --genome exactly: "
+                    "%s != %s" % (requested, actual)
+                )
+            fasta_by_db.pop(design_database)
+        genomes_by_db[design_database] = design_genome
 
     if fasta_by_db:
         from .genome import Genome
@@ -180,7 +193,7 @@ def _thermo_setup(arguments, design_genome=None):
             genomes_by_db[database] = Genome(fasta)
 
     if getattr(arguments, "no_thermo", False):
-        return genomes_by_db, None, True
+        return genomes_by_db, False, True
     if not available():
         if genomes_by_db:
             print(
@@ -337,7 +350,8 @@ def _cmd_check(arguments) -> int:
             thermo_gate=thermo_gate,
         )
         result.update(thermo_metadata(
-            genome, thermo_params, thermo_gate, association))
+                genome, thermo_params, thermo_gate, association,
+                result.get("thermo_site_stats")))
         results.append(result)
     if arguments.format == "json":
         text = json.dumps(

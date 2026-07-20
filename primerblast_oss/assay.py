@@ -106,7 +106,12 @@ def reclassify_by_anchor(
     pair=None,
     coordinate_tolerance: int = 0,
     size_tolerance: int = 0,
+    expected_primer_mismatches: Optional[Mapping[str, int]] = None,
 ) -> Dict:
+    allowed_mismatches = {
+        name: max(0, int(value))
+        for name, value in (expected_primer_mismatches or {}).items()
+    }
     all_products = (
         list(design_res.get("on_target", []))
         + list(design_res.get("off_target", []))
@@ -127,8 +132,10 @@ def reclassify_by_anchor(
                 and amplicon.fwd_primer == expected["fwd_primer"]
                 and amplicon.rev_primer == expected["rev_primer"]
                 and abs(amplicon.size - expected["size"]) <= size_tolerance
-                and amplicon.fwd_mismatch == 0
-                and amplicon.rev_mismatch == 0
+                and amplicon.fwd_mismatch
+                <= allowed_mismatches.get(amplicon.fwd_primer, 0)
+                and amplicon.rev_mismatch
+                <= allowed_mismatches.get(amplicon.rev_primer, 0)
             )
             if exact:
                 candidates.append(amplicon)
@@ -140,8 +147,10 @@ def reclassify_by_anchor(
         for amplicon in all_products:
             proper = {amplicon.fwd_primer, amplicon.rev_primer} == {"F", "R"}
             if (proper and _overlaps(amplicon, chrom, ext_start, ext_end)
-                    and amplicon.fwd_mismatch == 0
-                    and amplicon.rev_mismatch == 0):
+                    and amplicon.fwd_mismatch
+                    <= allowed_mismatches.get(amplicon.fwd_primer, 0)
+                    and amplicon.rev_mismatch
+                    <= allowed_mismatches.get(amplicon.rev_primer, 0)):
                 candidates.append(amplicon)
 
     if len(candidates) == 1:
@@ -213,7 +222,8 @@ def _variant_record_dict(variant) -> Dict:
 def analyze_pair(pair, per_db: Sequence[Dict], design_db: str,
                  template: Optional[Template], variants: Sequence,
                  caps_info: Optional[Dict], gel_min_gap: int = 50,
-                 dimer_params=None) -> Dict:
+                 dimer_params=None,
+                 expected_primer_mismatches: Optional[Mapping[str, int]] = None) -> Dict:
     len_f, len_r = len(pair.forward), len(pair.reverse)
     design_res = next(
         (result for result in per_db if result["db"] == design_db), per_db[0])
@@ -223,6 +233,7 @@ def analyze_pair(pair, per_db: Sequence[Dict], design_db: str,
             template=template,
             pair=pair,
             gel_min_gap=gel_min_gap,
+            expected_primer_mismatches=expected_primer_mismatches,
         )
 
     per_db_views = [
@@ -232,6 +243,19 @@ def analyze_pair(pair, per_db: Sequence[Dict], design_db: str,
     overall_completeness = combine_search_completeness([
         view.get("search_completeness", SEARCH_COMPLETE) for view in per_db_views
     ])
+    db_specific_values = [view.get("specific") for view in per_db_views]
+    if any(value is False for value in db_specific_values):
+        specific_all_db = False
+        specificity_status_all_db = "non_specific"
+    elif any(value is None for value in db_specific_values):
+        specific_all_db = None
+        specificity_status_all_db = "indeterminate"
+    elif db_specific_values and all(value is True for value in db_specific_values):
+        specific_all_db = True
+        specificity_status_all_db = "specific"
+    else:
+        specific_all_db = False
+        specificity_status_all_db = "non_specific"
 
     per_db_products = []
     for view in per_db_views:
@@ -374,6 +398,8 @@ def analyze_pair(pair, per_db: Sequence[Dict], design_db: str,
         "specific": design_res.get("specific"),
         "specific_observed": design_res.get("specific_observed"),
         "specificity_status": design_res.get("specificity_status"),
+        "specific_all_db": specific_all_db,
+        "specificity_status_all_db": specificity_status_all_db,
         "search_completeness": overall_completeness,
         "search_complete_all_db": overall_completeness == SEARCH_COMPLETE,
         "incomplete_databases": [

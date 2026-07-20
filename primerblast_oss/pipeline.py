@@ -41,21 +41,42 @@ def resolve_genome_for_database(database: str, databases: Sequence[str],
 
 
 def thermo_metadata(genome, thermo_params, thermo_gate: bool,
-                    association: str) -> Dict:
-    """Describe whether and against which FASTA thermodynamics were evaluated."""
+                    association: str, site_stats: Optional[Dict] = None) -> Dict:
+    """Describe configuration and actual site-level thermo coverage."""
     from . import thermo as thermo_module
-    if thermo_params is None:
-        status = "unavailable" if not thermo_module.available() else "disabled"
+    site_stats = site_stats or {
+        "attempted_per_primer": {},
+        "evaluated_per_primer": {},
+        "unresolved_per_primer": {},
+        "gated_per_primer": {},
+    }
+    evaluated = sum(site_stats.get("evaluated_per_primer", {}).values())
+    unresolved = sum(site_stats.get("unresolved_per_primer", {}).values())
+
+    if thermo_params is False:
+        status = "disabled"
     elif genome is None:
         status = "skipped_no_associated_genome"
     elif not thermo_module.available():
         status = "unavailable"
+    elif unresolved and not evaluated:
+        status = "failed_no_resolvable_sites"
+    elif unresolved:
+        status = "partial_unresolved_sites"
+    elif thermo_params is None:
+        status = (
+            "evaluated_defaults_gated" if thermo_gate
+            else "evaluated_defaults_annotation_only"
+        )
     else:
         status = "evaluated_gated" if thermo_gate else "evaluated_annotation_only"
     return {
         "thermo_status": status,
-        "thermo_evaluated": status.startswith("evaluated_"),
-        "thermo_genome_fasta": getattr(genome, "fasta", None) if genome is not None else None,
+        "thermo_evaluated": evaluated > 0,
+        "thermo_site_stats": site_stats,
+        "thermo_genome_fasta": (
+            getattr(genome, "fasta", None) if genome is not None else None
+        ),
         "thermo_genome_association": association,
     }
 
@@ -197,7 +218,8 @@ def run_pipeline(
                 thermo_gate=thermo_gate,
             )
             result.update(thermo_metadata(
-                database_genome, thermo_params, thermo_gate, association))
+                database_genome, thermo_params, thermo_gate, association,
+                result.get("thermo_site_stats")))
             per_db.append(result)
         dimer = (
             dimer_module.analyze_pair(pair.forward, pair.reverse, dimer_params)

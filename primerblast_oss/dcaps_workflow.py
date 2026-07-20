@@ -185,9 +185,13 @@ def evaluate_dcaps_candidates(
                 genome=genome,
                 thermo_params=thermo_params,
                 thermo_gate=thermo_gate,
+                allowed_primer_mismatches={
+                    candidate["primer_role"]: int(candidate["mismatches"])
+                },
             )
             result.update(thermo_metadata(
-                genome, thermo_params, thermo_gate, association))
+                genome, thermo_params, thermo_gate, association,
+                result.get("thermo_site_stats")))
             per_database.append(result)
 
         from . import dimers as dimer_module
@@ -206,20 +210,23 @@ def evaluate_dcaps_candidates(
             None,
             gel_min_gap=specificity.gel_min_gap_bp,
             dimer_params=dimer_params,
+            expected_primer_mismatches={
+                candidate["primer_role"]: int(candidate["mismatches"])
+            },
         )
         digest_dict = result_to_dict(digest)
         orderable = (
             digest.distinguishable
-            and assay_summary.get("specific") is True
+            and assay_summary.get("specific_all_db") is True
             and assay_summary.get("risk") in ("low", "medium")
             and assay_summary.get("search_complete_all_db") is True
         )
         if not digest.distinguishable:
             recommendation_status = "digest_not_resolvable"
-        elif assay_summary.get("specificity_status") == "indeterminate":
+        elif assay_summary.get("specificity_status_all_db") == "indeterminate":
             recommendation_status = "rerun_specificity_exhaustively"
-        elif assay_summary.get("specific") is not True:
-            recommendation_status = "not_specific"
+        elif assay_summary.get("specific_all_db") is not True:
+            recommendation_status = "not_specific_in_all_databases"
         elif assay_summary.get("risk") == "high":
             recommendation_status = "high_risk"
         else:

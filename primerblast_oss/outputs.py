@@ -105,46 +105,51 @@ def to_csv_generic(rows: List[dict], columns: List[str]) -> str:
 
 
 _CSV_COLUMNS = [
-    "name", "marker_type", "enzyme", "forward", "reverse", "product_size",
-    "tm_f", "tm_r", "tm_diff", "gc_f", "gc_r", "engineered_role",
-    "engineered_mismatches", "specificity_status", "search_completeness",
+    # Historical columns remain in their original order for compatibility.
+    "name", "forward", "reverse", "product_size",
+    "tm_f", "tm_r", "tm_diff", "gc_f", "gc_r",
     "n_off_target", "n_ff", "n_rr", "n_fr_offtarget",
-    "variant_in_primer", "conserved_refs", "gel_distinguishable", "risk",
+    "tp5_mismatch_min", "snp_in_primer", "conserved_refs",
+    "caps_enzyme", "gel_distinguishable", "cross_dimer_dg", "risk",
+    # New fields are append-only.
+    "marker_type", "enzyme", "engineered_role", "engineered_mismatches",
+    "specificity_status", "specificity_status_all_db",
+    "search_completeness", "variant_in_primer",
 ]
 
 
 def pairs_to_csv(pairs: List[dict]) -> str:
     buffer = io.StringIO()
-    writer = csv.writer(buffer, lineterminator="\n")
+    writer = csv.writer(buffer, lineterminator="
+")
     writer.writerow(_CSV_COLUMNS)
     for pair in pairs:
         orderable = _orderable_pair(pair)
         conserved = pair.get("conserved_refs", [])
-        writer.writerow([
-            orderable["name"],
-            orderable["marker_type"],
-            orderable["enzyme"],
-            orderable["forward"],
-            orderable["reverse"],
-            _num(orderable["product_size"]),
-            _num(orderable["tm_f"]),
-            _num(orderable["tm_r"]),
-            _tm_diff(orderable),
-            _num(orderable["gc_f"]),
-            _num(orderable["gc_r"]),
-            orderable["engineered_role"],
-            orderable["engineered_mismatches"],
-            pair.get("specificity_status"),
-            pair.get("search_completeness"),
-            _num(pair.get("n_off_target")),
-            _num(pair.get("n_ff")),
-            _num(pair.get("n_rr")),
-            _num(pair.get("n_fr_offtarget")),
-            _bool_str(pair.get("variant_in_primer", pair.get("snp_in_primer"))),
+        conserved_text = (
             ";".join(str(value) for value in conserved)
-            if isinstance(conserved, (list, tuple)) else str(conserved),
+            if isinstance(conserved, (list, tuple)) else str(conserved)
+        )
+        variant_flag = pair.get(
+            "variant_in_primer", pair.get("snp_in_primer"))
+        writer.writerow([
+            orderable["name"], orderable["forward"], orderable["reverse"],
+            _num(orderable["product_size"]), _num(orderable["tm_f"]),
+            _num(orderable["tm_r"]), _tm_diff(orderable),
+            _num(orderable["gc_f"]), _num(orderable["gc_r"]),
+            _num(pair.get("n_off_target")), _num(pair.get("n_ff")),
+            _num(pair.get("n_rr")), _num(pair.get("n_fr_offtarget")),
+            _num(pair.get("tp5_mismatch_min")),
+            _bool_str(pair.get("snp_in_primer", variant_flag)),
+            conserved_text,
+            orderable["enzyme"] or pair.get("caps_enzyme"),
             _bool_str(pair.get("gel_distinguishable")),
-            pair.get("risk"),
+            _num((pair.get("dimers") or {}).get("cross_dimer_dg")),
+            pair.get("risk"), orderable["marker_type"], orderable["enzyme"],
+            orderable["engineered_role"], orderable["engineered_mismatches"],
+            pair.get("specificity_status"),
+            pair.get("specificity_status_all_db"),
+            pair.get("search_completeness"), _bool_str(variant_flag),
         ])
     return buffer.getvalue()
 

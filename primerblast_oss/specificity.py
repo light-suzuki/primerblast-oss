@@ -10,7 +10,7 @@ from __future__ import annotations
 import shutil
 import subprocess
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 
 _OUTFMT = (
     "6 qseqid sseqid pident length mismatch gapopen qstart qend sstart send "
@@ -371,25 +371,52 @@ def _site_binding_strand(genome, site: PrimingSite) -> str:
 
 def annotate_thermo(sites: Sequence[PrimingSite], primers: Dict[str, str],
                     genome, tp=None, gate: bool = True):
+    """Annotate sites and report exactly what could be evaluated.
+
+    ``tp is False`` is an explicit disable sentinel used by ``--no-thermo``.
+    Missing contigs, out-of-range coordinates, or failed calculations are
+    counted as unresolved instead of being silently described as evaluated.
+    """
     from . import thermo as thermo_module
-    if not thermo_module.available() or genome is None:
-        return list(sites), {}
+    stats = {
+        "attempted_per_primer": {},
+        "evaluated_per_primer": {},
+        "unresolved_per_primer": {},
+        "gated_per_primer": {},
+    }
+    if tp is False or not thermo_module.available() or genome is None:
+        return list(sites), {}, stats
+
     viable: Dict[str, int] = {}
     kept: List[PrimingSite] = []
     for site in sites:
+        stats["attempted_per_primer"][site.primer] = (
+            stats["attempted_per_primer"].get(site.primer, 0) + 1)
         sequence = primers.get(site.primer)
         target = _site_binding_strand(genome, site) if sequence else ""
-        result = thermo_module.evaluate(sequence, target, tp) if (sequence and target) else None
-        if result is not None:
-            site.tm = result.tm
-            site.end3_dg = result.end3_dg
-            site.thermo_viable = result.viable
-            if result.viable:
-                viable[site.primer] = viable.get(site.primer, 0) + 1
-            elif gate:
-                continue
+        result = (
+            thermo_module.evaluate(sequence, target, tp)
+            if (sequence and target) else None
+        )
+        if result is None:
+            stats["unresolved_per_primer"][site.primer] = (
+                stats["unresolved_per_primer"].get(site.primer, 0) + 1)
+            kept.append(site)
+            continue
+
+        stats["evaluated_per_primer"][site.primer] = (
+            stats["evaluated_per_primer"].get(site.primer, 0) + 1)
+        site.tm = result.tm
+        site.end3_dg = result.end3_dg
+        site.thermo_viable = result.viable
+        if result.viable:
+            viable[site.primer] = viable.get(site.primer, 0) + 1
+        elif gate:
+            stats["gated_per_primer"][site.primer] = (
+                stats["gated_per_primer"].get(site.primer, 0) + 1)
+            continue
         kept.append(site)
-    return kept, viable
+    return kept, viable, stats
 
 
 def enumerate_amplicons(sites: Sequence[PrimingSite], sp: SpecParams) -> List[Amplicon]:
@@ -470,7 +497,7 @@ def in_silico_pcr(
     sp = sp or SpecParams()
     blastn = _detect_blastn(blastn_bin)
     sites, hit_stats = screen_primers_with_stats(primers, db, sp, blastn)
-    sites, viable_sites = annotate_thermo(
+    sites, viable_sites, thermo_site_stats = annotate_thermo(
         sites, primers, genome, thermo_params, thermo_gate)
     amplicons = enumerate_amplicons(sites, sp)
 
@@ -488,8 +515,9 @@ def in_silico_pcr(
         "sites_per_primer": {
             name: sum(site.primer == name for site in sites) for name in primers
         },
-        "thermo_evaluated": bool(viable_sites) or (
-            genome is not None and thermo_gate is False),
+        "thermo_evaluated": bool(sum(
+            thermo_site_stats["evaluated_per_primer"].values())),
+        "thermo_site_stats": thermo_site_stats,
         "viable_sites_per_primer": viable_sites,
         **metadata,
         "n_products": len(amplicons),
@@ -508,20 +536,30 @@ def pair_specificity(
     genome=None,
     thermo_params=None,
     thermo_gate: bool = True,
+    allowed_primer_mismatches: Optional[Mapping[str, int]] = None,
 ) -> Dict:
     sp = sp or SpecParams()
     blastn = _detect_blastn(blastn_bin)
     primers = {"F": forward, "R": reverse}
+    allowed_mismatches = {
+        name: max(0, int(value))
+        for name, value in (allowed_primer_mismatches or {}).items()
+    }
     sites, hit_stats = screen_primers_with_stats(primers, db, sp, blastn)
-    sites, viable_sites = annotate_thermo(
+    sites, viable_sites, thermo_site_stats = annotate_thermo(
         sites, primers, genome, thermo_params, thermo_gate)
     amplicons = enumerate_amplicons(sites, sp)
 
     for amplicon in amplicons:
-        perfect = amplicon.fwd_mismatch == 0 and amplicon.rev_mismatch == 0
+        mismatch_ok = (
+            amplicon.fwd_mismatch
+            <= allowed_mismatches.get(amplicon.fwd_primer, 0)
+            and amplicon.rev_mismatch
+            <= allowed_mismatches.get(amplicon.rev_primer, 0)
+        )
         proper_pair = {amplicon.fwd_primer, amplicon.rev_primer} == {"F", "R"}
         size_ok = designed_size is None or abs(amplicon.size - designed_size) <= size_tolerance
-        amplicon.on_target = perfect and proper_pair and size_ok
+        amplicon.on_target = mismatch_ok and proper_pair and size_ok
     _conservative_intended_products(amplicons)
 
     on_target = [amplicon for amplicon in amplicons if amplicon.on_target]
@@ -552,8 +590,9 @@ def pair_specificity(
         "db": db,
         "n_forward_sites": sum(site.primer == "F" for site in sites),
         "n_reverse_sites": sum(site.primer == "R" for site in sites),
-        "thermo_evaluated": bool(viable_sites) or (
-            genome is not None and thermo_gate is False),
+        "thermo_evaluated": bool(sum(
+            thermo_site_stats["evaluated_per_primer"].values())),
+        "thermo_site_stats": thermo_site_stats,
         "viable_sites_per_primer": viable_sites,
         **metadata,
         "n_products": len(amplicons),
@@ -567,4 +606,5 @@ def pair_specificity(
         "specific_observed": observed_specific,
         "specific": specific,
         "specificity_status": specificity_status,
+        "allowed_primer_mismatches": allowed_mismatches,
     }
