@@ -4,6 +4,10 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  pull-requests: write
+  contents: read
+
 jobs:
   audit-test:
     runs-on: ubuntu-latest
@@ -18,7 +22,23 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev,thermo]"
       - name: Test full suite
-        run: pytest -q
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          pytest -q --tb=short > /tmp/pytest.log 2>&1
+          status=$?
+          cat /tmp/pytest.log
+          if [ "$status" -ne 0 ]; then
+            {
+              echo '### Post-audit pytest failure'
+              echo '```text'
+              tail -180 /tmp/pytest.log
+              echo '```'
+            } > /tmp/pytest-comment.md
+            gh pr comment "${{ github.event.pull_request.number }}" --body-file /tmp/pytest-comment.md
+          fi
+          exit "$status"
       - name: Module self-tests
         run: |
           python primerblast_oss/caps.py
