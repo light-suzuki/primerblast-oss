@@ -54,11 +54,22 @@ def to_json(result: PipelineResult, indent: int = 2) -> str:
     return json.dumps(to_dict(result), indent=indent, default=str)
 
 
+def _thermo_summary(per_database: List[Dict]) -> str:
+    return ";".join(
+        "%s=%s:%s" % (
+            database.get("db", "").split("/")[-1],
+            database.get("thermo_status", "unknown"),
+            database.get("thermo_genome_fasta") or "-",
+        )
+        for database in per_database
+    )
+
+
 def to_tsv(result: PipelineResult) -> str:
     columns = [
         "rank", "score", "specificity_status", "specific_all_db",
         "specific_observed_all_db", "search_completeness",
-        "search_complete_all_db", "incomplete_databases",
+        "search_complete_all_db", "incomplete_databases", "thermo_by_db",
         "gel_distinguishable", "forward", "reverse", "product_size",
         "tm_f", "tm_r", "gc_f", "gc_r", "total_on_target",
         "total_off_target", "total_comigrating", "dimer_ok",
@@ -77,6 +88,7 @@ def to_tsv(result: PipelineResult) -> str:
             specificity.get("search_completeness"),
             specificity.get("search_complete_all_db"),
             ";".join(specificity.get("incomplete_databases", [])),
+            _thermo_summary(specificity.get("per_db", [])),
             specificity.get("gel_distinguishable"),
             pair.forward,
             pair.reverse,
@@ -103,11 +115,8 @@ def _completeness_warning(result: Dict, indent: str = "") -> List[str]:
     primer_states = result.get("primer_search_completeness", {})
     details = ", ".join(
         "%s=%s (subjects=%s, HSPs=%s)" % (
-            primer,
-            state,
-            subject_counts.get(primer, "?"),
-            hit_counts.get(primer, "?"),
-        )
+            primer, state, subject_counts.get(primer, "?"),
+            hit_counts.get(primer, "?"))
         for primer, state in sorted(primer_states.items())
         if state != "complete"
     )
@@ -115,24 +124,35 @@ def _completeness_warning(result: Dict, indent: str = "") -> List[str]:
         "rerun with --exhaustive or a larger --max-target-seqs")
     return [
         "%sWARNING: specificity evidence is %s%s" % (
-            indent,
-            completeness,
-            " (%s)" % details if details else "",
-        ),
+            indent, completeness, " (%s)" % details if details else ""),
         "%s         %s" % (indent, recommendation),
     ]
 
 
-def to_text(result: PipelineResult, max_offtarget_rows: int = 6) -> str:
-    output: List[str] = []
-    output.append("=" * 72)
-    output.append("primerblast-oss (design)  |  template: %s (%s bp)" % (
-        result.template_id, result.template_len))
-    output.append("databases: %s" % ", ".join(
-        database.split("/")[-1] for database in result.databases))
-    output.append("primer pairs returned: %s" % len(result.pairs))
-    output.append("=" * 72)
+def _thermo_line(result: Dict, indent: str = "") -> str:
+    status = result.get("thermo_status")
+    if not status:
+        status = "evaluated" if result.get("thermo_evaluated") else "not_evaluated"
+    fasta = result.get("thermo_genome_fasta")
+    association = result.get("thermo_genome_association")
+    detail = ""
+    if fasta:
+        detail += "  FASTA=%s" % fasta
+    if association:
+        detail += "  association=%s" % association
+    return "%sthermo: %s%s" % (indent, status, detail)
 
+
+def to_text(result: PipelineResult, max_offtarget_rows: int = 6) -> str:
+    output: List[str] = [
+        "=" * 72,
+        "primerblast-oss (design)  |  template: %s (%s bp)" % (
+            result.template_id, result.template_len),
+        "databases: %s" % ", ".join(
+            database.split("/")[-1] for database in result.databases),
+        "primer pairs returned: %s" % len(result.pairs),
+        "=" * 72,
+    ]
     for rank_number, pair in enumerate(result.pairs, 1):
         specificity = pair.specificity
         status = specificity.get("specificity_status")
@@ -144,33 +164,28 @@ def to_text(result: PipelineResult, max_offtarget_rows: int = 6) -> str:
             verdict = "GEL-RESOLVABLE"
         else:
             verdict = "AMBIGUOUS"
-
-        output.append("")
-        output.append("[%s] rank %s  score %s  %s" % (
-            rank_number, specificity.get("rank"),
-            specificity.get("score"), verdict))
-        output.append("    F  5'-%s-3'   Tm %.1f  GC %.0f%%  pos %s..%s" % (
-            pair.forward, pair.tm_f, pair.gc_f,
-            pair.left_start + 1, pair.left_3p + 1))
-        output.append("    R  5'-%s-3'   Tm %.1f  GC %.0f%%  pos %s..%s" % (
-            pair.reverse, pair.tm_r, pair.gc_r,
-            pair.right_3p + 1, pair.right_start + 1))
-        output.append("    product %s bp   on-target %s  off-target %s "
-                      "(co-migrating %s)" % (
-                          pair.product_size,
-                          specificity.get("total_on_target"),
-                          specificity.get("total_off_target"),
-                          specificity.get("total_comigrating"),
-                      ))
-
+        output.extend([
+            "",
+            "[%s] rank %s  score %s  %s" % (
+                rank_number, specificity.get("rank"),
+                specificity.get("score"), verdict),
+            "    F  5'-%s-3'   Tm %.1f  GC %.0f%%  pos %s..%s" % (
+                pair.forward, pair.tm_f, pair.gc_f,
+                pair.left_start + 1, pair.left_3p + 1),
+            "    R  5'-%s-3'   Tm %.1f  GC %.0f%%  pos %s..%s" % (
+                pair.reverse, pair.tm_r, pair.gc_r,
+                pair.right_3p + 1, pair.right_start + 1),
+            "    product %s bp   on-target %s  off-target %s (co-migrating %s)" % (
+                pair.product_size, specificity.get("total_on_target"),
+                specificity.get("total_off_target"),
+                specificity.get("total_comigrating")),
+        ])
         dimers = specificity.get("dimers")
         if dimers:
             tag = "OK" if dimers.get("ok") else "%s concerning" % dimers.get("n_concerning")
-            output.append("    primer-dimer/hairpin: %s  worst ΔG %s  "
-                          "F×R ΔG %s kcal/mol" % (
-                              tag, dimers.get("worst_dg"),
-                              dimers.get("cross_dimer_dg")))
-
+            output.append(
+                "    primer-dimer/hairpin: %s  worst ΔG %s  F×R ΔG %s kcal/mol"
+                % (tag, dimers.get("worst_dg"), dimers.get("cross_dimer_dg")))
         for database in specificity.get("per_db", []):
             if database.get("specific") is True:
                 tag = "OK (single exhaustive product)"
@@ -179,12 +194,11 @@ def to_text(result: PipelineResult, max_offtarget_rows: int = 6) -> str:
             else:
                 tag = "%s products; nearest off-target size gap %s bp" % (
                     database.get("n_products"),
-                    database.get("nearest_offtarget_gap"),
-                )
+                    database.get("nearest_offtarget_gap"))
             output.append("      %s: %s" % (
                 database["db"].split("/")[-1], tag))
+            output.append(_thermo_line(database, indent="         "))
             output.extend(_completeness_warning(database, indent="         "))
-
             if database.get("high_copy_primers"):
                 output.append("         repeat-prone primer(s): %s" % ", ".join(
                     database["high_copy_primers"]))
@@ -197,9 +211,7 @@ def to_text(result: PipelineResult, max_offtarget_rows: int = 6) -> str:
                     "         off: %s:%s-%s %sbp  %s  mm %s+%s%s" % (
                         amplicon.subject, amplicon.start, amplicon.end,
                         amplicon.size, amplicon.orientation,
-                        amplicon.fwd_mismatch, amplicon.rev_mismatch,
-                        tm_text,
-                    ))
+                        amplicon.fwd_mismatch, amplicon.rev_mismatch, tm_text))
             extra = len(database.get("off_target", [])) - max_offtarget_rows
             if extra > 0:
                 output.append("         ... %s more off-target products" % extra)
@@ -212,7 +224,10 @@ def insilico_to_dict(results: List[Dict], primers: Dict[str, str]) -> dict:
         databases.append({
             "db": result["db"],
             "sites_per_primer": result["sites_per_primer"],
+            "thermo_status": result.get("thermo_status"),
             "thermo_evaluated": result.get("thermo_evaluated"),
+            "thermo_genome_fasta": result.get("thermo_genome_fasta"),
+            "thermo_genome_association": result.get("thermo_genome_association"),
             "viable_sites_per_primer": result.get("viable_sites_per_primer", {}),
             "search_completeness": result.get("search_completeness", "complete"),
             "search_complete": result.get("search_complete", True),
@@ -234,30 +249,29 @@ def insilico_to_dict(results: List[Dict], primers: Dict[str, str]) -> dict:
 
 
 def insilico_to_text(results: List[Dict], primers: Dict[str, str]) -> str:
-    output: List[str] = []
-    output.append("=" * 72)
-    output.append("primerblast-oss (in-silico PCR)")
+    output: List[str] = ["=" * 72, "primerblast-oss (in-silico PCR)"]
     for name, sequence in primers.items():
         output.append("    %s: 5'-%s-3'  (%s nt)" % (
             name, sequence, len(sequence)))
     output.append("=" * 72)
-
     for result in results:
-        name = result["db"].split("/")[-1]
-        output.append("")
-        output.append("# %s: %s predicted product(s)   sites/primer: %s" % (
-            name, result["n_products"], result["sites_per_primer"]))
-        output.append("    search completeness: %s" % result.get(
-            "search_completeness", "complete"))
+        output.extend([
+            "",
+            "# %s: %s predicted product(s)   sites/primer: %s" % (
+                result["db"].split("/")[-1], result["n_products"],
+                result["sites_per_primer"]),
+            "    search completeness: %s" % result.get(
+                "search_completeness", "complete"),
+            _thermo_line(result, indent="    "),
+        ])
         output.extend(_completeness_warning(result, indent="    "))
         if result.get("thermo_evaluated"):
-            output.append("    thermo: viable priming sites/primer %s "
-                          "(primer3 Tm/3'-dG gated)" % result.get(
-                              "viable_sites_per_primer", {}))
+            output.append(
+                "    viable priming sites/primer: %s" % result.get(
+                    "viable_sites_per_primer", {}))
         if not result["products"]:
             output.append("    (no products within the size window)")
             continue
-
         thermo = result.get("thermo_evaluated")
         header = "    size   subject:start-end            primers    mm      Δsize"
         output.append(header + ("   Tm(F/R)" if thermo else ""))
@@ -270,15 +284,13 @@ def insilico_to_text(results: List[Dict], primers: Dict[str, str]) -> str:
                 reverse_tm = getattr(amplicon, "rev_tm", None)
                 tm_text = "   %s/%s" % (
                     forward_tm if forward_tm is not None else "-",
-                    reverse_tm if reverse_tm is not None else "-",
-                )
+                    reverse_tm if reverse_tm is not None else "-")
             output.append(
                 "    %5s  %s:%s-%-12s  %-9s  %s+%-4s  %s%s" % (
                     amplicon.size, amplicon.subject, amplicon.start,
                     amplicon.end, amplicon.orientation,
                     amplicon.fwd_mismatch, amplicon.rev_mismatch,
-                    gap_text, tm_text,
-                ))
+                    gap_text, tm_text))
     return "\n".join(output)
 
 
@@ -301,47 +313,43 @@ def tiling_to_dict(tiles: List[Dict], template_id: str, region,
             "specificity": _specificity_to_dict(pair.specificity),
         })
     return {
-        "mode": "tile",
-        "template_id": template_id,
-        "region": region,
-        "databases": databases,
-        "n_tiles": len(tiles),
-        "tiles": output_tiles,
+        "mode": "tile", "template_id": template_id, "region": region,
+        "databases": databases, "n_tiles": len(tiles), "tiles": output_tiles,
     }
 
 
 def assay_to_text(result: Dict) -> str:
     target = result["target"]
-    output: List[str] = []
-    output.append("=" * 72)
-    output.append("primerblast-oss (assay)  |  %s  %s:%s-%s (%s) [%s]" % (
-        target["name"], target["chrom"], target["start"], target["end"],
-        target["strand"], target["source"]))
-    output.append("template %s bp  |  references: %s" % (
-        result["template_len"], ", ".join(
-            database.split("/")[-1] for database in result["databases"])))
-    output.append("primer pairs: %s" % result["n_pairs"])
-    output.append("=" * 72)
-
+    output: List[str] = [
+        "=" * 72,
+        "primerblast-oss (assay)  |  %s  %s:%s-%s (%s) [%s]" % (
+            target["name"], target["chrom"], target["start"], target["end"],
+            target["strand"], target["source"]),
+        "template %s bp  |  references: %s" % (
+            result["template_len"], ", ".join(
+                database.split("/")[-1] for database in result["databases"])),
+        "primer pairs: %s" % result["n_pairs"],
+        "=" * 72,
+    ]
     for index, pair in enumerate(result["pairs"], 1):
-        output.append("")
-        output.append("[%s] risk %s (score %s)  product %s bp" % (
-            index, pair["risk"].upper(), pair.get("risk_score"),
-            pair["product_size"]))
-        output.append("    specificity: %s; search %s" % (
-            pair.get("specificity_status"),
-            pair.get("search_completeness", "complete")))
-        output.append("    F 5'-%s-3'  Tm %s GC %s%%  @ %s-%s" % (
-            pair["forward"], pair["tm_f"], pair["gc_f"],
-            pair["forward_pos"][0], pair["forward_pos"][1]))
-        output.append("    R 5'-%s-3'  Tm %s GC %s%%  @ %s-%s" % (
-            pair["reverse"], pair["tm_r"], pair["gc_r"],
-            pair["reverse_pos"][0], pair["reverse_pos"][1]))
-        output.append("    off-target %s (F/R %s, F/F %s, R/R %s)  "
-                      "3'-5bp mm min %s" % (
-                          pair["n_off_target"], pair["n_fr_offtarget"],
-                          pair["n_ff"], pair["n_rr"],
-                          pair.get("tp5_mismatch_min")))
+        output.extend([
+            "",
+            "[%s] risk %s (score %s)  product %s bp" % (
+                index, pair["risk"].upper(), pair.get("risk_score"),
+                pair["product_size"]),
+            "    specificity: %s; search %s" % (
+                pair.get("specificity_status"),
+                pair.get("search_completeness", "complete")),
+            "    F 5'-%s-3'  Tm %s GC %s%%  @ %s-%s" % (
+                pair["forward"], pair["tm_f"], pair["gc_f"],
+                pair["forward_pos"][0], pair["forward_pos"][1]),
+            "    R 5'-%s-3'  Tm %s GC %s%%  @ %s-%s" % (
+                pair["reverse"], pair["tm_r"], pair["gc_r"],
+                pair["reverse_pos"][0], pair["reverse_pos"][1]),
+            "    off-target %s (F/R %s, F/F %s, R/R %s)" % (
+                pair["n_off_target"], pair["n_fr_offtarget"],
+                pair["n_ff"], pair["n_rr"]),
+        ])
         conservation = pair.get("conservation", {})
         output.append("    conserved in %s/%s refs: %s" % (
             conservation.get("n_conserved"), conservation.get("n_refs"),
@@ -357,51 +365,50 @@ def assay_to_text(result: Dict) -> str:
                     caps["allele_alt_fragments"]))
             else:
                 output.append("    CAPS: no distinguishing enzyme found")
-        dimers = pair.get("dimers")
-        if dimers:
-            tag = "OK" if dimers.get("ok") else "%s concerning" % dimers.get("n_concerning")
-            output.append("    primer-dimer/hairpin: %s  F×R ΔG %s kcal/mol" % (
-                tag, dimers.get("cross_dimer_dg")))
         for database in pair.get("per_db_products", []):
+            output.append("    [%s] %s" % (
+                database["db"].split("/")[-1],
+                _thermo_line(database)))
             if database.get("search_completeness") != "complete":
                 output.append("    warning [%s]: search %s; %s" % (
                     database["db"].split("/")[-1],
                     database.get("search_completeness"),
                     database.get("completeness_recommendation")
-                    or "increase the BLAST hit cap",
-                ))
+                    or "increase the BLAST hit cap"))
         output.append("    reasons: %s" % "; ".join(
             pair.get("risk_reasons", [])))
     return "\n".join(output)
 
 
 def tiling_to_text(tiles: List[Dict], template_id: str, region) -> str:
-    output: List[str] = []
-    output.append("=" * 72)
-    output.append("primerblast-oss (tiling)  |  template: %s  region %s..%s" % (
-        template_id, region[0] + 1, region[1] + 1))
-    output.append("amplicons covering the region: %s" % len(tiles))
-    output.append("=" * 72)
+    output: List[str] = [
+        "=" * 72,
+        "primerblast-oss (tiling)  |  template: %s  region %s..%s" % (
+            template_id, region[0] + 1, region[1] + 1),
+        "amplicons covering the region: %s" % len(tiles),
+        "=" * 72,
+    ]
     if not tiles:
-        output.append("  (no amplicons could be placed - relax design/product-size options)")
+        output.append("  (no amplicons could be placed)")
         return "\n".join(output)
     covered_low = tiles[0]["covers"][0]
     covered_high = tiles[-1]["covers"][1]
     for tile in tiles:
         pair = tile["pair"]
         specificity = pair.specificity
-        rank = specificity.get("rank", "?") if specificity else "?"
         coverage = tile["covers"]
-        overlap = "" if tile.get("gap_to_prev") is None else (
-            "  overlap/gap %s bp" % tile["gap_to_prev"])
-        output.append("")
-        output.append("  amplicon %s: covers %s..%s (%s bp, rank %s)%s" % (
-            tile["index"], coverage[0] + 1, coverage[1] + 1,
-            pair.product_size, rank, overlap))
-        output.append("      F 5'-%s-3'  Tm %.1f" % (pair.forward, pair.tm_f))
-        output.append("      R 5'-%s-3'  Tm %.1f" % (pair.reverse, pair.tm_r))
+        output.extend([
+            "",
+            "  amplicon %s: covers %s..%s (%s bp, rank %s)" % (
+                tile["index"], coverage[0] + 1, coverage[1] + 1,
+                pair.product_size, specificity.get("rank", "?")),
+            "      F 5'-%s-3'  Tm %.1f" % (pair.forward, pair.tm_f),
+            "      R 5'-%s-3'  Tm %.1f" % (pair.reverse, pair.tm_r),
+        ])
+        for database in specificity.get("per_db", []):
+            output.append("      %s" % _thermo_line(database))
         if specificity.get("specificity_status") == "indeterminate":
-            output.append("      WARNING: specificity search incomplete; rerun exhaustively")
+            output.append("      WARNING: specificity search incomplete")
     output.append("")
     output.append("  region coverage: %s..%s of requested %s..%s" % (
         covered_low + 1, covered_high + 1, region[0] + 1, region[1] + 1))
