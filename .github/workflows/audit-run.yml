@@ -4,44 +4,15 @@ on:
   pull_request:
     branches: [main]
 
-permissions:
-  contents: write
-  pull-requests: write
-
 jobs:
-  audit-and-test:
+  audit-test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v6
         with:
-          ref: ${{ github.head_ref }}
-      - name: Apply audit patch
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set +e
-          python .github/scripts/post_integration_audit.py > /tmp/audit.log 2>&1
-          status=$?
-          cat /tmp/audit.log
-          if [ "$status" -ne 0 ]; then
-            {
-              echo '### Post-integration audit patch failure'
-              echo '```text'
-              cat /tmp/audit.log
-              echo '```'
-            } > /tmp/audit-comment.md
-            gh pr comment "${{ github.event.pull_request.number }}" --body-file /tmp/audit-comment.md
-          fi
-          exit "$status"
-      - name: Commit audit fixes
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add primerblast_oss tests
-          if ! git diff --cached --quiet; then
-            git commit -m "fix: address post-integration correctness audit"
-            git push origin HEAD:${{ github.head_ref }}
-          fi
+          python-version: "3.12"
       - name: Install
         run: |
           python -m pip install --upgrade pip
