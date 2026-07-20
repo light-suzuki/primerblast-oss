@@ -783,7 +783,7 @@ def build_parser() -> argparse.ArgumentParser:
         epilog="Run 'primerblast-oss <subcommand> --help' for options.",
     )
     parser.add_argument(
-        "--version", action="version", version="%(prog)s %s" % __version__)
+        "--version", action="version", version="%(prog)s " + __version__)
     subcommands = parser.add_subparsers(dest="cmd", required=True)
 
     design = subcommands.add_parser(
