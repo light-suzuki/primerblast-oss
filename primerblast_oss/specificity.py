@@ -1,8 +1,9 @@
-"""Specificity / in-silico PCR: the core Primer-BLAST-like step.
+"""Specificity and in-silico PCR.
 
-Each primer is searched with BLAST, accepted HSPs become 3'-anchored priming
-sites, and convergent sites are paired into predicted PCR products. Pairing is
-orientation-agnostic, so F/R, R/F, F/F and R/R products are all represented.
+Primer BLAST HSPs are converted to 3'-anchored priming sites and paired into
+convergent PCR products. The module also records whether BLAST returned enough
+evidence to support a definitive specificity statement. A clean *observed* hit
+list is not called exhaustive when target enumeration may have been capped.
 """
 from __future__ import annotations
 
@@ -11,7 +12,27 @@ import subprocess
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Sequence, Tuple
 
-_OUTFMT = "6 qseqid sseqid pident length mismatch gapopen qstart qend sstart send evalue bitscore sstrand qseq sseq qlen"
+_OUTFMT = (
+    "6 qseqid sseqid pident length mismatch gapopen qstart qend sstart send "
+    "evalue bitscore sstrand qseq sseq qlen"
+)
+
+SEARCH_COMPLETE = "complete"
+SEARCH_POSSIBLY_TRUNCATED = "possibly_truncated"
+SEARCH_REPEAT_LIMITED = "truncated_or_repeat_limited"
+_SEARCH_SEVERITY = {
+    SEARCH_COMPLETE: 0,
+    SEARCH_POSSIBLY_TRUNCATED: 1,
+    SEARCH_REPEAT_LIMITED: 2,
+}
+
+
+def combine_search_completeness(states: Sequence[str]) -> str:
+    """Return the most conservative completeness state in ``states``."""
+    known = [state for state in states if state in _SEARCH_SEVERITY]
+    if not known:
+        return SEARCH_COMPLETE
+    return max(known, key=lambda state: _SEARCH_SEVERITY[state])
 
 
 @dataclass
@@ -55,7 +76,7 @@ SPECIFICITY_PROFILES = {
 def spec_params_for_profile(profile: str = "local-strict", **overrides) -> SpecParams:
     if profile not in SPECIFICITY_PROFILES:
         names = ", ".join(sorted(SPECIFICITY_PROFILES))
-        raise ValueError(f"unknown specificity profile '{profile}'; choose one of: {names}")
+        raise ValueError("unknown specificity profile '%s'; choose one of: %s" % (profile, names))
     params = SpecParams()
     for key, value in SPECIFICITY_PROFILES[profile].items():
         setattr(params, key, value)
@@ -89,9 +110,10 @@ class PrimingSite:
         return "right" if self.strand == "+" else "left"
 
     def describe(self) -> str:
-        return (f"{self.primer} binds {self.subject} {self.strand} strand, "
-                f"5'={self.end5} 3'={self.end3}, extends {self.extends}, "
-                f"mm total={self.total_mismatch} 3'5bp={self.tp5_mismatch}")
+        return ("%s binds %s %s strand, 5'=%s 3'=%s, extends %s, "
+                "mm total=%s 3'5bp=%s" % (
+                    self.primer, self.subject, self.strand, self.end5, self.end3,
+                    self.extends, self.total_mismatch, self.tp5_mismatch))
 
 
 @dataclass
@@ -102,6 +124,8 @@ class PrimerHitStats:
     unique_subjects: int
     near_target_limit: bool
     high_copy: bool
+    at_target_limit: bool = False
+    completeness: str = SEARCH_COMPLETE
 
 
 @dataclass
@@ -124,18 +148,18 @@ class Amplicon:
 
     @property
     def orientation(self) -> str:
-        return f"{self.fwd_primer}/{self.rev_primer}"
+        return "%s/%s" % (self.fwd_primer, self.rev_primer)
 
 
 def _detect_blastn(explicit: Optional[str]) -> str:
-    for cand in (explicit, "blastn"):
-        if cand and shutil.which(cand):
-            return shutil.which(cand)  # type: ignore[return-value]
+    for candidate in (explicit, "blastn"):
+        if candidate and shutil.which(candidate):
+            return shutil.which(candidate)  # type: ignore[return-value]
     raise RuntimeError("blastn not found. Install BLAST+ or pass blastn_bin.")
 
 
 def _run_blast(primer: str, db: str, sp: SpecParams, blastn: str) -> str:
-    query = f">primer\n{primer}\n".encode()
+    query = (">primer\n%s\n" % primer).encode()
     cmd = [
         blastn, "-task", "blastn-short", "-db", db, "-query", "-",
         "-outfmt", _OUTFMT,
@@ -150,76 +174,103 @@ def _run_blast(primer: str, db: str, sp: SpecParams, blastn: str) -> str:
     ]
     proc = subprocess.run(cmd, input=query, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if proc.returncode != 0:
-        raise RuntimeError(f"blastn failed: {proc.stderr.decode(errors='ignore')}")
+        raise RuntimeError("blastn failed: %s" % proc.stderr.decode(errors="ignore"))
     return proc.stdout.decode(errors="ignore")
 
 
 def _count_3prime_mismatch(qseq: str, sseq: str, window: int) -> Tuple[int, bool]:
     """Count mismatches in the final query bases; every gapped column counts."""
-    mm = 0
-    seen = 0
+    mismatches = 0
+    query_bases_seen = 0
     terminal_match = False
-    first = True
-    for q, s in zip(reversed(qseq), reversed(sseq)):
-        if q == "-":
-            mm += 1
+    first_query_base = True
+    for query_base, subject_base in zip(reversed(qseq), reversed(sseq)):
+        if query_base == "-":
+            mismatches += 1
             continue
-        if first:
-            terminal_match = q == s
-            first = False
-        if q != s:
-            mm += 1
-        seen += 1
-        if seen >= window:
+        if first_query_base:
+            terminal_match = query_base == subject_base
+            first_query_base = False
+        if query_base != subject_base:
+            mismatches += 1
+        query_bases_seen += 1
+        if query_bases_seen >= window:
             break
-    return mm, terminal_match
+    return mismatches, terminal_match
 
 
 def _alignment_edit_count(qseq: str, sseq: str) -> int:
-    """Count substitutions and every gapped alignment column.
-
-    BLAST's ``gapopen`` field counts gap runs, not their length. Counting unequal
-    aligned columns prevents a multi-base indel from being treated as one edit.
-    """
+    """Count substitutions and every gapped alignment column."""
     return sum(q != s for q, s in zip(qseq, sseq)) + abs(len(qseq) - len(sseq))
 
 
 def _hit_to_site(fields: List[str], primer_id: str, sp: SpecParams) -> Optional[PrimingSite]:
-    (_qid, sseqid, _pident, _length, _mismatch, _gapopen, qstart, qend,
-     _sstart, send, _e, _bits, sstrand, qseq, sseq, qlen) = fields
-    qend_i = int(qend)
-    qlen_i = int(qlen)
-    if qend_i != qlen_i:
+    (_query_id, subject_id, _identity, _length, _mismatch, _gapopen,
+     query_start, query_end, _subject_start, subject_end, _evalue, _bits,
+     subject_strand, query_sequence, subject_sequence, query_length) = fields
+    query_end_i = int(query_end)
+    query_length_i = int(query_length)
+    if query_end_i != query_length_i:
         return None
 
-    tp_mm, terminal_match = _count_3prime_mismatch(qseq, sseq, sp.three_prime_window)
+    tp_mismatch, terminal_match = _count_3prime_mismatch(
+        query_sequence, subject_sequence, sp.three_prime_window)
     if sp.require_3prime_terminal_match and not terminal_match:
         return None
 
-    # Unequal aligned columns include substitutions and each gap base. Unaligned
-    # 5' query bases are additional edits against the full primer.
-    total_mm = _alignment_edit_count(qseq, sseq) + int(qstart) - 1
-    if total_mm > sp.max_total_mismatch or tp_mm > sp.max_3prime_mismatch:
+    total_mismatch = _alignment_edit_count(query_sequence, subject_sequence) + int(query_start) - 1
+    if total_mismatch > sp.max_total_mismatch or tp_mismatch > sp.max_3prime_mismatch:
         return None
 
-    strand = "+" if sstrand == "plus" else "-"
-    tp5, _ = _count_3prime_mismatch(qseq, sseq, 5)
-    tp10, _ = _count_3prime_mismatch(qseq, sseq, 10)
+    strand = "+" if subject_strand == "plus" else "-"
+    tp5, _ = _count_3prime_mismatch(query_sequence, subject_sequence, 5)
+    tp10, _ = _count_3prime_mismatch(query_sequence, subject_sequence, 10)
     return PrimingSite(
-        primer=primer_id, subject=sseqid, strand=strand, end3=int(send),
-        total_mismatch=total_mm, tp_mismatch=tp_mm, plen=qlen_i,
-        tp5_mismatch=tp5, tp10_mismatch=tp10,
+        primer=primer_id,
+        subject=subject_id,
+        strand=strand,
+        end3=int(subject_end),
+        total_mismatch=total_mismatch,
+        tp_mismatch=tp_mismatch,
+        plen=query_length_i,
+        tp5_mismatch=tp5,
+        tp10_mismatch=tp10,
     )
+
+
+def _classify_hit_list(raw_hits: int, priming_sites: int, unique_subjects: int,
+                       sp: SpecParams) -> Tuple[bool, bool, str]:
+    """Return ``(near_limit, high_copy, completeness)`` conservatively.
+
+    BLAST does not expose a reliable truncation bit for ``max_target_seqs``.
+    Reaching the subject cap, or producing a repeat-scale hit/site list, is
+    therefore treated as repeat-limited. The final five percent below the cap is
+    considered possibly truncated.
+    """
+    cap = max(1, int(sp.max_target_seqs))
+    near_limit = unique_subjects >= max(1, int(cap * 0.95))
+    at_limit = unique_subjects >= cap
+    high_copy = (
+        raw_hits >= sp.high_copy_hit_threshold
+        or priming_sites >= sp.high_copy_site_threshold
+    )
+    if at_limit or high_copy:
+        completeness = SEARCH_REPEAT_LIMITED
+    elif near_limit:
+        completeness = SEARCH_POSSIBLY_TRUNCATED
+    else:
+        completeness = SEARCH_COMPLETE
+    return near_limit, high_copy, completeness
 
 
 def priming_sites_with_stats(
     primer: str, primer_id: str, db: str, sp: SpecParams, blastn: str
 ) -> Tuple[List[PrimingSite], PrimerHitStats]:
-    out = _run_blast(primer, db, sp, blastn)
+    output = _run_blast(primer, db, sp, blastn)
     sites: List[PrimingSite] = []
     raw_hits = 0
     subjects = set()
-    for line in out.splitlines():
+    for line in output.splitlines():
         if not line.strip():
             continue
         raw_hits += 1
@@ -230,26 +281,33 @@ def priming_sites_with_stats(
         site = _hit_to_site(fields, primer_id, sp)
         if site is not None:
             sites.append(site)
+
+    near_limit, high_copy, completeness = _classify_hit_list(
+        raw_hits, len(sites), len(subjects), sp)
     stats = PrimerHitStats(
         primer=primer_id,
         raw_blast_hits=raw_hits,
         priming_sites=len(sites),
         unique_subjects=len(subjects),
-        near_target_limit=len(subjects) >= max(1, int(sp.max_target_seqs * 0.95)),
-        high_copy=len(sites) >= sp.high_copy_site_threshold,
+        near_target_limit=near_limit,
+        high_copy=high_copy,
+        at_target_limit=len(subjects) >= max(1, int(sp.max_target_seqs)),
+        completeness=completeness,
     )
     return sites, stats
 
 
-def priming_sites(primer: str, primer_id: str, db: str, sp: SpecParams, blastn: str) -> List[PrimingSite]:
+def priming_sites(primer: str, primer_id: str, db: str, sp: SpecParams,
+                  blastn: str) -> List[PrimingSite]:
     sites, _stats = priming_sites_with_stats(primer, primer_id, db, sp, blastn)
     return sites
 
 
-def screen_primers(primers: Dict[str, str], db: str, sp: SpecParams, blastn: str) -> List[PrimingSite]:
+def screen_primers(primers: Dict[str, str], db: str, sp: SpecParams,
+                   blastn: str) -> List[PrimingSite]:
     sites: List[PrimingSite] = []
-    for name, seq in primers.items():
-        sites.extend(priming_sites(seq, name, db, sp, blastn))
+    for name, sequence in primers.items():
+        sites.extend(priming_sites(sequence, name, db, sp, blastn))
     return sites
 
 
@@ -258,36 +316,75 @@ def screen_primers_with_stats(
 ) -> Tuple[List[PrimingSite], Dict[str, PrimerHitStats]]:
     sites: List[PrimingSite] = []
     stats: Dict[str, PrimerHitStats] = {}
-    for name, seq in primers.items():
-        primer_sites, primer_stats = priming_sites_with_stats(seq, name, db, sp, blastn)
+    for name, sequence in primers.items():
+        primer_sites, primer_stats = priming_sites_with_stats(
+            sequence, name, db, sp, blastn)
         sites.extend(primer_sites)
         stats[name] = primer_stats
     return sites, stats
 
 
+def _search_metadata(hit_stats: Dict[str, PrimerHitStats], sp: SpecParams) -> Dict:
+    per_primer = {name: stats.completeness for name, stats in hit_stats.items()}
+    overall = combine_search_completeness(list(per_primer.values()))
+    return {
+        "search_completeness": overall,
+        "search_complete": overall == SEARCH_COMPLETE,
+        "primer_search_completeness": per_primer,
+        "raw_hits_per_primer": {name: stats.raw_blast_hits for name, stats in hit_stats.items()},
+        "unique_subjects_per_primer": {
+            name: stats.unique_subjects for name, stats in hit_stats.items()
+        },
+        "near_blast_limit": [
+            name for name, stats in hit_stats.items() if stats.near_target_limit
+        ],
+        "at_blast_limit": [
+            name for name, stats in hit_stats.items() if stats.at_target_limit
+        ],
+        "high_copy_primers": [
+            name for name, stats in hit_stats.items() if stats.high_copy
+        ],
+        "blast_limits": {
+            "max_target_seqs": sp.max_target_seqs,
+            "evalue": sp.evalue,
+            "word_size": sp.word_size,
+            "num_threads": sp.num_threads,
+            "high_copy_hit_threshold": sp.high_copy_hit_threshold,
+            "high_copy_site_threshold": sp.high_copy_site_threshold,
+        },
+        "completeness_recommendation": (
+            None if overall == SEARCH_COMPLETE else
+            "Rerun with --exhaustive or a larger --max-target-seqs; if the primer "
+            "remains repeat-limited, redesign it or use an indexed alternative search."
+        ),
+    }
+
+
 def _site_binding_strand(genome, site: PrimingSite) -> str:
-    lo, hi = min(site.end5, site.end3), max(site.end5, site.end3)
+    low, high = min(site.end5, site.end3), max(site.end5, site.end3)
     strand = "-" if site.strand == "+" else "+"
     try:
-        return genome.fetch(site.subject, lo, hi, strand)
+        return genome.fetch(site.subject, low, high, strand)
     except Exception:  # noqa: BLE001
         return ""
 
 
 def annotate_thermo(sites: Sequence[PrimingSite], primers: Dict[str, str],
                     genome, tp=None, gate: bool = True):
-    from . import thermo as _thermo
-    if not _thermo.available() or genome is None:
+    from . import thermo as thermo_module
+    if not thermo_module.available() or genome is None:
         return list(sites), {}
     viable: Dict[str, int] = {}
     kept: List[PrimingSite] = []
     for site in sites:
-        seq = primers.get(site.primer)
-        target = _site_binding_strand(genome, site) if seq else ""
-        res = _thermo.evaluate(seq, target, tp) if (seq and target) else None
-        if res is not None:
-            site.tm, site.end3_dg, site.thermo_viable = res.tm, res.end3_dg, res.viable
-            if res.viable:
+        sequence = primers.get(site.primer)
+        target = _site_binding_strand(genome, site) if sequence else ""
+        result = thermo_module.evaluate(sequence, target, tp) if (sequence and target) else None
+        if result is not None:
+            site.tm = result.tm
+            site.end3_dg = result.end3_dg
+            site.thermo_viable = result.viable
+            if result.viable:
                 viable[site.primer] = viable.get(site.primer, 0) + 1
             elif gate:
                 continue
@@ -302,28 +399,38 @@ def enumerate_amplicons(sites: Sequence[PrimingSite], sp: SpecParams) -> List[Am
 
     amplicons: List[Amplicon] = []
     for subject, group in by_subject.items():
-        plus = sorted((s for s in group if s.strand == "+"), key=lambda x: x.end5)
-        minus = sorted((s for s in group if s.strand == "-"), key=lambda x: x.end5)
-        for fwd in plus:
-            for rev in minus:
-                if rev.end3 < fwd.end3:
+        plus_sites = sorted(
+            (site for site in group if site.strand == "+"), key=lambda site: site.end5)
+        minus_sites = sorted(
+            (site for site in group if site.strand == "-"), key=lambda site: site.end5)
+        for forward_site in plus_sites:
+            for reverse_site in minus_sites:
+                if reverse_site.end3 < forward_site.end3:
                     continue
-                start = fwd.end5
-                end = rev.end5
+                start = forward_site.end5
+                end = reverse_site.end5
                 size = end - start + 1
                 if size < sp.min_product:
                     continue
                 if size > sp.max_product:
                     break
                 amplicons.append(Amplicon(
-                    subject=subject, start=start, end=end, size=size,
-                    fwd_primer=fwd.primer, rev_primer=rev.primer,
-                    fwd_mismatch=fwd.total_mismatch, rev_mismatch=rev.total_mismatch,
-                    fwd_tp5=fwd.tp5_mismatch, rev_tp5=rev.tp5_mismatch,
-                    fwd_tm=fwd.tm, rev_tm=rev.tm,
-                    fwd_end3_dg=fwd.end3_dg, rev_end3_dg=rev.end3_dg,
+                    subject=subject,
+                    start=start,
+                    end=end,
+                    size=size,
+                    fwd_primer=forward_site.primer,
+                    rev_primer=reverse_site.primer,
+                    fwd_mismatch=forward_site.total_mismatch,
+                    rev_mismatch=reverse_site.total_mismatch,
+                    fwd_tp5=forward_site.tp5_mismatch,
+                    rev_tp5=reverse_site.tp5_mismatch,
+                    fwd_tm=forward_site.tm,
+                    rev_tm=reverse_site.tm,
+                    fwd_end3_dg=forward_site.end3_dg,
+                    rev_end3_dg=reverse_site.end3_dg,
                 ))
-    amplicons.sort(key=lambda a: (a.subject, a.start))
+    amplicons.sort(key=lambda amplicon: (amplicon.subject, amplicon.start))
     return amplicons
 
 
@@ -333,7 +440,7 @@ def nearest_size_gap(size: int, others: Sequence[int]) -> Optional[int]:
 
 
 def _conservative_intended_products(amplicons: Sequence[Amplicon]) -> List[Amplicon]:
-    candidates = [a for a in amplicons if a.on_target]
+    candidates = [amplicon for amplicon in amplicons if amplicon.on_target]
     if len(candidates) <= 1:
         return candidates
     for candidate in candidates[1:]:
@@ -341,6 +448,14 @@ def _conservative_intended_products(amplicons: Sequence[Amplicon]) -> List[Ampli
         candidate.__dict__["ambiguous_intended_duplicate"] = True
     candidates[0].__dict__["generic_intended_candidate"] = True
     return candidates[:1]
+
+
+def _specificity_verdict(observed_specific: bool, completeness: str):
+    if not observed_specific:
+        return False
+    if completeness != SEARCH_COMPLETE:
+        return None
+    return True
 
 
 def in_silico_pcr(
@@ -355,31 +470,28 @@ def in_silico_pcr(
     sp = sp or SpecParams()
     blastn = _detect_blastn(blastn_bin)
     sites, hit_stats = screen_primers_with_stats(primers, db, sp, blastn)
-    sites, viable_sites = annotate_thermo(sites, primers, genome, thermo_params, thermo_gate)
+    sites, viable_sites = annotate_thermo(
+        sites, primers, genome, thermo_params, thermo_gate)
     amplicons = enumerate_amplicons(sites, sp)
 
-    sizes = [a.size for a in amplicons]
-    for i, amplicon in enumerate(amplicons):
+    sizes = [amplicon.size for amplicon in amplicons]
+    for index, amplicon in enumerate(amplicons):
         amplicon.__dict__["nearest_gap"] = nearest_size_gap(
-            amplicon.size, [size for j, size in enumerate(sizes) if j != i])
+            amplicon.size,
+            [size for other_index, size in enumerate(sizes) if other_index != index],
+        )
 
+    metadata = _search_metadata(hit_stats, sp)
     return {
         "db": db,
         "primers": dict(primers),
-        "sites_per_primer": {name: sum(s.primer == name for s in sites) for name in primers},
-        "thermo_evaluated": bool(viable_sites) or (genome is not None and thermo_gate is False),
-        "viable_sites_per_primer": viable_sites,
-        "raw_hits_per_primer": {k: v.raw_blast_hits for k, v in hit_stats.items()},
-        "unique_subjects_per_primer": {k: v.unique_subjects for k, v in hit_stats.items()},
-        "near_blast_limit": [k for k, v in hit_stats.items() if v.near_target_limit],
-        "high_copy_primers": [k for k, v in hit_stats.items() if v.high_copy],
-        "blast_limits": {
-            "max_target_seqs": sp.max_target_seqs,
-            "evalue": sp.evalue,
-            "word_size": sp.word_size,
-            "num_threads": sp.num_threads,
-            "high_copy_hit_threshold": sp.high_copy_hit_threshold,
+        "sites_per_primer": {
+            name: sum(site.primer == name for site in sites) for name in primers
         },
+        "thermo_evaluated": bool(viable_sites) or (
+            genome is not None and thermo_gate is False),
+        "viable_sites_per_primer": viable_sites,
+        **metadata,
         "n_products": len(amplicons),
         "products": amplicons,
     }
@@ -401,7 +513,8 @@ def pair_specificity(
     blastn = _detect_blastn(blastn_bin)
     primers = {"F": forward, "R": reverse}
     sites, hit_stats = screen_primers_with_stats(primers, db, sp, blastn)
-    sites, viable_sites = annotate_thermo(sites, primers, genome, thermo_params, thermo_gate)
+    sites, viable_sites = annotate_thermo(
+        sites, primers, genome, thermo_params, thermo_gate)
     amplicons = enumerate_amplicons(sites, sp)
 
     for amplicon in amplicons:
@@ -411,38 +524,47 @@ def pair_specificity(
         amplicon.on_target = perfect and proper_pair and size_ok
     _conservative_intended_products(amplicons)
 
-    on = [a for a in amplicons if a.on_target]
-    off = [a for a in amplicons if not a.on_target]
-    ref_size = designed_size if designed_size is not None else (on[0].size if on else None)
-    comigrating = ([a for a in off if abs(a.size - ref_size) < sp.gel_min_gap_bp]
-                   if ref_size is not None else [])
-    nearest_off_gap = (nearest_size_gap(ref_size, [a.size for a in off])
-                       if ref_size is not None and off else None)
+    on_target = [amplicon for amplicon in amplicons if amplicon.on_target]
+    off_target = [amplicon for amplicon in amplicons if not amplicon.on_target]
+    reference_size = designed_size if designed_size is not None else (
+        on_target[0].size if on_target else None)
+    comigrating = (
+        [amplicon for amplicon in off_target
+         if abs(amplicon.size - reference_size) < sp.gel_min_gap_bp]
+        if reference_size is not None else []
+    )
+    nearest_off_gap = (
+        nearest_size_gap(reference_size, [amplicon.size for amplicon in off_target])
+        if reference_size is not None and off_target else None
+    )
+
+    metadata = _search_metadata(hit_stats, sp)
+    observed_specific = len(amplicons) == 1 and len(on_target) == 1
+    specific = _specificity_verdict(observed_specific, metadata["search_completeness"])
+    if specific is True:
+        specificity_status = "specific"
+    elif specific is None:
+        specificity_status = "indeterminate"
+    else:
+        specificity_status = "non_specific"
 
     return {
         "db": db,
-        "n_forward_sites": sum(s.primer == "F" for s in sites),
-        "n_reverse_sites": sum(s.primer == "R" for s in sites),
-        "thermo_evaluated": bool(viable_sites) or (genome is not None and thermo_gate is False),
+        "n_forward_sites": sum(site.primer == "F" for site in sites),
+        "n_reverse_sites": sum(site.primer == "R" for site in sites),
+        "thermo_evaluated": bool(viable_sites) or (
+            genome is not None and thermo_gate is False),
         "viable_sites_per_primer": viable_sites,
-        "raw_hits_per_primer": {k: v.raw_blast_hits for k, v in hit_stats.items()},
-        "unique_subjects_per_primer": {k: v.unique_subjects for k, v in hit_stats.items()},
-        "near_blast_limit": [k for k, v in hit_stats.items() if v.near_target_limit],
-        "high_copy_primers": [k for k, v in hit_stats.items() if v.high_copy],
-        "blast_limits": {
-            "max_target_seqs": sp.max_target_seqs,
-            "evalue": sp.evalue,
-            "word_size": sp.word_size,
-            "num_threads": sp.num_threads,
-            "high_copy_hit_threshold": sp.high_copy_hit_threshold,
-        },
+        **metadata,
         "n_products": len(amplicons),
-        "n_on_target": len(on),
-        "n_off_target": len(off),
+        "n_on_target": len(on_target),
+        "n_off_target": len(off_target),
         "n_comigrating": len(comigrating),
         "nearest_offtarget_gap": nearest_off_gap,
         "gel_distinguishable": len(comigrating) == 0,
-        "on_target": on,
-        "off_target": off,
-        "specific": len(amplicons) == 1 and len(on) == 1,
+        "on_target": on_target,
+        "off_target": off_target,
+        "specific_observed": observed_specific,
+        "specific": specific,
+        "specificity_status": specificity_status,
     }
