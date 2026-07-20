@@ -13,27 +13,29 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.head_ref }}
       - name: Set up Python 3.12
         uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Install
         run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev,thermo]"
+          python -m pip install -q --upgrade pip
+          pip install -q -e ".[dev,thermo]"
       - name: Test full suite
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set +e
-          pytest -q --tb=short > /tmp/pytest.log 2>&1
+          pytest -q --tb=short --maxfail=1 > /tmp/pytest.log 2>&1
           status=$?
           cat /tmp/pytest.log
           if [ "$status" -ne 0 ]; then
             {
-              echo '### Post-audit pytest failure'
+              echo '### Current-head post-audit pytest failure'
               echo '```text'
-              tail -180 /tmp/pytest.log
+              cat /tmp/pytest.log
               echo '```'
             } > /tmp/pytest-comment.md
             gh pr comment "${{ github.event.pull_request.number }}" --body-file /tmp/pytest-comment.md
