@@ -1,92 +1,41 @@
-"""Self-contained output-formatting for primerblast_oss.
-
-This module renders primer-pair results into shareable, static artefacts:
-CSV tables, a plain-text oligo order sheet, BED tracks, ASCII off-target maps,
-and a printable self-contained HTML report.
-
-Design constraints (intentional):
-    * Standard library ONLY (csv, io, html, json).
-    * No imports from any other primerblast_oss module -> fully decoupled.
-    * Every function consumes PLAIN dicts/lists following the documented schema
-      below, so callers can build inputs without importing package types.
-    * Nothing here is interactive; outputs are strings (or files) a user can
-      save, share, or print to PDF.
-
-Input schema -- a "primer pair record" dict::
-
-    {
-      "name": "P1", "forward": "ACGT...", "reverse": "TTGC...",
-      "product_size": 368, "tm_f": 60.0, "tm_r": 60.1,
-      "gc_f": 55.0, "gc_r": 45.0,
-      "left_pos": [start, end], "right_pos": [start, end],   # 1-based
-      "risk": "low",                                         # low|medium|high
-      "n_off_target": 0, "n_ff": 0, "n_rr": 0, "n_fr_offtarget": 0,
-      "tp5_mismatch_min": 0,        # min 3'-5bp mismatches among off-targets
-      "snp_in_primer": false, "conserved_refs": ["cameor_v2", "ZW6"],
-      "caps_enzyme": "EcoRI", "gel_distinguishable": true,
-      "products": [
-         {"subject": "chr1", "start": 85338374, "end": 85338741,
-          "size": 368, "orientation": "F/R", "on_target": true},
-         ...
-      ]
-    }
-
-All getters tolerate missing keys; absent values render blank / neutral.
-"""
-
+"""Static CSV, order-sheet, BED, ASCII and HTML outputs."""
 from __future__ import annotations
 
 import csv
 import html
 import io
 import json
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Sequence
 
 
-# --------------------------------------------------------------------------- #
-# Small internal helpers
-# --------------------------------------------------------------------------- #
-
-def _get(d: Dict[str, Any], key: str, default: Any = "") -> Any:
-    """Return ``d[key]`` or *default* when the key is missing or ``None``."""
-    val = d.get(key, default)
-    return default if val is None else val
+def _get(mapping: Dict[str, Any], key: str, default: Any = "") -> Any:
+    value = mapping.get(key, default)
+    return default if value is None else value
 
 
-def _num(val: Any) -> str:
-    """Render a numeric value compactly, blank when missing/None."""
-    if val is None or val == "":
+def _num(value: Any) -> str:
+    if value is None or value == "":
         return ""
-    if isinstance(val, float):
-        # Trim trailing zeros but keep at least one decimal for Tm-like values.
-        return f"{val:.1f}"
-    return str(val)
+    if isinstance(value, float):
+        return "%.1f" % value
+    return str(value)
+
+
+def _bool_str(value: Any) -> str:
+    if value is None or value == "":
+        return ""
+    return "yes" if bool(value) else "no"
 
 
 def _tm_diff(pair: Dict[str, Any]) -> str:
-    """Absolute Tm difference between the two primers, blank if unavailable."""
-    tm_f = pair.get("tm_f")
-    tm_r = pair.get("tm_r")
-    if isinstance(tm_f, (int, float)) and isinstance(tm_r, (int, float)):
-        return f"{abs(float(tm_f) - float(tm_r)):.1f}"
+    forward = pair.get("tm_f")
+    reverse = pair.get("tm_r")
+    if isinstance(forward, (int, float)) and isinstance(reverse, (int, float)):
+        return "%.1f" % abs(float(forward) - float(reverse))
     return ""
 
 
-def _bool_str(val: Any) -> str:
-    """Render a boolean-ish flag as ``yes``/``no``/blank."""
-    if val is None or val == "":
-        return ""
-    return "yes" if bool(val) else "no"
-
-
 def _synthesis_scale(length: int) -> str:
-    """Suggest a standard oligo synthesis scale from the oligo length.
-
-    A pragmatic heuristic for ordering standard desalted primers; longer
-    oligos typically move to a larger scale for adequate yield.
-    """
-    if length <= 0:
-        return "25 nmol (std desalt)"
     if length <= 30:
         return "25 nmol (std desalt)"
     if length <= 45:
@@ -94,589 +43,407 @@ def _synthesis_scale(length: int) -> str:
     return "250 nmol (PAGE)"
 
 
-# --------------------------------------------------------------------------- #
-# Generic CSV helper
-# --------------------------------------------------------------------------- #
+def _best_dcaps(pair: Dict[str, Any]) -> Dict[str, Any]:
+    caps = pair.get("caps") or {}
+    dcaps = caps.get("dcaps") or {}
+    best = dcaps.get("best") or {}
+    if caps.get("best_marker_type") == "dCAPS" and best.get("orderable"):
+        return best
+    return {}
+
+
+def _orderable_pair(pair: Dict[str, Any]) -> Dict[str, Any]:
+    """Return the actual oligos recommended for ordering.
+
+    Natural CAPS and generic assays use the parent pair. A validated dCAPS result
+    replaces the modified side with its engineered sequence and keeps the other
+    parent primer.
+    """
+    derived = _best_dcaps(pair)
+    if not derived:
+        return {
+            "name": _get(pair, "name", "pair"),
+            "marker_type": _get(pair, "marker_type", "generic"),
+            "enzyme": _get(pair, "caps_enzyme"),
+            "forward": _get(pair, "forward"),
+            "reverse": _get(pair, "reverse"),
+            "tm_f": pair.get("tm_f"),
+            "tm_r": pair.get("tm_r"),
+            "gc_f": pair.get("gc_f"),
+            "gc_r": pair.get("gc_r"),
+            "product_size": pair.get("product_size"),
+            "engineered_role": "",
+            "engineered_mismatches": 0,
+        }
+    return {
+        "name": "%s_dCAPS_%s" % (
+            _get(pair, "name", "pair"), derived.get("enzyme", "enzyme")),
+        "marker_type": "dCAPS",
+        "enzyme": derived.get("enzyme"),
+        "forward": derived.get("forward"),
+        "reverse": derived.get("reverse"),
+        "tm_f": derived.get("tm_f"),
+        "tm_r": derived.get("tm_r"),
+        "gc_f": derived.get("gc_f"),
+        "gc_r": derived.get("gc_r"),
+        "product_size": derived.get("product_size"),
+        "engineered_role": derived.get("modified_primer_role"),
+        "engineered_mismatches": derived.get("engineered_mismatches"),
+    }
+
 
 def to_csv_generic(rows: List[dict], columns: List[str]) -> str:
-    """Render *rows* as CSV using exactly *columns* (in order).
-
-    Missing keys become empty cells. Values are stringified as-is. Uses the
-    ``csv`` module so quoting/escaping is always correct.
-    """
-    buf = io.StringIO()
-    writer = csv.writer(buf, lineterminator="\n")
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, lineterminator="\n")
     writer.writerow(columns)
     for row in rows:
-        writer.writerow(["" if row.get(c) is None else row.get(c, "") for c in columns])
-    return buf.getvalue()
+        writer.writerow([
+            "" if row.get(column) is None else row.get(column, "")
+            for column in columns
+        ])
+    return buffer.getvalue()
 
 
-# --------------------------------------------------------------------------- #
-# Experimenter CSV
-# --------------------------------------------------------------------------- #
-
-# Column header covering the fields an experimenter cares about.
-_CSV_COLUMNS: List[str] = [
-    "name", "forward", "reverse", "product_size",
-    "tm_f", "tm_r", "tm_diff",
-    "gc_f", "gc_r",
+_CSV_COLUMNS = [
+    "name", "marker_type", "enzyme", "forward", "reverse", "product_size",
+    "tm_f", "tm_r", "tm_diff", "gc_f", "gc_r", "engineered_role",
+    "engineered_mismatches", "specificity_status", "search_completeness",
     "n_off_target", "n_ff", "n_rr", "n_fr_offtarget",
-    "tp5_mismatch_min", "snp_in_primer",
-    "conserved_refs", "caps_enzyme", "gel_distinguishable", "cross_dimer_dg", "risk",
+    "variant_in_primer", "conserved_refs", "gel_distinguishable", "risk",
 ]
 
 
 def pairs_to_csv(pairs: List[dict]) -> str:
-    """Return a CSV string of all primer pairs (one row per pair).
-
-    Tolerates missing keys (rendered blank). ``conserved_refs`` is joined by
-    ``';'`` so the CSV stays single-cell per field.
-    """
-    buf = io.StringIO()
-    writer = csv.writer(buf, lineterminator="\n")
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, lineterminator="\n")
     writer.writerow(_CSV_COLUMNS)
-
     for pair in pairs:
-        conserved = _get(pair, "conserved_refs", [])
-        if isinstance(conserved, (list, tuple)):
-            conserved_str = ";".join(str(c) for c in conserved)
-        else:
-            conserved_str = str(conserved)
-
+        orderable = _orderable_pair(pair)
+        conserved = pair.get("conserved_refs", [])
         writer.writerow([
-            _get(pair, "name"),
-            _get(pair, "forward"),
-            _get(pair, "reverse"),
-            _num(pair.get("product_size")),
-            _num(pair.get("tm_f")),
-            _num(pair.get("tm_r")),
-            _tm_diff(pair),
-            _num(pair.get("gc_f")),
-            _num(pair.get("gc_r")),
+            orderable["name"],
+            orderable["marker_type"],
+            orderable["enzyme"],
+            orderable["forward"],
+            orderable["reverse"],
+            _num(orderable["product_size"]),
+            _num(orderable["tm_f"]),
+            _num(orderable["tm_r"]),
+            _tm_diff(orderable),
+            _num(orderable["gc_f"]),
+            _num(orderable["gc_r"]),
+            orderable["engineered_role"],
+            orderable["engineered_mismatches"],
+            pair.get("specificity_status"),
+            pair.get("search_completeness"),
             _num(pair.get("n_off_target")),
             _num(pair.get("n_ff")),
             _num(pair.get("n_rr")),
             _num(pair.get("n_fr_offtarget")),
-            _num(pair.get("tp5_mismatch_min")),
-            _bool_str(pair.get("snp_in_primer")),
-            conserved_str,
-            _get(pair, "caps_enzyme"),
+            _bool_str(pair.get("variant_in_primer", pair.get("snp_in_primer"))),
+            ";".join(str(value) for value in conserved)
+            if isinstance(conserved, (list, tuple)) else str(conserved),
             _bool_str(pair.get("gel_distinguishable")),
-            _num((pair.get("dimers") or {}).get("cross_dimer_dg")),
-            _get(pair, "risk"),
+            pair.get("risk"),
         ])
-    return buf.getvalue()
+    return buffer.getvalue()
 
-
-# --------------------------------------------------------------------------- #
-# Oligo order sheet (plain text)
-# --------------------------------------------------------------------------- #
 
 def order_table(pairs: List[dict]) -> str:
-    """Return a plain-text oligo ORDER sheet, one row per primer.
-
-    Forward and reverse primers are listed on separate rows (``P1_F``,
-    ``P1_R``) with sequence 5'->3', length, Tm, and a suggested synthesis
-    scale, in nicely aligned columns.
-    """
-    header = ("Oligo name", "Sequence (5'->3')", "Len", "Tm", "Scale")
-
-    # Build the row data first so we can size columns to content.
+    header = (
+        "Oligo name", "Sequence (5'->3')", "Len", "Tm", "Scale",
+        "Marker", "Enzyme", "Engineered",
+    )
     rows: List[Sequence[str]] = []
     for pair in pairs:
-        name = str(_get(pair, "name", "?"))
-        for suffix, seq_key, tm_key in (("F", "forward", "tm_f"),
-                                        ("R", "reverse", "tm_r")):
-            seq = str(_get(pair, seq_key, ""))
-            length = len(seq)
-            tm = pair.get(tm_key)
+        orderable = _orderable_pair(pair)
+        engineered_role = orderable.get("engineered_role") or ""
+        mismatch_count = orderable.get("engineered_mismatches") or 0
+        for role, sequence_key, tm_key in (
+            ("F", "forward", "tm_f"), ("R", "reverse", "tm_r")
+        ):
+            sequence = str(orderable.get(sequence_key) or "")
+            engineered = (
+                "%s mismatch(es)" % mismatch_count
+                if engineered_role == role else ""
+            )
             rows.append((
-                f"{name}_{suffix}",
-                seq,
-                str(length) if length else "",
-                _num(tm),
-                _synthesis_scale(length),
+                "%s_%s" % (orderable["name"], role),
+                sequence,
+                str(len(sequence)) if sequence else "",
+                _num(orderable.get(tm_key)),
+                _synthesis_scale(len(sequence)),
+                str(orderable.get("marker_type") or ""),
+                str(orderable.get("enzyme") or ""),
+                engineered,
             ))
-
-    # Compute per-column widths (header vs. data).
-    ncols = len(header)
-    widths = [len(header[i]) for i in range(ncols)]
+    widths = [len(column) for column in header]
     for row in rows:
-        for i in range(ncols):
-            widths[i] = max(widths[i], len(row[i]))
+        for index, cell in enumerate(row):
+            widths[index] = max(widths[index], len(str(cell)))
 
-    def fmt(cells: Sequence[str]) -> str:
-        return "  ".join(str(cells[i]).ljust(widths[i]) for i in range(ncols)).rstrip()
+    def format_row(cells: Sequence[str]) -> str:
+        return "  ".join(
+            str(cells[index]).ljust(widths[index])
+            for index in range(len(header))
+        ).rstrip()
 
-    lines: List[str] = []
-    lines.append("Primer synthesis order sheet")
-    lines.append("")
-    lines.append(fmt(header))
-    lines.append("  ".join("-" * widths[i] for i in range(ncols)))
-    for row in rows:
-        lines.append(fmt(row))
-    lines.append("")
-    lines.append("Note: scales are suggestions for standard desalted oligos; "
-                 "adjust to your supplier and application.")
+    lines = [
+        "Primer synthesis order sheet",
+        "",
+        format_row(header),
+        "  ".join("-" * width for width in widths),
+    ]
+    lines.extend(format_row(row) for row in rows)
+    lines.extend([
+        "",
+        "dCAPS rows contain the validated engineered primer sequence. "
+        "Do not substitute the unmodified parent primer.",
+        "Scales are suggestions; adjust to the supplier and application.",
+    ])
     return "\n".join(lines) + "\n"
 
 
-# --------------------------------------------------------------------------- #
-# BED track of predicted products
-# --------------------------------------------------------------------------- #
-
-def products_to_bed(pairs: List[dict], track_name: str = "primerblast_oss") -> str:
-    """Return a BED track (0-based half-open) of all predicted products.
-
-    One BED line per predicted product across all pairs::
-
-        chrom  start-1  end  name=<pair>:<orientation>:<size>bp  .  +
-
-    A ``track name=...`` header line is emitted first.
-    """
-    lines: List[str] = [f'track name={track_name} description="predicted products"']
-
+def products_to_bed(pairs: List[dict],
+                    track_name: str = "primerblast_oss") -> str:
+    lines = [
+        'track name=%s description="predicted products"' % track_name]
     for pair in pairs:
         pair_name = str(_get(pair, "name", "?"))
-        for prod in _get(pair, "products", []) or []:
-            chrom = str(_get(prod, "subject", ""))
-            start = prod.get("start")
-            end = prod.get("end")
-            if chrom == "" or start is None or end is None:
-                continue  # skip incomplete product records
+        for product in pair.get("products", []) or []:
+            chromosome = str(_get(product, "subject", ""))
+            start, end = product.get("start"), product.get("end")
+            if not chromosome or start is None or end is None:
+                continue
             try:
-                start0 = int(start) - 1  # BED is 0-based half-open
-                end0 = int(end)
+                start_zero = int(start) - 1
+                end_zero = int(end)
             except (TypeError, ValueError):
                 continue
-            orientation = str(_get(prod, "orientation", ""))
-            size = prod.get("size")
-            size_str = f"{int(size)}bp" if isinstance(size, (int, float)) else ""
-            # BED name has no spaces; build a compact descriptive label.
-            name = f"{pair_name}:{orientation}:{size_str}".replace(" ", "_")
-            lines.append(f"{chrom}\t{start0}\t{end0}\t{name}\t.\t+")
-
+            orientation = str(_get(product, "orientation", ""))
+            size = product.get("size")
+            label = "%s:%s:%sbp" % (
+                pair_name, orientation, size if size is not None else "")
+            lines.append("%s\t%s\t%s\t%s\t.\t+" % (
+                chromosome, start_zero, end_zero, label.replace(" ", "_")))
     return "\n".join(lines) + "\n"
 
-
-# --------------------------------------------------------------------------- #
-# ASCII off-target map
-# --------------------------------------------------------------------------- #
 
 def ascii_offtarget_map(pair: dict, width: int = 56) -> str:
-    """Return an ASCII diagram of predicted products for one primer pair.
-
-    Per subject/chromosome, draws the two primer arrows around a span whose
-    length is scaled (relative to that subject's largest product) into at most
-    *width* columns. Orientation determines arrowheads:
-
-        F/R  ->  ``F >----< R``   (convergent, a real amplicon)
-        F/F  ->  ``F >----> F``   (both forward -> mispriming)
-        R/R  ->  ``R <----< R``   (both reverse -> mispriming)
-
-    The intended (on_target) product is marked ``(intended)``; others are
-    labelled with their orientation as off-targets.
-    """
-    products = list(_get(pair, "products", []) or [])
+    products = list(pair.get("products", []) or [])
     name = str(_get(pair, "name", "?"))
-
     if not products:
-        return f"{name}: (no predicted products)\n"
-
-    # Group products by subject, preserving first-seen order.
-    by_subject: Dict[str, List[dict]] = {}
-    for prod in products:
-        subj = str(_get(prod, "subject", "?"))
-        by_subject.setdefault(subj, []).append(prod)
-
-    lines: List[str] = [f"Off-target map for {name}"]
-
-    for subject, prods in by_subject.items():
-        # Scale spans relative to the largest product on THIS subject.
-        sizes = [p.get("size") for p in prods if isinstance(p.get("size"), (int, float))]
-        max_size = max(sizes) if sizes else 1
-        max_size = max_size or 1  # guard against zero
-
-        for prod in prods:
-            orientation = str(_get(prod, "orientation", "F/R")).upper()
-            size = prod.get("size")
-            on_target = bool(prod.get("on_target", False))
-
-            # Determine per-product tag on the subject header line.
-            if on_target:
-                tag = "(intended)"
-            else:
-                tag = f"(off-target, {orientation})" if orientation else "(off-target)"
-            lines.append(f"{subject}  {tag}")
-
-            # Scale the span width; keep a small minimum so arrows are legible.
-            if isinstance(size, (int, float)) and max_size:
-                span = int(round((float(size) / float(max_size)) * width))
-            else:
-                span = width
-            span = max(span, 4)
-
-            # Choose arrowheads from orientation halves.
+        return "%s: (no predicted products)\n" % name
+    grouped: Dict[str, List[dict]] = {}
+    for product in products:
+        grouped.setdefault(str(_get(product, "subject", "?")), []).append(product)
+    lines = ["Off-target map for %s" % name]
+    for subject, subject_products in grouped.items():
+        numeric_sizes = [
+            product.get("size") for product in subject_products
+            if isinstance(product.get("size"), (int, float))
+        ]
+        maximum = max(numeric_sizes) if numeric_sizes else 1
+        for product in subject_products:
+            orientation = str(_get(product, "orientation", "F/R")).upper()
+            size = product.get("size")
+            target = "intended" if product.get("on_target") else "off-target"
+            span = int(round(float(size) / maximum * width)) if isinstance(
+                size, (int, float)) else width
+            span = max(4, span)
             parts = orientation.split("/")
-            left_code = parts[0] if parts and parts[0] else "F"
-            right_code = parts[1] if len(parts) > 1 and parts[1] else "R"
-
-            left_head = ">" if left_code == "F" else "<"
-            right_head = ">" if right_code == "F" else "<"
-
-            dashes = "-" * span
-            size_label = f"{int(size)} bp" if isinstance(size, (int, float)) else ""
-            lines.append(
-                f"  {left_code} {left_head}{dashes}{right_head} {right_code}"
-                f"    {size_label}".rstrip()
-            )
-
+            left = parts[0] if parts else "F"
+            right = parts[1] if len(parts) > 1 else "R"
+            left_head = ">" if left == "F" else "<"
+            right_head = "<" if right == "R" else ">"
+            lines.extend([
+                "%s  (%s, %s)" % (subject, target, orientation),
+                "  %s %s%s%s %s    %s bp" % (
+                    left, left_head, "-" * span, right_head, right,
+                    size if size is not None else ""),
+            ])
     return "\n".join(lines) + "\n"
 
 
-# --------------------------------------------------------------------------- #
-# Self-contained HTML report
-# --------------------------------------------------------------------------- #
-
-# Risk -> CSS colour mapping used for the summary table badges.
-_RISK_COLORS = {
-    "low": "#1a7f37",     # green
-    "medium": "#bf8700",  # orange
-    "high": "#cf222e",    # red
-}
-
-_HTML_CSS = """\
-:root { color-scheme: light; }
-* { box-sizing: border-box; }
-body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-    Helvetica, Arial, sans-serif;
-  color: #1f2328; background: #ffffff; margin: 0; padding: 24px 32px;
-  line-height: 1.45; font-size: 14px;
-}
-h1 { font-size: 22px; margin: 0 0 4px; }
-h2 { font-size: 17px; margin: 28px 0 8px; border-bottom: 2px solid #d0d7de;
-     padding-bottom: 4px; }
-h3 { font-size: 15px; margin: 18px 0 6px; }
-.meta { color: #57606a; font-size: 13px; margin: 2px 0; }
-table { border-collapse: collapse; width: 100%; margin: 8px 0 4px;
-        font-size: 13px; }
-th, td { border: 1px solid #d0d7de; padding: 5px 8px; text-align: left;
-         vertical-align: top; }
-th { background: #f6f8fa; font-weight: 600; }
-tr:nth-child(even) td { background: #fafbfc; }
-code, .seq { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo,
-             Consolas, monospace; font-size: 12.5px; word-break: break-all; }
-.badge { display: inline-block; padding: 1px 9px; border-radius: 10px;
-         color: #fff; font-size: 12px; font-weight: 600; }
-.pair { border: 1px solid #d0d7de; border-radius: 8px; padding: 12px 16px;
-        margin: 12px 0; background: #fff; }
-.pair h3 { margin-top: 0; }
-.kv { display: flex; flex-wrap: wrap; gap: 4px 24px; margin: 6px 0; }
-.kv div { min-width: 160px; }
-.kv .label { color: #57606a; font-size: 12px; }
-.flags span { display: inline-block; margin-right: 12px; font-size: 12.5px; }
-.off { color: #cf222e; } .on { color: #1a7f37; }
-footer { margin-top: 32px; border-top: 1px solid #d0d7de; padding-top: 12px;
-         color: #57606a; font-size: 12px; }
-footer pre { background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 6px;
-             padding: 10px; overflow-x: auto; font-size: 12px; }
-@media print {
-  body { padding: 0; font-size: 12px; }
-  .pair { break-inside: avoid; }
-  h2 { break-after: avoid; }
-}
+_RISK_COLORS = {"low": "#1a7f37", "medium": "#bf8700", "high": "#cf222e"}
+_HTML_CSS = """
+*{box-sizing:border-box}body{font-family:system-ui,sans-serif;color:#1f2328;
+margin:0;padding:24px 32px;line-height:1.45;font-size:14px}h1{font-size:22px}
+h2{font-size:17px;margin-top:28px;border-bottom:2px solid #d0d7de}
+table{border-collapse:collapse;width:100%;font-size:13px}th,td{border:1px solid
+#d0d7de;padding:5px 8px;text-align:left;vertical-align:top}th{background:#f6f8fa}
+code,.seq{font-family:ui-monospace,monospace;word-break:break-all}.pair{border:1px
+solid #d0d7de;border-radius:8px;padding:12px 16px;margin:12px 0}.badge{display:inline-block;
+padding:1px 9px;border-radius:10px;color:white;font-weight:600}.warning{background:#fff8c5;
+border:1px solid #d4a72c;padding:8px}.ok{color:#1a7f37}.bad{color:#cf222e}.meta{color:#57606a}
+@media print{body{padding:0}.pair{break-inside:avoid}}
 """
 
 
-def _esc(val: Any) -> str:
-    """HTML-escape any value (stringify first)."""
-    return html.escape("" if val is None else str(val))
+def _esc(value: Any) -> str:
+    return html.escape("" if value is None else str(value))
 
 
 def _risk_badge(risk: Any) -> str:
-    """Return an HTML badge span coloured by risk level."""
-    r = str(risk or "").lower()
-    color = _RISK_COLORS.get(r, "#57606a")
-    label = _esc(risk or "n/a")
-    return f'<span class="badge" style="background:{color}">{label}</span>'
+    normalized = str(risk or "").lower()
+    color = _RISK_COLORS.get(normalized, "#57606a")
+    return '<span class="badge" style="background:%s">%s</span>' % (
+        color, _esc(risk or "n/a"))
 
 
 def _summary_table(pairs: List[dict]) -> str:
-    """Build the top-level summary table of all pairs."""
-    cols = ["Rank", "Name", "Risk", "Product (bp)", "Tm F/R", "GC F/R",
-            "Off-tgt", "F/F", "R/R", "F/R off", "3' mm min"]
-    head = "".join(f"<th>{_esc(c)}</th>" for c in cols)
-    rows_html: List[str] = []
-    for i, pair in enumerate(pairs, start=1):
-        tm = f"{_num(pair.get('tm_f'))} / {_num(pair.get('tm_r'))}"
-        gc = f"{_num(pair.get('gc_f'))} / {_num(pair.get('gc_r'))}"
-        cells = [
-            str(i),
-            _esc(_get(pair, "name")),
+    columns = [
+        "Rank", "Name", "Marker", "Risk", "Product", "Specificity",
+        "Search", "Off-targets",
+    ]
+    rows = []
+    for index, pair in enumerate(pairs, 1):
+        orderable = _orderable_pair(pair)
+        rows.append([
+            index,
+            orderable["name"],
+            "%s %s" % (orderable["marker_type"], orderable["enzyme"] or ""),
             _risk_badge(pair.get("risk")),
-            _esc(_num(pair.get("product_size"))),
-            _esc(tm),
-            _esc(gc),
-            _esc(_num(pair.get("n_off_target"))),
-            _esc(_num(pair.get("n_ff"))),
-            _esc(_num(pair.get("n_rr"))),
-            _esc(_num(pair.get("n_fr_offtarget"))),
-            _esc(_num(pair.get("tp5_mismatch_min"))),
-        ]
-        rows_html.append("<tr>" + "".join(f"<td>{c}</td>" for c in cells) + "</tr>")
-    return (f'<table><thead><tr>{head}</tr></thead>'
-            f'<tbody>{"".join(rows_html)}</tbody></table>')
+            orderable.get("product_size"),
+            pair.get("specificity_status"),
+            pair.get("search_completeness"),
+            pair.get("n_off_target"),
+        ])
+    header = "".join("<th>%s</th>" % _esc(column) for column in columns)
+    body = "".join(
+        "<tr>%s</tr>" % "".join("<td>%s</td>" % cell for cell in [
+            _esc(row[0]), _esc(row[1]), _esc(row[2]), row[3],
+            _esc(row[4]), _esc(row[5]), _esc(row[6]), _esc(row[7]),
+        ])
+        for row in rows
+    )
+    return "<table><thead><tr>%s</tr></thead><tbody>%s</tbody></table>" % (
+        header, body)
 
 
 def _products_table(pair: dict) -> str:
-    """Build the predicted-products table for one pair's detail section."""
-    products = list(_get(pair, "products", []) or [])
+    products = list(pair.get("products", []) or [])
     if not products:
         return '<p class="meta">No predicted products.</p>'
-    cols = ["Subject", "Start", "End", "Size (bp)", "Orientation", "Target"]
-    head = "".join(f"<th>{_esc(c)}</th>" for c in cols)
-    rows_html: List[str] = []
-    for prod in products:
-        on_target = bool(prod.get("on_target", False))
-        target_cls = "on" if on_target else "off"
-        target_txt = "intended" if on_target else "off-target"
-        cells = [
-            _esc(_get(prod, "subject")),
-            _esc(_num(prod.get("start")) or prod.get("start")),
-            _esc(_num(prod.get("end")) or prod.get("end")),
-            _esc(_num(prod.get("size"))),
-            _esc(_get(prod, "orientation")),
-            f'<span class="{target_cls}">{target_txt}</span>',
-        ]
-        rows_html.append("<tr>" + "".join(f"<td>{c}</td>" for c in cells) + "</tr>")
-    return (f'<table><thead><tr>{head}</tr></thead>'
-            f'<tbody>{"".join(rows_html)}</tbody></table>')
+    rows = []
+    for product in products:
+        rows.append("<tr>%s</tr>" % "".join(
+            "<td>%s</td>" % _esc(value) for value in [
+                product.get("subject"), product.get("start"), product.get("end"),
+                product.get("size"), product.get("orientation"),
+                "intended" if product.get("on_target") else "off-target",
+            ]))
+    return ("<table><thead><tr><th>Subject</th><th>Start</th><th>End</th>"
+            "<th>Size</th><th>Orientation</th><th>Target</th></tr></thead>"
+            "<tbody>%s</tbody></table>" % "".join(rows))
+
+
+def _dcaps_html(pair: dict) -> str:
+    best = _best_dcaps(pair)
+    if not best:
+        return ""
+    digest = best.get("digest") or {}
+    changes = best.get("engineered_changes_template") or []
+    return """
+<div class="warning"><b>Validated dCAPS order candidate</b><br>
+Enzyme: {enzyme}; modified primer: {role}; engineered mismatch(es): {count}<br>
+Forward: <span class="seq">{forward}</span><br>
+Reverse: <span class="seq">{reverse}</span><br>
+Predicted digest: ref {ref_fragments} vs alt {alt_fragments}; status {status}<br>
+Engineered template changes: <code>{changes}</code></div>
+""".format(
+        enzyme=_esc(best.get("enzyme")),
+        role=_esc(best.get("modified_primer_role")),
+        count=_esc(best.get("engineered_mismatches")),
+        forward=_esc(best.get("forward")),
+        reverse=_esc(best.get("reverse")),
+        ref_fragments=_esc(digest.get("allele_a_fragments")),
+        alt_fragments=_esc(digest.get("allele_b_fragments")),
+        status=_esc(best.get("recommendation_status")),
+        changes=_esc(json.dumps(changes, ensure_ascii=False)),
+    )
 
 
 def _pair_detail(pair: dict, rank: int) -> str:
-    """Build one per-pair detail section."""
-    name = _esc(_get(pair, "name"))
-    left = _get(pair, "left_pos", [])
-    right = _get(pair, "right_pos", [])
-    left_s = "-".join(str(x) for x in left) if isinstance(left, (list, tuple)) else _esc(left)
-    right_s = "-".join(str(x) for x in right) if isinstance(right, (list, tuple)) else _esc(right)
-
-    conserved = _get(pair, "conserved_refs", [])
-    if isinstance(conserved, (list, tuple)):
-        conserved_s = ", ".join(_esc(c) for c in conserved)
-    else:
-        conserved_s = _esc(conserved)
-
-    # 3' off-target mismatch minimum is a specificity hint.
-    tp5 = _num(pair.get("tp5_mismatch_min"))
-    snp = _bool_str(pair.get("snp_in_primer"))
-    caps = _esc(_get(pair, "caps_enzyme")) or "n/a"
-    gel = _bool_str(pair.get("gel_distinguishable"))
-
-    return f"""\
-<div class="pair">
-  <h3>#{rank} &middot; {name} &nbsp; {_risk_badge(pair.get("risk"))}</h3>
-  <div class="kv">
-    <div><span class="label">Forward (5'-&gt;3')</span><br>
-         <span class="seq">{_esc(_get(pair, "forward"))}</span></div>
-    <div><span class="label">Reverse (5'-&gt;3')</span><br>
-         <span class="seq">{_esc(_get(pair, "reverse"))}</span></div>
-  </div>
-  <div class="kv">
-    <div><span class="label">Product size</span><br>{_esc(_num(pair.get("product_size")))} bp</div>
-    <div><span class="label">Tm F / R</span><br>{_esc(_num(pair.get("tm_f")))} / {_esc(_num(pair.get("tm_r")))} &deg;C</div>
-    <div><span class="label">GC F / R</span><br>{_esc(_num(pair.get("gc_f")))} / {_esc(_num(pair.get("gc_r")))} %</div>
-    <div><span class="label">Forward pos</span><br>{_esc(left_s)}</div>
-    <div><span class="label">Reverse pos</span><br>{_esc(right_s)}</div>
-  </div>
-  <h4 style="margin:12px 0 4px;font-size:13px;">Predicted products</h4>
-  {_products_table(pair)}
-  <div class="flags" style="margin-top:8px;">
-    <span><b>CAPS enzyme:</b> {caps}</span>
-    <span><b>Gel-distinguishable:</b> {gel or "n/a"}</span>
-    <span><b>SNP in primer:</b> {snp or "n/a"}</span>
-    <span><b>3' mismatch min (off-tgt):</b> {tp5 or "n/a"}</span>
-    <span><b>Conserved in:</b> {conserved_s or "n/a"}</span>
-  </div>
-</div>"""
+    orderable = _orderable_pair(pair)
+    conserved = pair.get("conserved_refs", [])
+    reasons = "; ".join(pair.get("risk_reasons", []) or [])
+    return """
+<div class="pair"><h3>#{rank} · {name} {risk}</h3>
+<p><b>Recommended marker:</b> {marker} {enzyme}</p>
+<p>Forward: <span class="seq">{forward}</span><br>
+Reverse: <span class="seq">{reverse}</span></p>
+<p>Product {product} bp; Tm {tmf}/{tmr} °C; GC {gcf}/{gcr}%</p>
+<p>Specificity: {specificity}; search: {search}; off-targets: {off}</p>
+{dcaps}
+<h4>Predicted parent-pair products</h4>{products}
+<p><b>Conserved in:</b> {conserved}<br><b>Risk reasons:</b> {reasons}</p>
+</div>
+""".format(
+        rank=rank,
+        name=_esc(orderable["name"]),
+        risk=_risk_badge(pair.get("risk")),
+        marker=_esc(orderable["marker_type"]),
+        enzyme=_esc(orderable["enzyme"]),
+        forward=_esc(orderable["forward"]),
+        reverse=_esc(orderable["reverse"]),
+        product=_esc(orderable["product_size"]),
+        tmf=_esc(_num(orderable["tm_f"])),
+        tmr=_esc(_num(orderable["tm_r"])),
+        gcf=_esc(_num(orderable["gc_f"])),
+        gcr=_esc(_num(orderable["gc_r"])),
+        specificity=_esc(pair.get("specificity_status")),
+        search=_esc(pair.get("search_completeness")),
+        off=_esc(pair.get("n_off_target")),
+        dcaps=_dcaps_html(pair),
+        products=_products_table(pair),
+        conserved=_esc(", ".join(str(value) for value in conserved)),
+        reasons=_esc(reasons),
+    )
 
 
 def html_report(context: dict) -> str:
-    """Return a self-contained, printable HTML report string.
-
-    ``context`` schema::
-
-        {
-          "title": str, "template": str, "databases": [...],
-          "generated": str, "params": dict, "provenance": dict,
-          "pairs": [pair dicts]
-        }
-
-    The output has inline CSS, no external resources, a light theme, and is
-    designed to print cleanly to PDF.
-    """
     title = _esc(_get(context, "title", "primerblast_oss report"))
     template = _esc(_get(context, "template", ""))
     generated = _esc(_get(context, "generated", ""))
-    databases = _get(context, "databases", []) or []
-    if isinstance(databases, (list, tuple)):
-        db_str = ", ".join(_esc(d) for d in databases)
-    else:
-        db_str = _esc(databases)
+    databases = context.get("databases", []) or []
+    pairs = list(context.get("pairs", []) or [])
+    provenance = {
+        "params": context.get("params", {}),
+        "provenance": context.get("provenance", {}),
+    }
+    details = "\n".join(
+        _pair_detail(pair, index) for index, pair in enumerate(pairs, 1))
+    return """<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>{title}</title>
+<style>{css}</style></head><body><h1>{title}</h1>
+<p class="meta"><b>Template:</b> {template}<br><b>Databases:</b> {databases}<br>
+<b>Generated:</b> {generated}</p><h2>Summary</h2>{summary}
+<h2>Primer pair details</h2>{details}<h2>Provenance</h2><pre>{provenance}</pre>
+</body></html>""".format(
+        title=title,
+        css=_HTML_CSS,
+        template=template or "n/a",
+        databases=_esc(", ".join(str(value) for value in databases)) or "n/a",
+        generated=generated or "n/a",
+        summary=_summary_table(pairs),
+        details=details,
+        provenance=_esc(json.dumps(
+            provenance, indent=2, ensure_ascii=False, default=str)),
+    )
 
-    pairs = list(_get(context, "pairs", []) or [])
-
-    # Provenance + params serialised for reproducibility (pretty JSON).
-    provenance = _get(context, "provenance", {}) or {}
-    params = _get(context, "params", {}) or {}
-    prov_blob = {"params": params, "provenance": provenance}
-    try:
-        prov_json = json.dumps(prov_blob, indent=2, ensure_ascii=False, default=str)
-    except (TypeError, ValueError):
-        prov_json = str(prov_blob)
-
-    details = "\n".join(_pair_detail(p, i) for i, p in enumerate(pairs, start=1))
-
-    return f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{title}</title>
-<style>
-{_HTML_CSS}</style>
-</head>
-<body>
-<header>
-  <h1>{title}</h1>
-  <p class="meta"><b>Template:</b> {template or "n/a"}</p>
-  <p class="meta"><b>Databases:</b> {db_str or "n/a"}</p>
-  <p class="meta"><b>Generated:</b> {generated or "n/a"}</p>
-</header>
-
-<h2>Summary ({len(pairs)} primer pair{"s" if len(pairs) != 1 else ""})</h2>
-{_summary_table(pairs)}
-
-<h2>Primer pair details</h2>
-{details}
-
-<footer>
-  <p><b>Provenance &amp; parameters</b> (for reproducibility)</p>
-  <pre>{_esc(prov_json)}</pre>
-</footer>
-</body>
-</html>
-"""
-
-
-# --------------------------------------------------------------------------- #
-# Self-test / demo
-# --------------------------------------------------------------------------- #
 
 if __name__ == "__main__":
-    # Two sample pair dicts exercising the full schema.
-    clean_pair: Dict[str, Any] = {
-        "name": "P1",
-        "forward": "ACGTGGTCAACGGATTTGCAC",
-        "reverse": "TTGCACCAGTTGAGCTTCGAT",
-        "product_size": 368,
-        "tm_f": 60.0, "tm_r": 60.1, "gc_f": 55.0, "gc_r": 45.0,
-        "left_pos": [85338374, 85338394],
-        "right_pos": [85338721, 85338741],
-        "risk": "low",
-        "n_off_target": 0, "n_ff": 0, "n_rr": 0, "n_fr_offtarget": 0,
-        "tp5_mismatch_min": 0,
-        "snp_in_primer": False,
-        "conserved_refs": ["cameor_v2", "ZW6"],
-        "caps_enzyme": "EcoRI",
-        "gel_distinguishable": True,
-        "products": [
-            {"subject": "chr1", "start": 85338374, "end": 85338741,
-             "size": 368, "orientation": "F/R", "on_target": True},
-        ],
+    sample = {
+        "name": "P1", "forward": "ACGTACGT", "reverse": "TGCATGCA",
+        "product_size": 100, "tm_f": 55.0, "tm_r": 55.0,
+        "gc_f": 50.0, "gc_r": 50.0, "risk": "low",
+        "specificity_status": "specific", "search_completeness": "complete",
+        "products": [{"subject": "chr1", "start": 1, "end": 100,
+                      "size": 100, "orientation": "F/R", "on_target": True}],
     }
-
-    messy_pair: Dict[str, Any] = {
-        "name": "P2",
-        "forward": "GGATCCAATGCGTTAGCCTGA",
-        "reverse": "CTGCAGTTACCGGATTACGGT",
-        "product_size": 402,
-        "tm_f": 59.4, "tm_r": 61.2, "gc_f": 52.4, "gc_r": 52.4,
-        "left_pos": [12045, 12065],
-        "right_pos": [12427, 12447],
-        "risk": "medium",
-        "n_off_target": 1, "n_ff": 1, "n_rr": 0, "n_fr_offtarget": 1,
-        "tp5_mismatch_min": 2,
-        "snp_in_primer": True,
-        "conserved_refs": ["cameor_v2"],
-        "caps_enzyme": "",
-        "gel_distinguishable": False,
-        "products": [
-            {"subject": "chr2", "start": 12046, "end": 12447,
-             "size": 402, "orientation": "F/R", "on_target": True},
-            {"subject": "chr5", "start": 285451473, "end": 285454732,
-             "size": 3260, "orientation": "F/F", "on_target": False},
-            {"subject": "chr7", "start": 9001000, "end": 9001900,
-             "size": 900, "orientation": "F/R", "on_target": False},
-        ],
-    }
-
-    pairs = [clean_pair, messy_pair]
-
-    print("=" * 70)
-    print("CSV")
-    print("=" * 70)
-    print(pairs_to_csv(pairs))
-
-    print("=" * 70)
-    print("ORDER TABLE")
-    print("=" * 70)
-    print(order_table(pairs))
-
-    print("=" * 70)
-    print("BED")
-    print("=" * 70)
-    print(products_to_bed(pairs))
-
-    print("=" * 70)
-    print("ASCII OFF-TARGET MAPS")
-    print("=" * 70)
-    for p in pairs:
-        print(ascii_offtarget_map(p))
-
-    print("=" * 70)
-    print("GENERIC CSV helper")
-    print("=" * 70)
-    print(to_csv_generic(
-        [{"a": 1, "b": 2}, {"a": 3}],
-        ["a", "b", "c"],
-    ))
-
-    # Build and write the HTML report.
-    context = {
-        "title": "PrimerBLAST-OSS report: PsCIK2 locus",
-        "template": "cameor_v2:chr1:85,330,000-85,345,000",
-        "databases": ["cameor_v2", "ZW6", "nr/nt"],
-        "generated": "2026-07-08 12:00 JST",
-        "params": {
-            "primer3": {"opt_tm": 60, "opt_size": 20, "product_size_range": "300-500"},
-            "specificity": {"min_3p_mismatch": 2, "max_product": 4000},
-        },
-        "provenance": {
-            "tool": "primerblast_oss",
-            "version": "0.1.0",
-            "primer3_version": "2.6.1",
-            "blast_version": "2.15.0+",
-            "command": "primerblast-oss run --template PsCIK2.fa",
-        },
-        "pairs": pairs,
-    }
-    html_out = html_report(context)
-    out_path = "/tmp/pbo_sample_report.html"
-    with open(out_path, "w", encoding="utf-8") as fh:
-        fh.write(html_out)
-    print("=" * 70)
-    print(f"HTML written to {out_path} ({len(html_out)} chars)")
-    print("=" * 70)
+    assert "P1_F" in order_table([sample])
+    assert "chr1\t0\t100" in products_to_bed([sample])
+    assert "primerblast_oss" in html_report({"pairs": [sample]})
+    assert "forward" in pairs_to_csv([sample])
+    print("All self-tests passed.")
