@@ -1,0 +1,681 @@
+from pathlib import Path
+import re
+
+
+def replace_once(path: str, old: str, new: str) -> None:
+    file_path = Path(path)
+    text = file_path.read_text()
+    count = text.count(old)
+    if count != 1:
+        raise SystemExit(
+            f"{path}: expected one exact match, found {count}: {old[:100]!r}"
+        )
+    file_path.write_text(text.replace(old, new, 1))
+
+
+def regex_once(path: str, pattern: str, replacement: str) -> None:
+    file_path = Path(path)
+    text = file_path.read_text()
+    updated, count = re.subn(pattern, replacement, text, count=1, flags=re.S | re.M)
+    if count != 1:
+        raise SystemExit(
+            f"{path}: expected one regex match, found {count}: {pattern[:100]!r}"
+        )
+    file_path.write_text(updated)
+
+
+def regex_count(path: str, pattern: str, replacement: str, expected: int) -> None:
+    file_path = Path(path)
+    text = file_path.read_text()
+    updated, count = re.subn(pattern, replacement, text, flags=re.S | re.M)
+    if count != expected:
+        raise SystemExit(
+            f"{path}: expected {expected} regex matches, found {count}: {pattern[:100]!r}"
+        )
+    file_path.write_text(updated)
+
+
+# ---------------------------------------------------------------------------
+# specificity.py: explicit thermo disable, actual site-level coverage, and
+# intentional mismatch allowances for engineered dCAPS primers.
+# ---------------------------------------------------------------------------
+replace_once(
+    "primerblast_oss/specificity.py",
+    "from typing import Dict, List, Optional, Sequence, Tuple",
+    "from typing import Dict, List, Mapping, Optional, Sequence, Tuple",
+)
+
+regex_once(
+    "primerblast_oss/specificity.py",
+    r"def annotate_thermo\(sites: Sequence\[PrimingSite\], primers: Dict\[str, str\],\n"
+    r"\s+genome, tp=None, gate: bool = True\):\n.*?\n\s+return kept, viable\n\n",
+    '''def annotate_thermo(sites: Sequence[PrimingSite], primers: Dict[str, str],
+                    genome, tp=None, gate: bool = True):
+    """Annotate sites and report exactly what could be evaluated.
+
+    ``tp is False`` is an explicit disable sentinel used by ``--no-thermo``.
+    Missing contigs, out-of-range coordinates, or failed calculations are
+    counted as unresolved instead of being silently described as evaluated.
+    """
+    from . import thermo as thermo_module
+    stats = {
+        "attempted_per_primer": {},
+        "evaluated_per_primer": {},
+        "unresolved_per_primer": {},
+        "gated_per_primer": {},
+    }
+    if tp is False or not thermo_module.available() or genome is None:
+        return list(sites), {}, stats
+
+    viable: Dict[str, int] = {}
+    kept: List[PrimingSite] = []
+    for site in sites:
+        stats["attempted_per_primer"][site.primer] = (
+            stats["attempted_per_primer"].get(site.primer, 0) + 1)
+        sequence = primers.get(site.primer)
+        target = _site_binding_strand(genome, site) if sequence else ""
+        result = (
+            thermo_module.evaluate(sequence, target, tp)
+            if (sequence and target) else None
+        )
+        if result is None:
+            stats["unresolved_per_primer"][site.primer] = (
+                stats["unresolved_per_primer"].get(site.primer, 0) + 1)
+            kept.append(site)
+            continue
+
+        stats["evaluated_per_primer"][site.primer] = (
+            stats["evaluated_per_primer"].get(site.primer, 0) + 1)
+        site.tm = result.tm
+        site.end3_dg = result.end3_dg
+        site.thermo_viable = result.viable
+        if result.viable:
+            viable[site.primer] = viable.get(site.primer, 0) + 1
+        elif gate:
+            stats["gated_per_primer"][site.primer] = (
+                stats["gated_per_primer"].get(site.primer, 0) + 1)
+            continue
+        kept.append(site)
+    return kept, viable, stats
+
+''',
+)
+
+regex_count(
+    "primerblast_oss/specificity.py",
+    r"sites, viable_sites = annotate_thermo\(\n"
+    r"\s+sites, primers, genome, thermo_params, thermo_gate\)",
+    "sites, viable_sites, thermo_site_stats = annotate_thermo(\n"
+    "        sites, primers, genome, thermo_params, thermo_gate)",
+    2,
+)
+
+regex_count(
+    "primerblast_oss/specificity.py",
+    r'        "thermo_evaluated": bool\(viable_sites\) or \(\n'
+    r'\s+genome is not None and thermo_gate is False\),\n'
+    r'\s+"viable_sites_per_primer": viable_sites,',
+    '        "thermo_evaluated": bool(sum(\n'
+    '            thermo_site_stats["evaluated_per_primer"].values())),\n'
+    '        "thermo_site_stats": thermo_site_stats,\n'
+    '        "viable_sites_per_primer": viable_sites,',
+    2,
+)
+
+replace_once(
+    "primerblast_oss/specificity.py",
+    '''    thermo_params=None,
+    thermo_gate: bool = True,
+) -> Dict:
+    sp = sp or SpecParams()
+    blastn = _detect_blastn(blastn_bin)
+    primers = {"F": forward, "R": reverse}''',
+    '''    thermo_params=None,
+    thermo_gate: bool = True,
+    allowed_primer_mismatches: Optional[Mapping[str, int]] = None,
+) -> Dict:
+    sp = sp or SpecParams()
+    blastn = _detect_blastn(blastn_bin)
+    primers = {"F": forward, "R": reverse}
+    allowed_mismatches = {
+        name: max(0, int(value))
+        for name, value in (allowed_primer_mismatches or {}).items()
+    }''',
+)
+
+replace_once(
+    "primerblast_oss/specificity.py",
+    '''    for amplicon in amplicons:
+        perfect = amplicon.fwd_mismatch == 0 and amplicon.rev_mismatch == 0
+        proper_pair = {amplicon.fwd_primer, amplicon.rev_primer} == {"F", "R"}
+        size_ok = designed_size is None or abs(amplicon.size - designed_size) <= size_tolerance
+        amplicon.on_target = perfect and proper_pair and size_ok''',
+    '''    for amplicon in amplicons:
+        mismatch_ok = (
+            amplicon.fwd_mismatch
+            <= allowed_mismatches.get(amplicon.fwd_primer, 0)
+            and amplicon.rev_mismatch
+            <= allowed_mismatches.get(amplicon.rev_primer, 0)
+        )
+        proper_pair = {amplicon.fwd_primer, amplicon.rev_primer} == {"F", "R"}
+        size_ok = designed_size is None or abs(amplicon.size - designed_size) <= size_tolerance
+        amplicon.on_target = mismatch_ok and proper_pair and size_ok''',
+)
+
+replace_once(
+    "primerblast_oss/specificity.py",
+    '''        "specific_observed": observed_specific,
+        "specific": specific,
+        "specificity_status": specificity_status,
+    }''',
+    '''        "specific_observed": observed_specific,
+        "specific": specific,
+        "specificity_status": specificity_status,
+        "allowed_primer_mismatches": allowed_mismatches,
+    }''',
+)
+
+
+# ---------------------------------------------------------------------------
+# pipeline.py: separate configuration from actual site-level thermo coverage.
+# ---------------------------------------------------------------------------
+regex_once(
+    "primerblast_oss/pipeline.py",
+    r"def thermo_metadata\(genome, thermo_params, thermo_gate: bool,\n"
+    r"\s+association: str\) -> Dict:\n.*?\n\s+}\n\n",
+    '''def thermo_metadata(genome, thermo_params, thermo_gate: bool,
+                    association: str, site_stats: Optional[Dict] = None) -> Dict:
+    """Describe configuration and actual site-level thermo coverage."""
+    from . import thermo as thermo_module
+    site_stats = site_stats or {
+        "attempted_per_primer": {},
+        "evaluated_per_primer": {},
+        "unresolved_per_primer": {},
+        "gated_per_primer": {},
+    }
+    evaluated = sum(site_stats.get("evaluated_per_primer", {}).values())
+    unresolved = sum(site_stats.get("unresolved_per_primer", {}).values())
+
+    if thermo_params is False:
+        status = "disabled"
+    elif genome is None:
+        status = "skipped_no_associated_genome"
+    elif not thermo_module.available():
+        status = "unavailable"
+    elif unresolved and not evaluated:
+        status = "failed_no_resolvable_sites"
+    elif unresolved:
+        status = "partial_unresolved_sites"
+    elif thermo_params is None:
+        status = (
+            "evaluated_defaults_gated" if thermo_gate
+            else "evaluated_defaults_annotation_only"
+        )
+    else:
+        status = "evaluated_gated" if thermo_gate else "evaluated_annotation_only"
+    return {
+        "thermo_status": status,
+        "thermo_evaluated": evaluated > 0,
+        "thermo_site_stats": site_stats,
+        "thermo_genome_fasta": (
+            getattr(genome, "fasta", None) if genome is not None else None
+        ),
+        "thermo_genome_association": association,
+    }
+
+''',
+)
+
+for file_name, variable in (
+    ("primerblast_oss/pipeline.py", "database_genome"),
+    ("primerblast_oss/tiling.py", "database_genome"),
+    ("primerblast_oss/cli.py", "genome"),
+    ("primerblast_oss/dcaps_workflow.py", "genome"),
+):
+    regex_once(
+        file_name,
+        rf"result\.update\(thermo_metadata\(\n"
+        rf"\s+{variable}, thermo_params, thermo_gate, association\)\)",
+        "result.update(thermo_metadata(\n"
+        f"                {variable}, thermo_params, thermo_gate, association,\n"
+        "                result.get(\"thermo_site_stats\")))",
+    )
+
+
+# ---------------------------------------------------------------------------
+# cli.py: true --no-thermo sentinel and first/design FASTA consistency.
+# ---------------------------------------------------------------------------
+replace_once(
+    "primerblast_oss/cli.py",
+    "import sys\nfrom typing import Dict, List, Mapping, Optional, Tuple",
+    "import sys\nfrom pathlib import Path\nfrom typing import Dict, List, Mapping, Optional, Tuple",
+)
+
+replace_once(
+    "primerblast_oss/cli.py",
+    '''    genomes_by_db: Dict[str, object] = {}
+    if design_genome is not None and databases:
+        genomes_by_db[databases[0]] = design_genome
+
+    legacy_fasta = getattr(arguments, "genome_fasta", None)
+    if legacy_fasta and databases and databases[0] not in fasta_by_db:
+        fasta_by_db[databases[0]] = legacy_fasta
+
+    if fasta_by_db:
+        from .genome import Genome
+        for database, fasta in fasta_by_db.items():
+            genomes_by_db[database] = Genome(fasta)
+
+    if getattr(arguments, "no_thermo", False):
+        return genomes_by_db, None, True''',
+    '''    genomes_by_db: Dict[str, object] = {}
+
+    legacy_fasta = getattr(arguments, "genome_fasta", None)
+    if legacy_fasta and databases and databases[0] not in fasta_by_db:
+        fasta_by_db[databases[0]] = legacy_fasta
+
+    if design_genome is not None and databases:
+        design_database = databases[0]
+        requested_design_fasta = fasta_by_db.get(design_database)
+        if requested_design_fasta is not None:
+            actual = Path(str(design_genome.fasta)).resolve()
+            requested = Path(requested_design_fasta).resolve()
+            if requested != actual:
+                raise ValueError(
+                    "the first/design DB FASTA must match --genome exactly: "
+                    "%s != %s" % (requested, actual)
+                )
+            fasta_by_db.pop(design_database)
+        genomes_by_db[design_database] = design_genome
+
+    if fasta_by_db:
+        from .genome import Genome
+        for database, fasta in fasta_by_db.items():
+            genomes_by_db[database] = Genome(fasta)
+
+    if getattr(arguments, "no_thermo", False):
+        return genomes_by_db, False, True''',
+)
+
+
+# ---------------------------------------------------------------------------
+# assay.py: permit the known engineered mismatch only at the exact anchor, and
+# expose a distinct all-database specificity verdict.
+# ---------------------------------------------------------------------------
+replace_once(
+    "primerblast_oss/assay.py",
+    '''    coordinate_tolerance: int = 0,
+    size_tolerance: int = 0,
+) -> Dict:
+    all_products = (''',
+    '''    coordinate_tolerance: int = 0,
+    size_tolerance: int = 0,
+    expected_primer_mismatches: Optional[Mapping[str, int]] = None,
+) -> Dict:
+    allowed_mismatches = {
+        name: max(0, int(value))
+        for name, value in (expected_primer_mismatches or {}).items()
+    }
+    all_products = (''',
+)
+
+replace_once(
+    "primerblast_oss/assay.py",
+    '''                and amplicon.fwd_mismatch == 0
+                and amplicon.rev_mismatch == 0''',
+    '''                and amplicon.fwd_mismatch
+                <= allowed_mismatches.get(amplicon.fwd_primer, 0)
+                and amplicon.rev_mismatch
+                <= allowed_mismatches.get(amplicon.rev_primer, 0)''',
+)
+
+replace_once(
+    "primerblast_oss/assay.py",
+    '''            if (proper and _overlaps(amplicon, chrom, ext_start, ext_end)
+                    and amplicon.fwd_mismatch == 0
+                    and amplicon.rev_mismatch == 0):''',
+    '''            if (proper and _overlaps(amplicon, chrom, ext_start, ext_end)
+                    and amplicon.fwd_mismatch
+                    <= allowed_mismatches.get(amplicon.fwd_primer, 0)
+                    and amplicon.rev_mismatch
+                    <= allowed_mismatches.get(amplicon.rev_primer, 0)):''',
+)
+
+replace_once(
+    "primerblast_oss/assay.py",
+    '''def analyze_pair(pair, per_db: Sequence[Dict], design_db: str,
+                 template: Optional[Template], variants: Sequence,
+                 caps_info: Optional[Dict], gel_min_gap: int = 50,
+                 dimer_params=None) -> Dict:''',
+    '''def analyze_pair(pair, per_db: Sequence[Dict], design_db: str,
+                 template: Optional[Template], variants: Sequence,
+                 caps_info: Optional[Dict], gel_min_gap: int = 50,
+                 dimer_params=None,
+                 expected_primer_mismatches: Optional[Mapping[str, int]] = None) -> Dict:''',
+)
+
+replace_once(
+    "primerblast_oss/assay.py",
+    '''            pair=pair,
+            gel_min_gap=gel_min_gap,
+        )''',
+    '''            pair=pair,
+            gel_min_gap=gel_min_gap,
+            expected_primer_mismatches=expected_primer_mismatches,
+        )''',
+)
+
+replace_once(
+    "primerblast_oss/assay.py",
+    '''    overall_completeness = combine_search_completeness([
+        view.get("search_completeness", SEARCH_COMPLETE) for view in per_db_views
+    ])
+
+    per_db_products = []''',
+    '''    overall_completeness = combine_search_completeness([
+        view.get("search_completeness", SEARCH_COMPLETE) for view in per_db_views
+    ])
+    db_specific_values = [view.get("specific") for view in per_db_views]
+    if any(value is False for value in db_specific_values):
+        specific_all_db = False
+        specificity_status_all_db = "non_specific"
+    elif any(value is None for value in db_specific_values):
+        specific_all_db = None
+        specificity_status_all_db = "indeterminate"
+    elif db_specific_values and all(value is True for value in db_specific_values):
+        specific_all_db = True
+        specificity_status_all_db = "specific"
+    else:
+        specific_all_db = False
+        specificity_status_all_db = "non_specific"
+
+    per_db_products = []''',
+)
+
+replace_once(
+    "primerblast_oss/assay.py",
+    '''        "specific": design_res.get("specific"),
+        "specific_observed": design_res.get("specific_observed"),
+        "specificity_status": design_res.get("specificity_status"),''',
+    '''        "specific": design_res.get("specific"),
+        "specific_observed": design_res.get("specific_observed"),
+        "specificity_status": design_res.get("specificity_status"),
+        "specific_all_db": specific_all_db,
+        "specificity_status_all_db": specificity_status_all_db,''',
+)
+
+
+# ---------------------------------------------------------------------------
+# dCAPS: carry the intentional mismatch through generic and anchored checks,
+# and require every database to support the final order recommendation.
+# ---------------------------------------------------------------------------
+replace_once(
+    "primerblast_oss/dcaps_workflow.py",
+    '''                thermo_params=thermo_params,
+                thermo_gate=thermo_gate,
+            )''',
+    '''                thermo_params=thermo_params,
+                thermo_gate=thermo_gate,
+                allowed_primer_mismatches={
+                    candidate["primer_role"]: int(candidate["mismatches"])
+                },
+            )''',
+)
+
+replace_once(
+    "primerblast_oss/dcaps_workflow.py",
+    '''            gel_min_gap=specificity.gel_min_gap_bp,
+            dimer_params=dimer_params,
+        )''',
+    '''            gel_min_gap=specificity.gel_min_gap_bp,
+            dimer_params=dimer_params,
+            expected_primer_mismatches={
+                candidate["primer_role"]: int(candidate["mismatches"])
+            },
+        )''',
+)
+
+replace_once(
+    "primerblast_oss/dcaps_workflow.py",
+    '''            and assay_summary.get("specific") is True
+            and assay_summary.get("risk") in ("low", "medium")''',
+    '''            and assay_summary.get("specific_all_db") is True
+            and assay_summary.get("risk") in ("low", "medium")''',
+)
+
+replace_once(
+    "primerblast_oss/dcaps_workflow.py",
+    '''        elif assay_summary.get("specificity_status") == "indeterminate":
+            recommendation_status = "rerun_specificity_exhaustively"
+        elif assay_summary.get("specific") is not True:
+            recommendation_status = "not_specific"''',
+    '''        elif assay_summary.get("specificity_status_all_db") == "indeterminate":
+            recommendation_status = "rerun_specificity_exhaustively"
+        elif assay_summary.get("specific_all_db") is not True:
+            recommendation_status = "not_specific_in_all_databases"''',
+)
+
+
+# ---------------------------------------------------------------------------
+# outputs.py: restore the historical first 20 CSV columns and append new fields.
+# ---------------------------------------------------------------------------
+regex_once(
+    "primerblast_oss/outputs.py",
+    r"_CSV_COLUMNS = \[\n.*?\n\]\n\n\ndef pairs_to_csv\(pairs: List\[dict\]\) -> str:\n.*?\n    return buffer.getvalue\(\)\n",
+    '''_CSV_COLUMNS = [
+    # Historical columns remain in their original order for compatibility.
+    "name", "forward", "reverse", "product_size",
+    "tm_f", "tm_r", "tm_diff", "gc_f", "gc_r",
+    "n_off_target", "n_ff", "n_rr", "n_fr_offtarget",
+    "tp5_mismatch_min", "snp_in_primer", "conserved_refs",
+    "caps_enzyme", "gel_distinguishable", "cross_dimer_dg", "risk",
+    # New fields are append-only.
+    "marker_type", "enzyme", "engineered_role", "engineered_mismatches",
+    "specificity_status", "specificity_status_all_db",
+    "search_completeness", "variant_in_primer",
+]
+
+
+def pairs_to_csv(pairs: List[dict]) -> str:
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, lineterminator="\\n")
+    writer.writerow(_CSV_COLUMNS)
+    for pair in pairs:
+        orderable = _orderable_pair(pair)
+        conserved = pair.get("conserved_refs", [])
+        conserved_text = (
+            ";".join(str(value) for value in conserved)
+            if isinstance(conserved, (list, tuple)) else str(conserved)
+        )
+        variant_flag = pair.get(
+            "variant_in_primer", pair.get("snp_in_primer"))
+        writer.writerow([
+            orderable["name"], orderable["forward"], orderable["reverse"],
+            _num(orderable["product_size"]), _num(orderable["tm_f"]),
+            _num(orderable["tm_r"]), _tm_diff(orderable),
+            _num(orderable["gc_f"]), _num(orderable["gc_r"]),
+            _num(pair.get("n_off_target")), _num(pair.get("n_ff")),
+            _num(pair.get("n_rr")), _num(pair.get("n_fr_offtarget")),
+            _num(pair.get("tp5_mismatch_min")),
+            _bool_str(pair.get("snp_in_primer", variant_flag)),
+            conserved_text,
+            orderable["enzyme"] or pair.get("caps_enzyme"),
+            _bool_str(pair.get("gel_distinguishable")),
+            _num((pair.get("dimers") or {}).get("cross_dimer_dg")),
+            pair.get("risk"), orderable["marker_type"], orderable["enzyme"],
+            orderable["engineered_role"], orderable["engineered_mismatches"],
+            pair.get("specificity_status"),
+            pair.get("specificity_status_all_db"),
+            pair.get("search_completeness"), _bool_str(variant_flag),
+        ])
+    return buffer.getvalue()
+''',
+)
+
+
+# ---------------------------------------------------------------------------
+# Regression tests for all post-integration findings.
+# ---------------------------------------------------------------------------
+Path("tests/test_post_integration_audit.py").write_text(r'''from types import SimpleNamespace
+
+from primerblast_oss.assay import reclassify_by_anchor
+from primerblast_oss.cli import _thermo_setup, build_parser
+from primerblast_oss.design import PrimerPair
+from primerblast_oss.outputs import pairs_to_csv
+from primerblast_oss.regions import GenomicRegion, Template
+from primerblast_oss.specificity import (
+    Amplicon, PrimerHitStats, PrimingSite, SpecParams,
+    annotate_thermo, pair_specificity,
+)
+
+
+def _template():
+    return Template(
+        id="t", seq="A" * 500,
+        region=GenomicRegion("chr1", 1000, 1499, "+", "t"),
+        ext_start=1000, ext_end=1499,
+        anchor_coord=1000, anchor_strand="+",
+    )
+
+
+def _pair():
+    return PrimerPair(
+        index=0, template_id="t", forward="A" * 20, reverse="T" * 20,
+        left_start=100, left_len=20, right_start=299, right_len=20,
+        product_size=200, tm_f=60.0, tm_r=60.0, gc_f=0.0, gc_r=0.0,
+    )
+
+
+def test_anchored_dcaps_allows_expected_intentional_mismatch():
+    amp = Amplicon("chr1", 1100, 1299, 200, "F", "R", 1, 0)
+    result = reclassify_by_anchor(
+        {"db": "db", "on_target": [], "off_target": [amp],
+         "search_completeness": "complete"},
+        template=_template(), pair=_pair(),
+        expected_primer_mismatches={"F": 1},
+    )
+    assert result["intended_status"] == "unique"
+    assert result["specific"] is True
+    assert result["on_target"] == [amp]
+
+
+def test_pair_specificity_accepts_configured_engineered_mismatch():
+    import primerblast_oss.specificity as specificity
+
+    sites = [
+        PrimingSite("F", "chr1", "+", 119, 1, 0, plen=20),
+        PrimingSite("R", "chr1", "-", 280, 0, 0, plen=20),
+    ]
+    stats = {
+        "F": PrimerHitStats("F", 1, 1, 1, False, False),
+        "R": PrimerHitStats("R", 1, 1, 1, False, False),
+    }
+    old_detect = specificity._detect_blastn
+    old_screen = specificity.screen_primers_with_stats
+    try:
+        specificity._detect_blastn = lambda value: "blastn"
+        specificity.screen_primers_with_stats = lambda *args: (sites, stats)
+        result = pair_specificity(
+            "A" * 20, "T" * 20, "db", designed_size=200,
+            sp=SpecParams(min_product=40, max_product=1000),
+            allowed_primer_mismatches={"F": 1},
+        )
+    finally:
+        specificity._detect_blastn = old_detect
+        specificity.screen_primers_with_stats = old_screen
+    assert result["specific"] is True
+    assert result["n_on_target"] == 1
+
+
+def test_no_thermo_sentinel_never_calls_evaluator():
+    import primerblast_oss.thermo as thermo
+
+    class Genome:
+        fasta = "x.fa"
+        def fetch(self, *args):
+            return "A" * 20
+
+    old_available = thermo.available
+    old_evaluate = thermo.evaluate
+    try:
+        thermo.available = lambda: True
+        thermo.evaluate = lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("evaluator must not be called"))
+        kept, viable, stats = annotate_thermo(
+            [PrimingSite("F", "chr1", "+", 20, 0, 0, plen=20)],
+            {"F": "A" * 20}, Genome(), tp=False, gate=True)
+    finally:
+        thermo.available = old_available
+        thermo.evaluate = old_evaluate
+    assert len(kept) == 1 and viable == {}
+    assert sum(stats["attempted_per_primer"].values()) == 0
+
+
+def test_unresolved_contig_is_reported_not_silently_evaluated():
+    import primerblast_oss.thermo as thermo
+
+    class MissingGenome:
+        fasta = "missing.fa"
+        def fetch(self, *args):
+            raise KeyError("missing contig")
+
+    old_available = thermo.available
+    try:
+        thermo.available = lambda: True
+        kept, viable, stats = annotate_thermo(
+            [PrimingSite("F", "chr1", "+", 20, 0, 0, plen=20)],
+            {"F": "A" * 20}, MissingGenome(), tp=None, gate=True)
+    finally:
+        thermo.available = old_available
+    assert len(kept) == 1 and viable == {}
+    assert stats["unresolved_per_primer"] == {"F": 1}
+    assert stats["evaluated_per_primer"] == {}
+
+
+def test_cli_no_thermo_uses_explicit_disable_sentinel():
+    parser = build_parser()
+    args = parser.parse_args([
+        "check", "--forward", "A" * 20, "--db", "db", "--no-thermo"])
+    genomes, params, gate = _thermo_setup(args)
+    assert genomes == {}
+    assert params is False and gate is True
+
+
+def test_design_database_fasta_conflict_is_rejected(tmp_path):
+    design = tmp_path / "design.fa"
+    other = tmp_path / "other.fa"
+    design.write_text(">chr1\nAAAA\n")
+    other.write_text(">chr1\nCCCC\n")
+    fake_genome = SimpleNamespace(fasta=str(design))
+    args = SimpleNamespace(
+        db=["db"], db_genome=["db=%s" % other], genome_fasta=None,
+        no_thermo=True, min_anneal_tm=40.0, max_3p_dg=-5.0,
+        no_thermo_gate=False,
+    )
+    try:
+        _thermo_setup(args, design_genome=fake_genome)
+    except ValueError as error:
+        assert "must match --genome" in str(error)
+    else:
+        raise AssertionError("conflicting first-DB FASTA should be rejected")
+
+
+def test_csv_keeps_historical_columns_and_appends_new_fields():
+    text = pairs_to_csv([{
+        "name": "P1", "forward": "AAAA", "reverse": "TTTT",
+        "product_size": 100, "tm_f": 60.0, "tm_r": 60.0,
+        "gc_f": 0.0, "gc_r": 0.0, "tp5_mismatch_min": 1,
+        "snp_in_primer": True, "caps_enzyme": "EcoRI",
+        "dimers": {"cross_dimer_dg": -2.0}, "risk": "medium",
+    }])
+    header = text.splitlines()[0].split(",")
+    assert header[:20] == [
+        "name", "forward", "reverse", "product_size", "tm_f", "tm_r",
+        "tm_diff", "gc_f", "gc_r", "n_off_target", "n_ff", "n_rr",
+        "n_fr_offtarget", "tp5_mismatch_min", "snp_in_primer",
+        "conserved_refs", "caps_enzyme", "gel_distinguishable",
+        "cross_dimer_dg", "risk",
+    ]
+    assert "marker_type" in header
+    assert "specificity_status_all_db" in header
+''')
