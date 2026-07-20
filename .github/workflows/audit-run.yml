@@ -1,0 +1,53 @@
+name: Post-integration audit
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  audit-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.head_ref }}
+      - name: Extract and apply audit patch
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import textwrap
+
+          workflow = Path('.github/workflows/ci.yml').read_text().splitlines()
+          start = next(i for i, line in enumerate(workflow)
+                       if "python - <<'PY'" in line) + 1
+          end = next(i for i in range(start, len(workflow))
+                     if workflow[i].strip() == 'PY')
+          script = textwrap.dedent('\n'.join(workflow[start:end])) + '\n'
+          Path('/tmp/post_integration_audit.py').write_text(script)
+          PY
+          python /tmp/post_integration_audit.py
+      - name: Commit audit fixes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add primerblast_oss tests
+          if ! git diff --cached --quiet; then
+            git commit -m "fix: address post-integration correctness audit"
+            git push origin HEAD:${{ github.head_ref }}
+          fi
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,thermo]"
+      - name: Test full suite
+        run: pytest -q
+      - name: Module self-tests
+        run: |
+          python primerblast_oss/caps.py
+          python primerblast_oss/outputs.py
+          python primerblast_oss/bed.py
+          python primerblast_oss/vcf.py
