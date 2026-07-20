@@ -160,6 +160,8 @@ def test_end_to_end_dcaps_rechecks_modified_pair_against_each_database():
         assay.analyze_pair = lambda *args, **kwargs: {
             "specific": True,
             "specificity_status": "specific",
+            "specific_all_db": True,
+            "specificity_status_all_db": "specific",
             "risk": "low",
             "search_complete_all_db": True,
         }
