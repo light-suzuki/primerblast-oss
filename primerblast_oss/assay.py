@@ -400,6 +400,7 @@ def analyze_pair(pair, per_db: Sequence[Dict], design_db: str,
         "conserved_refs": conservation["conserved_in"],
         "conservation": conservation,
         "caps_enzyme": (caps_info or {}).get("best_enzyme"),
+        "marker_type": (caps_info or {}).get("best_marker_type"),
         "caps": caps_info,
         "gel_distinguishable": design_res.get("gel_distinguishable", True),
         "dimers": ({
@@ -422,33 +423,94 @@ def analyze_pair(pair, per_db: Sequence[Dict], design_db: str,
 
 def build_caps(template: Template, pair, snp_local_index: int,
                alt_base: str, gel_min_gap: int = 25) -> Optional[Dict]:
-    from .caps import caps_scan, enzymes_gained_lost
+    """Build exact natural-CAPS digest results for the designed amplicon."""
+    from .caps import caps_scan, enzymes_gained_lost, result_to_dict
+
     sequence = template.seq
     low = pair.left_start
     high = pair.right_start
     if not (low <= snp_local_index <= high):
         return None
-    amplicon_ref = sequence[low:high + 1]
+    amplicon_ref = sequence[low:high + 1].upper()
     relative_index = snp_local_index - low
+    ref_base = amplicon_ref[relative_index]
     amplicon_alt = (
         amplicon_ref[:relative_index]
         + alt_base.upper()
         + amplicon_ref[relative_index + 1:]
     )
-    results = caps_scan(amplicon_ref, amplicon_alt, gel_min_gap=gel_min_gap)
+    results = caps_scan(
+        amplicon_ref, amplicon_alt, gel_min_gap=gel_min_gap)
     gained_lost = enzymes_gained_lost(amplicon_ref, amplicon_alt)
-    best = next((result for result in results if result.distinguishable), None)
+    best = next(
+        (result for result in results if result.distinguishable), None)
     return {
+        "best_marker_type": "CAPS" if best else None,
         "best_enzyme": best.enzyme if best else None,
         "best_distinguishable": bool(best),
         "allele_ref_fragments": best.allele_a_fragments if best else None,
         "allele_alt_fragments": best.allele_b_fragments if best else None,
         "min_gel_gap": best.min_gel_gap if best else None,
+        "best_result": result_to_dict(best) if best else None,
+        "natural_candidates": [result_to_dict(result) for result in results],
         "gained": gained_lost.get("gained", []),
         "lost": gained_lost.get("lost", []),
         "n_candidate_enzymes": sum(
             result.distinguishable for result in results),
+        "snp_local_index": snp_local_index,
+        "snp_amplicon_index": relative_index,
+        "ref_base": ref_base,
+        "alt_base": alt_base.upper(),
+        "dcaps": None,
     }
+
+
+def _attach_dcaps(
+    caps_info: Dict,
+    template: Template,
+    pair,
+    snp_local: int,
+    alt_base: str,
+    databases: Sequence[str],
+    spec_params: SpecParams,
+    blastn_bin: Optional[str],
+    genomes_by_db: Mapping[str, object],
+    thermo_params,
+    thermo_gate: bool,
+    dimer_params,
+    variants: Sequence,
+    max_candidates: int,
+) -> Dict:
+    from .dcaps_workflow import evaluate_dcaps_candidates
+
+    dcaps = evaluate_dcaps_candidates(
+        template,
+        pair,
+        snp_local,
+        alt_base,
+        databases,
+        spec_params=spec_params,
+        blastn_bin=blastn_bin,
+        genomes_by_db=genomes_by_db,
+        thermo_params=thermo_params,
+        thermo_gate=thermo_gate,
+        dimer_params=dimer_params,
+        variants=variants,
+        max_candidates_to_screen=max_candidates,
+    )
+    caps_info["dcaps"] = dcaps
+    best = dcaps.get("best")
+    if best and best.get("orderable"):
+        caps_info["best_marker_type"] = "dCAPS"
+        caps_info["best_enzyme"] = best["enzyme"]
+        caps_info["best_distinguishable"] = True
+        caps_info["allele_ref_fragments"] = best["digest"][
+            "allele_a_fragments"]
+        caps_info["allele_alt_fragments"] = best["digest"][
+            "allele_b_fragments"]
+        caps_info["min_gel_gap"] = best["digest"]["min_gel_gap"]
+        caps_info["best_result"] = best
+    return caps_info
 
 
 def run_assay(
@@ -466,6 +528,8 @@ def run_assay(
     thermo_params=None,
     thermo_gate: bool = True,
     dimer_params=None,
+    dcaps_pairs_to_screen: int = 3,
+    dcaps_candidates_per_pair: int = 6,
 ) -> Dict:
     template = extract_template(genome, region, flank=flank)
     design_db = databases[0]
@@ -473,6 +537,7 @@ def run_assay(
     associated_genomes.setdefault(design_db, genome)
 
     design_params = design_params or DesignParams()
+    specificity = spec_params or SpecParams()
     if caps_snp is not None:
         snp_local = _genomic_to_local(template, caps_snp["genomic_pos"])
         if snp_local is not None:
@@ -484,24 +549,54 @@ def run_assay(
         template.seq,
         databases,
         design_params=design_params,
-        spec_params=spec_params,
+        spec_params=specificity,
         primer3_bin=primer3_bin,
         blastn_bin=blastn_bin,
         genomes_by_db=associated_genomes,
         thermo_params=thermo_params,
         thermo_gate=thermo_gate,
+        dimer_params=dimer_params,
     )
 
     variants = variants or []
-    gel_min_gap = spec_params.gel_min_gap_bp if spec_params else 50
+    gel_min_gap = specificity.gel_min_gap_bp
     pair_dicts: List[Dict] = []
-    for pair in result.pairs:
+    for pair_index, pair in enumerate(result.pairs):
         caps_info = None
         if caps_snp is not None:
-            snp_local = _genomic_to_local(template, caps_snp["genomic_pos"])
+            snp_local = _genomic_to_local(
+                template, caps_snp["genomic_pos"])
             if snp_local is not None:
                 caps_info = build_caps(
                     template, pair, snp_local, caps_snp["alt"])
+                if (caps_info is not None
+                        and not caps_info.get("best_distinguishable")):
+                    if pair_index < dcaps_pairs_to_screen:
+                        caps_info = _attach_dcaps(
+                            caps_info,
+                            template,
+                            pair,
+                            snp_local,
+                            caps_snp["alt"],
+                            databases,
+                            specificity,
+                            blastn_bin,
+                            associated_genomes,
+                            thermo_params,
+                            thermo_gate,
+                            dimer_params,
+                            variants,
+                            dcaps_candidates_per_pair,
+                        )
+                    else:
+                        caps_info["dcaps"] = {
+                            "status": "skipped_pair_limit",
+                            "reason": (
+                                "dCAPS specificity screening is limited to the "
+                                "top %s parent primer pairs" % dcaps_pairs_to_screen),
+                            "candidates": [],
+                            "n_orderable": 0,
+                        }
         pair_dicts.append(analyze_pair(
             pair,
             pair.specificity["per_db"],
@@ -516,6 +611,7 @@ def run_assay(
     risk_order = {"low": 0, "medium": 1, "high": 2}
     pair_dicts.sort(key=lambda pair_dict: (
         risk_order.get(pair_dict["risk"], 3),
+        pair_dict.get("marker_type") is None if caps_snp is not None else False,
         -pair_dict.get("risk_score", 0),
     ))
     return {
@@ -533,6 +629,15 @@ def run_assay(
         "thermo_genomes": {
             database: getattr(associated_genomes.get(database), "fasta", None)
             for database in databases
+        },
+        "caps_metadata": {
+            "cut_coordinates": "top and bottom strand boundaries",
+            "default_recommendation_policy": (
+                "verified cleavage metadata and ordinary-PCR-compatible substrate"),
+            "dcaps_pairs_screened": min(
+                dcaps_pairs_to_screen, len(result.pairs)) if caps_snp else 0,
+            "dcaps_candidates_per_pair": (
+                dcaps_candidates_per_pair if caps_snp else 0),
         },
         "n_pairs": len(pair_dicts),
         "pairs": pair_dicts,
