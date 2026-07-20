@@ -19,14 +19,17 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
-          import textwrap
 
           workflow = Path('.github/workflows/ci.yml').read_text().splitlines()
           start = next(i for i, line in enumerate(workflow)
                        if "python - <<'PY'" in line) + 1
           end = next(i for i in range(start, len(workflow))
                      if workflow[i].strip() == 'PY')
-          script = textwrap.dedent('\n'.join(workflow[start:end])) + '\n'
+          lines = workflow[start:end]
+          script = '\n'.join(
+              line[10:] if line.startswith('          ') else line
+              for line in lines
+          ) + '\n'
           Path('/tmp/post_integration_audit.py').write_text(script)
           PY
       - name: Apply audit patch
