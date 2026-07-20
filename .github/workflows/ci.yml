@@ -6,39 +6,8 @@ on:
   pull_request:
     branches: [main]
 
-permissions:
-  contents: write
-  pull-requests: write
-
 jobs:
-  autofix:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ github.head_ref }}
-      - name: Fix mixed percent-format version string
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          path = Path('primerblast_oss/cli.py')
-          text = path.read_text()
-          old = 'version="%(prog)s %s" % __version__'
-          new = 'version="%(prog)s " + __version__'
-          if old in text:
-              path.write_text(text.replace(old, new))
-          PY
-          if ! git diff --quiet; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add primerblast_oss/cli.py
-            git commit -m "fix: construct CLI version string safely"
-            git push origin HEAD:${{ github.head_ref }}
-          fi
-
   test:
-    needs: autofix
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -46,8 +15,6 @@ jobs:
         python-version: ["3.8", "3.10", "3.12"]
     steps:
       - uses: actions/checkout@v7
-        with:
-          ref: ${{ github.head_ref }}
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v6
         with:
@@ -57,23 +24,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
       - name: Unit tests (no external tools needed)
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set +e
-          pytest -q --tb=short > /tmp/pytest.log 2>&1
-          status=$?
-          cat /tmp/pytest.log
-          if [ "$status" -ne 0 ] && [ "${{ matrix.python-version }}" = "3.12" ]; then
-            {
-              echo '### Temporary CI diagnostic — Python 3.12'
-              echo '```text'
-              tail -120 /tmp/pytest.log
-              echo '```'
-            } > /tmp/pytest-comment.md
-            gh pr comment "${{ github.event.pull_request.number }}" --body-file /tmp/pytest-comment.md
-          fi
-          exit "$status"
+        run: pytest -q
       - name: Module self-tests
         run: |
           python primerblast_oss/caps.py
@@ -82,12 +33,9 @@ jobs:
           python primerblast_oss/vcf.py
 
   thermo-test:
-    needs: autofix
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-        with:
-          ref: ${{ github.head_ref }}
       - name: Set up Python 3.12
         uses: actions/setup-python@v6
         with:
@@ -97,20 +45,4 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev,thermo]"
       - name: Run thermodynamics-enabled tests
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set +e
-          pytest -q --tb=short > /tmp/pytest-thermo.log 2>&1
-          status=$?
-          cat /tmp/pytest-thermo.log
-          if [ "$status" -ne 0 ]; then
-            {
-              echo '### Temporary CI diagnostic — thermo'
-              echo '```text'
-              tail -120 /tmp/pytest-thermo.log
-              echo '```'
-            } > /tmp/pytest-thermo-comment.md
-            gh pr comment "${{ github.event.pull_request.number }}" --body-file /tmp/pytest-thermo-comment.md
-          fi
-          exit "$status"
+        run: pytest -q
