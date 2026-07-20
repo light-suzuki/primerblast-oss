@@ -120,8 +120,7 @@ _CSV_COLUMNS = [
 
 def pairs_to_csv(pairs: List[dict]) -> str:
     buffer = io.StringIO()
-    writer = csv.writer(buffer, lineterminator="
-")
+    writer = csv.writer(buffer, lineterminator="\n")
     writer.writerow(_CSV_COLUMNS)
     for pair in pairs:
         orderable = _orderable_pair(pair)
