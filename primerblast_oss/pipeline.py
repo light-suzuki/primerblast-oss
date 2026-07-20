@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Sequence
+from typing import Dict, List, Mapping, Optional, Sequence
 
 from .design import DesignParams, PrimerPair, design_primers
 from .specificity import (
@@ -21,6 +21,43 @@ class PipelineResult:
     primer3_explain: str
     databases: List[str]
     params: Dict = field(default_factory=dict)
+
+
+def resolve_genome_for_database(database: str, databases: Sequence[str],
+                                genome=None,
+                                genomes_by_db: Optional[Mapping[str, object]] = None):
+    """Return only a genome explicitly safe for ``database``.
+
+    ``genomes_by_db`` always wins. The legacy single ``genome`` argument is used
+    for a single database, or for the first/design database only. It is never
+    silently reused for secondary assemblies.
+    """
+    if genomes_by_db and database in genomes_by_db:
+        return genomes_by_db[database], "explicit_db_mapping"
+    if genome is not None and databases:
+        if len(databases) == 1 or database == databases[0]:
+            return genome, "legacy_design_database"
+    return None, "unassociated"
+
+
+def thermo_metadata(genome, thermo_params, thermo_gate: bool,
+                    association: str) -> Dict:
+    """Describe whether and against which FASTA thermodynamics were evaluated."""
+    from . import thermo as thermo_module
+    if thermo_params is None:
+        status = "unavailable" if not thermo_module.available() else "disabled"
+    elif genome is None:
+        status = "skipped_no_associated_genome"
+    elif not thermo_module.available():
+        status = "unavailable"
+    else:
+        status = "evaluated_gated" if thermo_gate else "evaluated_annotation_only"
+    return {
+        "thermo_status": status,
+        "thermo_evaluated": status.startswith("evaluated_"),
+        "thermo_genome_fasta": getattr(genome, "fasta", None) if genome is not None else None,
+        "thermo_genome_association": association,
+    }
 
 
 def _score_pair(pair: PrimerPair, per_db: Sequence[Dict],
@@ -81,9 +118,6 @@ def _score_pair(pair: PrimerPair, per_db: Sequence[Dict],
         score -= 12.0
     score = max(0.0, min(100.0, score))
 
-    # I is an explicit non-orderable/needs-rerun rank. It avoids disguising an
-    # incomplete clean search as B while still sorting ahead of genuinely poor
-    # products by score when users inspect the full output.
     if specificity_status == "indeterminate":
         rank = "I"
     elif dimer_concern:
@@ -135,6 +169,7 @@ def run_pipeline(
     blastn_bin: Optional[str] = None,
     size_tolerance: int = 10,
     genome=None,
+    genomes_by_db: Optional[Mapping[str, object]] = None,
     thermo_params=None,
     thermo_gate: bool = True,
     dimer_params=None,
@@ -147,7 +182,9 @@ def run_pipeline(
     for pair in pairs:
         per_db: List[Dict] = []
         for database in databases:
-            per_db.append(pair_specificity(
+            database_genome, association = resolve_genome_for_database(
+                database, databases, genome=genome, genomes_by_db=genomes_by_db)
+            result = pair_specificity(
                 pair.forward,
                 pair.reverse,
                 database,
@@ -155,10 +192,13 @@ def run_pipeline(
                 sp=spec_params,
                 blastn_bin=blastn_bin,
                 size_tolerance=size_tolerance,
-                genome=genome,
+                genome=database_genome,
                 thermo_params=thermo_params,
                 thermo_gate=thermo_gate,
-            ))
+            )
+            result.update(thermo_metadata(
+                database_genome, thermo_params, thermo_gate, association))
+            per_db.append(result)
         dimer = (
             dimer_module.analyze_pair(pair.forward, pair.reverse, dimer_params)
             if dimer_module.available() else None
@@ -183,5 +223,11 @@ def run_pipeline(
             "design": design_params.__dict__,
             "specificity": spec_params.__dict__,
             "size_tolerance": size_tolerance,
+            "thermo_genomes": {
+                database: getattr(resolve_genome_for_database(
+                    database, databases, genome=genome,
+                    genomes_by_db=genomes_by_db)[0], "fasta", None)
+                for database in databases
+            },
         },
     )
