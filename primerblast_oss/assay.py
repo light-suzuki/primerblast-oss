@@ -1,7 +1,7 @@
 """High-level breeding assay design pipeline."""
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Sequence
+from typing import Dict, List, Mapping, Optional, Sequence
 
 from .design import DesignParams
 from .specificity import (
@@ -48,7 +48,6 @@ def _amp_dict(amplicon) -> Dict:
 
 
 def _overlaps(amplicon, chrom: str, low: int, high: int) -> bool:
-    """Legacy interval-overlap helper retained for library compatibility."""
     if amplicon.subject != chrom:
         return False
     amplicon_low = min(amplicon.start, amplicon.end)
@@ -57,7 +56,6 @@ def _overlaps(amplicon, chrom: str, low: int, high: int) -> bool:
 
 
 def expected_amplicon_from_design(pair, template: Template) -> Dict:
-    """Map Primer3 left/right 5' coordinates to the design genome."""
     left_5p = template.to_genomic(pair.left_start)
     right_5p = template.to_genomic(pair.right_start)
     if template.anchor_strand == "+":
@@ -109,12 +107,6 @@ def reclassify_by_anchor(
     coordinate_tolerance: int = 0,
     size_tolerance: int = 0,
 ) -> Dict:
-    """Reclassify the design-reference products using a genomic anchor.
-
-    Exactly one coordinate/orientation match is required in the normal assay
-    path. A clean observed product remains indeterminate when BLAST completeness
-    is not ``complete``.
-    """
     all_products = (
         list(design_res.get("on_target", []))
         + list(design_res.get("off_target", []))
@@ -222,7 +214,6 @@ def analyze_pair(pair, per_db: Sequence[Dict], design_db: str,
                  template: Optional[Template], variants: Sequence,
                  caps_info: Optional[Dict], gel_min_gap: int = 50,
                  dimer_params=None) -> Dict:
-    """Build a full experimenter-facing summary for one designed pair."""
     len_f, len_r = len(pair.forward), len(pair.reverse)
     design_res = next(
         (result for result in per_db if result["db"] == design_db), per_db[0])
@@ -259,6 +250,11 @@ def analyze_pair(pair, per_db: Sequence[Dict], design_db: str,
                 "primer_search_completeness", {}),
             "completeness_recommendation": view.get(
                 "completeness_recommendation"),
+            "thermo_status": view.get("thermo_status"),
+            "thermo_evaluated": view.get("thermo_evaluated", False),
+            "thermo_genome_fasta": view.get("thermo_genome_fasta"),
+            "thermo_genome_association": view.get(
+                "thermo_genome_association"),
             "intended_status": view.get("intended_status"),
             "expected_amplicon": view.get("expected_amplicon"),
             "gel_distinguishable": view.get("gel_distinguishable", True),
@@ -353,6 +349,12 @@ def analyze_pair(pair, per_db: Sequence[Dict], design_db: str,
     amplicon_variant_dicts = [
         _variant_record_dict(variant) for variant in amplicon_span_variants
     ]
+    thermo_status_by_db = {
+        view["db"]: view.get("thermo_status") for view in per_db_views
+    }
+    thermo_genomes_by_db = {
+        view["db"]: view.get("thermo_genome_fasta") for view in per_db_views
+    }
 
     return {
         "name": "%s_P%s" % (pair.template_id, pair.index + 1),
@@ -378,6 +380,8 @@ def analyze_pair(pair, per_db: Sequence[Dict], design_db: str,
             view["db"] for view in per_db_views
             if view.get("search_completeness", SEARCH_COMPLETE) != SEARCH_COMPLETE
         ],
+        "thermo_status_by_db": thermo_status_by_db,
+        "thermo_genomes_by_db": thermo_genomes_by_db,
         "risk": risk.level,
         "risk_score": risk.score,
         "risk_reasons": risk.reasons,
@@ -458,12 +462,16 @@ def run_assay(
     caps_snp: Optional[Dict] = None,
     primer3_bin: Optional[str] = None,
     blastn_bin: Optional[str] = None,
+    genomes_by_db: Optional[Mapping[str, object]] = None,
     thermo_params=None,
     thermo_gate: bool = True,
     dimer_params=None,
 ) -> Dict:
     template = extract_template(genome, region, flank=flank)
     design_db = databases[0]
+    associated_genomes = dict(genomes_by_db or {})
+    associated_genomes.setdefault(design_db, genome)
+
     design_params = design_params or DesignParams()
     if caps_snp is not None:
         snp_local = _genomic_to_local(template, caps_snp["genomic_pos"])
@@ -479,7 +487,7 @@ def run_assay(
         spec_params=spec_params,
         primer3_bin=primer3_bin,
         blastn_bin=blastn_bin,
-        genome=genome,
+        genomes_by_db=associated_genomes,
         thermo_params=thermo_params,
         thermo_gate=thermo_gate,
     )
@@ -522,6 +530,10 @@ def run_assay(
         },
         "template_len": len(template.seq),
         "databases": list(databases),
+        "thermo_genomes": {
+            database: getattr(associated_genomes.get(database), "fasta", None)
+            for database in databases
+        },
         "n_pairs": len(pair_dicts),
         "pairs": pair_dicts,
     }
