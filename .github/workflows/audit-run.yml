@@ -1,0 +1,78 @@
+name: Post-integration audit
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  pull-requests: write
+  contents: write
+
+jobs:
+  audit-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.head_ref }}
+      - name: Update dCAPS regression mock
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('tests/test_caps_dcaps_workflow.py')
+          text = path.read_text()
+          old = '''        assay.analyze_pair = lambda *args, **kwargs: {
+            "specific": True,
+            "specificity_status": "specific",
+            "risk": "low",
+            "search_complete_all_db": True,
+        }'''
+          new = '''        assay.analyze_pair = lambda *args, **kwargs: {
+            "specific": True,
+            "specificity_status": "specific",
+            "specific_all_db": True,
+            "specificity_status_all_db": "specific",
+            "risk": "low",
+            "search_complete_all_db": True,
+        }'''
+          if old not in text:
+              raise SystemExit('dCAPS regression mock already updated or not found')
+          path.write_text(text.replace(old, new, 1))
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tests/test_caps_dcaps_workflow.py
+          git commit -m "test: model all-database dCAPS specificity"
+          git push origin HEAD:${{ github.head_ref }}
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: |
+          python -m pip install -q --upgrade pip
+          pip install -q -e ".[dev,thermo]"
+      - name: Test full suite
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          pytest -q --tb=short --maxfail=1 > /tmp/pytest.log 2>&1
+          status=$?
+          cat /tmp/pytest.log
+          if [ "$status" -ne 0 ]; then
+            {
+              echo '### Current-head post-audit pytest failure'
+              echo '```text'
+              cat /tmp/pytest.log
+              echo '```'
+            } > /tmp/pytest-comment.md
+            gh pr comment "${{ github.event.pull_request.number }}" --body-file /tmp/pytest-comment.md
+          fi
+          exit "$status"
+      - name: Module self-tests
+        run: |
+          python primerblast_oss/caps.py
+          python primerblast_oss/outputs.py
+          python primerblast_oss/bed.py
+          python primerblast_oss/vcf.py

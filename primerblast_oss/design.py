@@ -24,11 +24,11 @@ class DesignParams:
     opt_tm: float = 60.0
     min_tm: float = 57.0
     max_tm: float = 63.0
-    max_tm_diff: float = 3.0          # PRIMER_PAIR_MAX_DIFF_TM
+    max_tm_diff: float = 3.0
     min_gc: float = 20.0
     max_gc: float = 80.0
     max_poly_x: int = 5
-    max_self_any_th: float = 45.0     # thermodynamic self/cross dimer
+    max_self_any_th: float = 45.0
     max_self_end_th: float = 35.0
     max_hairpin_th: float = 24.0
     salt_monovalent: float = 50.0
@@ -36,7 +36,6 @@ class DesignParams:
     dntp_conc: float = 0.6
     dna_conc: float = 50.0
     num_return: int = 10
-    # optional constraints on the template (0-based, [start, length])
     target: Optional[Tuple[int, int]] = None
     included_region: Optional[Tuple[int, int]] = None
     excluded_regions: Sequence[Tuple[int, int]] = ()
@@ -48,10 +47,9 @@ class PrimerPair:
     template_id: str
     forward: str
     reverse: str
-    # 0-based positions on the template top strand
-    left_start: int       # 5' base of forward primer
+    left_start: int
     left_len: int
-    right_start: int      # 5' base of reverse primer (rightmost top-strand base)
+    right_start: int
     right_len: int
     product_size: int
     tm_f: float
@@ -61,7 +59,6 @@ class PrimerPair:
     self_any_th: float = 0.0
     self_end_th: float = 0.0
     penalty: float = 0.0
-    # populated later by the specificity stage
     specificity: Dict = field(default_factory=dict)
 
     @property
@@ -74,8 +71,44 @@ class PrimerPair:
 
 
 def clean_sequence(seq: str) -> str:
-    """Uppercase and strip anything that is not a canonical base (drops Ns)."""
-    return re.sub(r"[^ACGT]", "", seq.upper())
+    """Normalize a template without changing its biological coordinates.
+
+    Whitespace is FASTA formatting and is removed. Canonical bases are retained;
+    every ambiguity or unsupported non-whitespace symbol is represented by ``N``
+    instead of being deleted. This prevents artificial sequence junctions and
+    keeps Primer3 coordinates aligned with the supplied template.
+    """
+    compact = re.sub(r"\s+", "", seq.upper())
+    return "".join(base if base in "ACGT" else "N" for base in compact)
+
+
+def _ambiguous_regions(seq: str) -> List[Tuple[int, int]]:
+    """Return 0-based ``(start, length)`` runs containing non-ACGT bases."""
+    regions: List[Tuple[int, int]] = []
+    start: Optional[int] = None
+    for i, base in enumerate(seq):
+        if base not in "ACGT":
+            if start is None:
+                start = i
+        elif start is not None:
+            regions.append((start, i - start))
+            start = None
+    if start is not None:
+        regions.append((start, len(seq) - start))
+    return regions
+
+
+def _merge_regions(regions: Sequence[Tuple[int, int]]) -> List[Tuple[int, int]]:
+    """Merge overlapping/adjacent 0-based regions for deterministic Boulder-IO."""
+    spans = sorted((start, start + length) for start, length in regions
+                   if start >= 0 and length > 0)
+    merged: List[List[int]] = []
+    for start, end in spans:
+        if not merged or start > merged[-1][1]:
+            merged.append([start, end])
+        else:
+            merged[-1][1] = max(merged[-1][1], end)
+    return [(start, end - start) for start, end in merged]
 
 
 def read_fasta(path: str) -> List[Tuple[str, str]]:
@@ -141,8 +174,12 @@ def _build_boulder(template_id: str, seq: str, p: DesignParams) -> str:
         lines.append(f"SEQUENCE_INCLUDED_REGION={p.included_region[0]},{p.included_region[1]}")
     if p.target:
         lines.append(f"SEQUENCE_TARGET={p.target[0]},{p.target[1]}")
-    if p.excluded_regions:
-        excl = " ".join(f"{s},{l}" for s, l in p.excluded_regions)
+
+    # Explicitly prevent primers from landing on assembly gaps/masked sequence.
+    # These regions are added without changing the coordinate system.
+    excluded = _merge_regions([*p.excluded_regions, *_ambiguous_regions(seq)])
+    if excluded:
+        excl = " ".join(f"{start},{length}" for start, length in excluded)
         lines.append(f"SEQUENCE_EXCLUDED_REGION={excl}")
     lines.append("=")
     return "\n".join(lines) + "\n"
@@ -178,7 +215,8 @@ def _parse_boulder(out: str, template_id: str) -> Tuple[List[PrimerPair], str]:
                 self_end_th=float(kv.get(f"PRIMER_PAIR_{i}_COMPL_END_TH", 0.0)),
                 penalty=float(kv.get(f"PRIMER_PAIR_{i}_PENALTY", 0.0)),
             )
-            pairs.append(pair)
+            if set(pair.forward) <= set("ACGT") and set(pair.reverse) <= set("ACGT"):
+                pairs.append(pair)
         except KeyError:
             continue
     explain = kv.get("PRIMER_PAIR_EXPLAIN", "")
@@ -191,7 +229,7 @@ def design_primers(
     params: Optional[DesignParams] = None,
     primer3_bin: Optional[str] = None,
 ) -> Tuple[List[PrimerPair], str]:
-    """Design primer pairs for a template. Returns (pairs, primer3_explain)."""
+    """Design primer pairs for a template. Returns ``(pairs, Primer3 explain)``."""
     params = params or DesignParams()
     seq = clean_sequence(sequence)
     if len(seq) < params.min_size * 2:

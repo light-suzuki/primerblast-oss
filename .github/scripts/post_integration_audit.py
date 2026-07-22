@@ -1,59 +1,55 @@
-name: CI
+from pathlib import Path
+import re
 
-on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
 
-permissions:
-  contents: write
-  pull-requests: write
+def replace_once(path: str, old: str, new: str) -> None:
+    file_path = Path(path)
+    text = file_path.read_text()
+    count = text.count(old)
+    if count != 1:
+        raise SystemExit(
+            f"{path}: expected one exact match, found {count}: {old[:100]!r}"
+        )
+    file_path.write_text(text.replace(old, new, 1))
 
-jobs:
-  auditfix:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ github.head_ref }}
-      - name: Apply audited correctness fixes
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          import re
 
-          def replace_once(path, old, new):
-              p = Path(path)
-              text = p.read_text()
-              count = text.count(old)
-              if count != 1:
-                  raise SystemExit(f"{path}: expected one exact match, found {count}: {old[:80]!r}")
-              p.write_text(text.replace(old, new, 1))
+def regex_once(path: str, pattern: str, replacement: str) -> None:
+    file_path = Path(path)
+    text = file_path.read_text()
+    updated, count = re.subn(pattern, replacement, text, count=1, flags=re.S | re.M)
+    if count != 1:
+        raise SystemExit(
+            f"{path}: expected one regex match, found {count}: {pattern[:100]!r}"
+        )
+    file_path.write_text(updated)
 
-          def regex_once(path, pattern, replacement):
-              p = Path(path)
-              text = p.read_text()
-              new, count = re.subn(pattern, replacement, text, count=1, flags=re.S | re.M)
-              if count != 1:
-                  raise SystemExit(f"{path}: expected one regex match, found {count}: {pattern[:80]!r}")
-              p.write_text(new)
 
-          # ------------------------------------------------------------------
-          # specificity.py: explicit thermo-disable sentinel, site-resolution
-          # accounting, and intentional mismatch allowances for dCAPS.
-          # ------------------------------------------------------------------
-          replace_once(
-              'primerblast_oss/specificity.py',
-              'from typing import Dict, List, Optional, Sequence, Tuple',
-              'from typing import Dict, List, Mapping, Optional, Sequence, Tuple',
-          )
-          regex_once(
-              'primerblast_oss/specificity.py',
-              r'def annotate_thermo\(sites: Sequence\[PrimingSite\], primers: Dict\[str, str\],\n'
-              r'\s+genome, tp=None, gate: bool = True\):\n.*?\n\s+return kept, viable\n',
-              '''def annotate_thermo(sites: Sequence[PrimingSite], primers: Dict[str, str],
+def regex_count(path: str, pattern: str, replacement: str, expected: int) -> None:
+    file_path = Path(path)
+    text = file_path.read_text()
+    updated, count = re.subn(pattern, replacement, text, flags=re.S | re.M)
+    if count != expected:
+        raise SystemExit(
+            f"{path}: expected {expected} regex matches, found {count}: {pattern[:100]!r}"
+        )
+    file_path.write_text(updated)
+
+
+# ---------------------------------------------------------------------------
+# specificity.py: explicit thermo disable, actual site-level coverage, and
+# intentional mismatch allowances for engineered dCAPS primers.
+# ---------------------------------------------------------------------------
+replace_once(
+    "primerblast_oss/specificity.py",
+    "from typing import Dict, List, Optional, Sequence, Tuple",
+    "from typing import Dict, List, Mapping, Optional, Sequence, Tuple",
+)
+
+regex_once(
+    "primerblast_oss/specificity.py",
+    r"def annotate_thermo\(sites: Sequence\[PrimingSite\], primers: Dict\[str, str\],\n"
+    r"\s+genome, tp=None, gate: bool = True\):\n.*?\n\s+return kept, viable\n\n",
+    '''def annotate_thermo(sites: Sequence[PrimingSite], primers: Dict[str, str],
                     genome, tp=None, gate: bool = True):
     """Annotate sites and report exactly what could be evaluated.
 
@@ -101,43 +97,40 @@ jobs:
             continue
         kept.append(site)
     return kept, viable, stats
-''',
-          )
-          # Both in_silico_pcr and pair_specificity call annotate_thermo.
-          p = Path('primerblast_oss/specificity.py')
-          text = p.read_text()
-          old = '''    sites, viable_sites = annotate_thermo(
-        sites, primers, genome, thermo_params, thermo_gate)'''
-          if text.count(old) != 2:
-              raise SystemExit(f"specificity.py: expected two thermo call matches, found {text.count(old)}")
-          text = text.replace(
-              old,
-              '''    sites, viable_sites, thermo_site_stats = annotate_thermo(
-        sites, primers, genome, thermo_params, thermo_gate)''',
-          )
-          old_meta = '''        "thermo_evaluated": bool(viable_sites) or (
-            genome is not None and thermo_gate is False),
-        "viable_sites_per_primer": viable_sites,'''
-          if text.count(old_meta) != 2:
-              raise SystemExit(f"specificity.py: expected two thermo metadata matches, found {text.count(old_meta)}")
-          text = text.replace(
-              old_meta,
-              '''        "thermo_evaluated": bool(sum(
-            thermo_site_stats["evaluated_per_primer"].values())),
-        "thermo_site_stats": thermo_site_stats,
-        "viable_sites_per_primer": viable_sites,''',
-          )
-          p.write_text(text)
 
-          replace_once(
-              'primerblast_oss/specificity.py',
-              '''    thermo_params=None,
+''',
+)
+
+regex_count(
+    "primerblast_oss/specificity.py",
+    r"sites, viable_sites = annotate_thermo\(\n"
+    r"\s+sites, primers, genome, thermo_params, thermo_gate\)",
+    "sites, viable_sites, thermo_site_stats = annotate_thermo(\n"
+    "        sites, primers, genome, thermo_params, thermo_gate)",
+    2,
+)
+
+regex_count(
+    "primerblast_oss/specificity.py",
+    r'        "thermo_evaluated": bool\(viable_sites\) or \(\n'
+    r'\s+genome is not None and thermo_gate is False\),\n'
+    r'\s+"viable_sites_per_primer": viable_sites,',
+    '        "thermo_evaluated": bool(sum(\n'
+    '            thermo_site_stats["evaluated_per_primer"].values())),\n'
+    '        "thermo_site_stats": thermo_site_stats,\n'
+    '        "viable_sites_per_primer": viable_sites,',
+    2,
+)
+
+replace_once(
+    "primerblast_oss/specificity.py",
+    '''    thermo_params=None,
     thermo_gate: bool = True,
 ) -> Dict:
     sp = sp or SpecParams()
     blastn = _detect_blastn(blastn_bin)
     primers = {"F": forward, "R": reverse}''',
-              '''    thermo_params=None,
+    '''    thermo_params=None,
     thermo_gate: bool = True,
     allowed_primer_mismatches: Optional[Mapping[str, int]] = None,
 ) -> Dict:
@@ -148,15 +141,16 @@ jobs:
         name: max(0, int(value))
         for name, value in (allowed_primer_mismatches or {}).items()
     }''',
-          )
-          replace_once(
-              'primerblast_oss/specificity.py',
-              '''    for amplicon in amplicons:
+)
+
+replace_once(
+    "primerblast_oss/specificity.py",
+    '''    for amplicon in amplicons:
         perfect = amplicon.fwd_mismatch == 0 and amplicon.rev_mismatch == 0
         proper_pair = {amplicon.fwd_primer, amplicon.rev_primer} == {"F", "R"}
         size_ok = designed_size is None or abs(amplicon.size - designed_size) <= size_tolerance
         amplicon.on_target = perfect and proper_pair and size_ok''',
-              '''    for amplicon in amplicons:
+    '''    for amplicon in amplicons:
         mismatch_ok = (
             amplicon.fwd_mismatch
             <= allowed_mismatches.get(amplicon.fwd_primer, 0)
@@ -166,34 +160,38 @@ jobs:
         proper_pair = {amplicon.fwd_primer, amplicon.rev_primer} == {"F", "R"}
         size_ok = designed_size is None or abs(amplicon.size - designed_size) <= size_tolerance
         amplicon.on_target = mismatch_ok and proper_pair and size_ok''',
-          )
-          replace_once(
-              'primerblast_oss/specificity.py',
-              '''        "specific_observed": observed_specific,
+)
+
+replace_once(
+    "primerblast_oss/specificity.py",
+    '''        "specific_observed": observed_specific,
         "specific": specific,
         "specificity_status": specificity_status,
     }''',
-              '''        "specific_observed": observed_specific,
+    '''        "specific_observed": observed_specific,
         "specific": specific,
         "specificity_status": specificity_status,
         "allowed_primer_mismatches": allowed_mismatches,
     }''',
-          )
+)
 
-          # ------------------------------------------------------------------
-          # pipeline/tiling/CLI/dCAPS: accurate thermo status and site stats.
-          # ------------------------------------------------------------------
-          regex_once(
-              'primerblast_oss/pipeline.py',
-              r'def thermo_metadata\(genome, thermo_params, thermo_gate: bool,\n'
-              r'\s+association: str\) -> Dict:\n.*?\n\s+}\n\n',
-              '''def thermo_metadata(genome, thermo_params, thermo_gate: bool,
+
+# ---------------------------------------------------------------------------
+# pipeline.py: separate configuration from actual site-level thermo coverage.
+# ---------------------------------------------------------------------------
+regex_once(
+    "primerblast_oss/pipeline.py",
+    r"def thermo_metadata\(genome, thermo_params, thermo_gate: bool,\n"
+    r"\s+association: str\) -> Dict:\n.*?\n\s+}\n\n",
+    '''def thermo_metadata(genome, thermo_params, thermo_gate: bool,
                     association: str, site_stats: Optional[Dict] = None) -> Dict:
     """Describe configuration and actual site-level thermo coverage."""
     from . import thermo as thermo_module
     site_stats = site_stats or {
-        "attempted_per_primer": {}, "evaluated_per_primer": {},
-        "unresolved_per_primer": {}, "gated_per_primer": {},
+        "attempted_per_primer": {},
+        "evaluated_per_primer": {},
+        "unresolved_per_primer": {},
+        "gated_per_primer": {},
     }
     evaluated = sum(site_stats.get("evaluated_per_primer", {}).values())
     unresolved = sum(site_stats.get("unresolved_per_primer", {}).values())
@@ -211,7 +209,8 @@ jobs:
     elif thermo_params is None:
         status = (
             "evaluated_defaults_gated" if thermo_gate
-            else "evaluated_defaults_annotation_only")
+            else "evaluated_defaults_annotation_only"
+        )
     else:
         status = "evaluated_gated" if thermo_gate else "evaluated_annotation_only"
     return {
@@ -219,49 +218,42 @@ jobs:
         "thermo_evaluated": evaluated > 0,
         "thermo_site_stats": site_stats,
         "thermo_genome_fasta": (
-            getattr(genome, "fasta", None) if genome is not None else None),
+            getattr(genome, "fasta", None) if genome is not None else None
+        ),
         "thermo_genome_association": association,
     }
 
 ''',
-          )
-          for path in [
-              'primerblast_oss/pipeline.py',
-              'primerblast_oss/tiling.py',
-              'primerblast_oss/cli.py',
-              'primerblast_oss/dcaps_workflow.py',
-          ]:
-              p = Path(path)
-              text = p.read_text()
-              old = '''result.update(thermo_metadata(
-                genome, thermo_params, thermo_gate, association))'''
-              alt = '''result.update(thermo_metadata(
-                database_genome, thermo_params, thermo_gate, association))'''
-              replacement_genome = '''result.update(thermo_metadata(
-                genome, thermo_params, thermo_gate, association,
-                result.get("thermo_site_stats")))'''
-              replacement_db = '''result.update(thermo_metadata(
-                database_genome, thermo_params, thermo_gate, association,
-                result.get("thermo_site_stats")))'''
-              if old in text:
-                  text = text.replace(old, replacement_genome)
-              elif alt in text:
-                  text = text.replace(alt, replacement_db)
-              else:
-                  raise SystemExit(f"{path}: thermo_metadata call not found")
-              p.write_text(text)
+)
 
-          # ------------------------------------------------------------------
-          # CLI: true --no-thermo sentinel and design-DB FASTA conflict guard.
-          # ------------------------------------------------------------------
-          replace_once(
-              'primerblast_oss/cli.py',
-              'import sys\nfrom typing import Dict, List, Mapping, Optional, Tuple',
-              'import sys\nfrom pathlib import Path\nfrom typing import Dict, List, Mapping, Optional, Tuple',
-          )
-          replace_once(
-              'primerblast_oss/cli.py',
-              '''    genomes_by_db: Dict[str, object] = {}
+for file_name, variable in (
+    ("primerblast_oss/pipeline.py", "database_genome"),
+    ("primerblast_oss/tiling.py", "database_genome"),
+    ("primerblast_oss/cli.py", "genome"),
+    ("primerblast_oss/dcaps_workflow.py", "genome"),
+):
+    regex_once(
+        file_name,
+        rf"result\.update\(thermo_metadata\(\n"
+        rf"\s+{variable}, thermo_params, thermo_gate, association\)\)",
+        "result.update(thermo_metadata(\n"
+        f"                {variable}, thermo_params, thermo_gate, association,\n"
+        "                result.get(\"thermo_site_stats\")))",
+    )
+
+
+# ---------------------------------------------------------------------------
+# cli.py: true --no-thermo sentinel and first/design FASTA consistency.
+# ---------------------------------------------------------------------------
+replace_once(
+    "primerblast_oss/cli.py",
+    "import sys\nfrom typing import Dict, List, Mapping, Optional, Tuple",
+    "import sys\nfrom pathlib import Path\nfrom typing import Dict, List, Mapping, Optional, Tuple",
+)
+
+replace_once(
+    "primerblast_oss/cli.py",
+    '''    genomes_by_db: Dict[str, object] = {}
     if design_genome is not None and databases:
         genomes_by_db[databases[0]] = design_genome
 
@@ -276,7 +268,7 @@ jobs:
 
     if getattr(arguments, "no_thermo", False):
         return genomes_by_db, None, True''',
-              '''    genomes_by_db: Dict[str, object] = {}
+    '''    genomes_by_db: Dict[str, object] = {}
 
     legacy_fasta = getattr(arguments, "genome_fasta", None)
     if legacy_fasta and databases and databases[0] not in fasta_by_db:
@@ -291,7 +283,8 @@ jobs:
             if requested != actual:
                 raise ValueError(
                     "the first/design DB FASTA must match --genome exactly: "
-                    "%s != %s" % (requested, actual))
+                    "%s != %s" % (requested, actual)
+                )
             fasta_by_db.pop(design_database)
         genomes_by_db[design_database] = design_genome
 
@@ -302,19 +295,20 @@ jobs:
 
     if getattr(arguments, "no_thermo", False):
         return genomes_by_db, False, True''',
-          )
+)
 
-          # ------------------------------------------------------------------
-          # assay.py: allow intentional dCAPS mismatches at the exact anchor and
-          # expose a separate all-database specificity verdict.
-          # ------------------------------------------------------------------
-          replace_once(
-              'primerblast_oss/assay.py',
-              '''    coordinate_tolerance: int = 0,
+
+# ---------------------------------------------------------------------------
+# assay.py: permit the known engineered mismatch only at the exact anchor, and
+# expose a distinct all-database specificity verdict.
+# ---------------------------------------------------------------------------
+replace_once(
+    "primerblast_oss/assay.py",
+    '''    coordinate_tolerance: int = 0,
     size_tolerance: int = 0,
 ) -> Dict:
     all_products = (''',
-              '''    coordinate_tolerance: int = 0,
+    '''    coordinate_tolerance: int = 0,
     size_tolerance: int = 0,
     expected_primer_mismatches: Optional[Mapping[str, int]] = None,
 ) -> Dict:
@@ -323,57 +317,62 @@ jobs:
         for name, value in (expected_primer_mismatches or {}).items()
     }
     all_products = (''',
-          )
-          replace_once(
-              'primerblast_oss/assay.py',
-              '''                and amplicon.fwd_mismatch == 0
+)
+
+replace_once(
+    "primerblast_oss/assay.py",
+    '''                and amplicon.fwd_mismatch == 0
                 and amplicon.rev_mismatch == 0''',
-              '''                and amplicon.fwd_mismatch
+    '''                and amplicon.fwd_mismatch
                 <= allowed_mismatches.get(amplicon.fwd_primer, 0)
                 and amplicon.rev_mismatch
                 <= allowed_mismatches.get(amplicon.rev_primer, 0)''',
-          )
-          replace_once(
-              'primerblast_oss/assay.py',
-              '''            if (proper and _overlaps(amplicon, chrom, ext_start, ext_end)
+)
+
+replace_once(
+    "primerblast_oss/assay.py",
+    '''            if (proper and _overlaps(amplicon, chrom, ext_start, ext_end)
                     and amplicon.fwd_mismatch == 0
                     and amplicon.rev_mismatch == 0):''',
-              '''            if (proper and _overlaps(amplicon, chrom, ext_start, ext_end)
+    '''            if (proper and _overlaps(amplicon, chrom, ext_start, ext_end)
                     and amplicon.fwd_mismatch
                     <= allowed_mismatches.get(amplicon.fwd_primer, 0)
                     and amplicon.rev_mismatch
                     <= allowed_mismatches.get(amplicon.rev_primer, 0)):''',
-          )
-          replace_once(
-              'primerblast_oss/assay.py',
-              '''def analyze_pair(pair, per_db: Sequence[Dict], design_db: str,
+)
+
+replace_once(
+    "primerblast_oss/assay.py",
+    '''def analyze_pair(pair, per_db: Sequence[Dict], design_db: str,
                  template: Optional[Template], variants: Sequence,
                  caps_info: Optional[Dict], gel_min_gap: int = 50,
                  dimer_params=None) -> Dict:''',
-              '''def analyze_pair(pair, per_db: Sequence[Dict], design_db: str,
+    '''def analyze_pair(pair, per_db: Sequence[Dict], design_db: str,
                  template: Optional[Template], variants: Sequence,
                  caps_info: Optional[Dict], gel_min_gap: int = 50,
                  dimer_params=None,
                  expected_primer_mismatches: Optional[Mapping[str, int]] = None) -> Dict:''',
-          )
-          replace_once(
-              'primerblast_oss/assay.py',
-              '''            pair=pair,
+)
+
+replace_once(
+    "primerblast_oss/assay.py",
+    '''            pair=pair,
             gel_min_gap=gel_min_gap,
         )''',
-              '''            pair=pair,
+    '''            pair=pair,
             gel_min_gap=gel_min_gap,
             expected_primer_mismatches=expected_primer_mismatches,
         )''',
-          )
-          replace_once(
-              'primerblast_oss/assay.py',
-              '''    overall_completeness = combine_search_completeness([
+)
+
+replace_once(
+    "primerblast_oss/assay.py",
+    '''    overall_completeness = combine_search_completeness([
         view.get("search_completeness", SEARCH_COMPLETE) for view in per_db_views
     ])
 
     per_db_products = []''',
-              '''    overall_completeness = combine_search_completeness([
+    '''    overall_completeness = combine_search_completeness([
         view.get("search_completeness", SEARCH_COMPLETE) for view in per_db_views
     ])
     db_specific_values = [view.get("specific") for view in per_db_views]
@@ -391,74 +390,79 @@ jobs:
         specificity_status_all_db = "non_specific"
 
     per_db_products = []''',
-          )
-          replace_once(
-              'primerblast_oss/assay.py',
-              '''        "specific": design_res.get("specific"),
+)
+
+replace_once(
+    "primerblast_oss/assay.py",
+    '''        "specific": design_res.get("specific"),
         "specific_observed": design_res.get("specific_observed"),
         "specificity_status": design_res.get("specificity_status"),''',
-              '''        "specific": design_res.get("specific"),
+    '''        "specific": design_res.get("specific"),
         "specific_observed": design_res.get("specific_observed"),
         "specificity_status": design_res.get("specificity_status"),
         "specific_all_db": specific_all_db,
         "specificity_status_all_db": specificity_status_all_db,''',
-          )
+)
 
-          # ------------------------------------------------------------------
-          # dCAPS workflow: pass intentional mismatch allowance through generic
-          # and anchored specificity and require all DBs to pass.
-          # ------------------------------------------------------------------
-          replace_once(
-              'primerblast_oss/dcaps_workflow.py',
-              '''                thermo_params=thermo_params,
+
+# ---------------------------------------------------------------------------
+# dCAPS: carry the intentional mismatch through generic and anchored checks,
+# and require every database to support the final order recommendation.
+# ---------------------------------------------------------------------------
+replace_once(
+    "primerblast_oss/dcaps_workflow.py",
+    '''                thermo_params=thermo_params,
                 thermo_gate=thermo_gate,
             )''',
-              '''                thermo_params=thermo_params,
+    '''                thermo_params=thermo_params,
                 thermo_gate=thermo_gate,
                 allowed_primer_mismatches={
                     candidate["primer_role"]: int(candidate["mismatches"])
                 },
             )''',
-          )
-          replace_once(
-              'primerblast_oss/dcaps_workflow.py',
-              '''            gel_min_gap=specificity.gel_min_gap_bp,
+)
+
+replace_once(
+    "primerblast_oss/dcaps_workflow.py",
+    '''            gel_min_gap=specificity.gel_min_gap_bp,
             dimer_params=dimer_params,
         )''',
-              '''            gel_min_gap=specificity.gel_min_gap_bp,
+    '''            gel_min_gap=specificity.gel_min_gap_bp,
             dimer_params=dimer_params,
             expected_primer_mismatches={
                 candidate["primer_role"]: int(candidate["mismatches"])
             },
         )''',
-          )
-          replace_once(
-              'primerblast_oss/dcaps_workflow.py',
-              '''            and assay_summary.get("specific") is True
+)
+
+replace_once(
+    "primerblast_oss/dcaps_workflow.py",
+    '''            and assay_summary.get("specific") is True
             and assay_summary.get("risk") in ("low", "medium")''',
-              '''            and assay_summary.get("specific_all_db") is True
+    '''            and assay_summary.get("specific_all_db") is True
             and assay_summary.get("risk") in ("low", "medium")''',
-          )
-          replace_once(
-              'primerblast_oss/dcaps_workflow.py',
-              '''        elif assay_summary.get("specificity_status") == "indeterminate":
+)
+
+replace_once(
+    "primerblast_oss/dcaps_workflow.py",
+    '''        elif assay_summary.get("specificity_status") == "indeterminate":
             recommendation_status = "rerun_specificity_exhaustively"
         elif assay_summary.get("specific") is not True:
             recommendation_status = "not_specific"''',
-              '''        elif assay_summary.get("specificity_status_all_db") == "indeterminate":
+    '''        elif assay_summary.get("specificity_status_all_db") == "indeterminate":
             recommendation_status = "rerun_specificity_exhaustively"
         elif assay_summary.get("specific_all_db") is not True:
             recommendation_status = "not_specific_in_all_databases"''',
-          )
+)
 
-          # ------------------------------------------------------------------
-          # CSV: preserve the historical schema and append new dCAPS/confidence
-          # fields instead of renaming/removing old columns.
-          # ------------------------------------------------------------------
-          regex_once(
-              'primerblast_oss/outputs.py',
-              r'_CSV_COLUMNS = \[\n.*?\n\]\n\n\ndef pairs_to_csv\(pairs: List\[dict\]\) -> str:\n.*?\n    return buffer.getvalue\(\)\n',
-              '''_CSV_COLUMNS = [
+
+# ---------------------------------------------------------------------------
+# outputs.py: restore the historical first 20 CSV columns and append new fields.
+# ---------------------------------------------------------------------------
+regex_once(
+    "primerblast_oss/outputs.py",
+    r"_CSV_COLUMNS = \[\n.*?\n\]\n\n\ndef pairs_to_csv\(pairs: List\[dict\]\) -> str:\n.*?\n    return buffer.getvalue\(\)\n",
+    '''_CSV_COLUMNS = [
     # Historical columns remain in their original order for compatibility.
     "name", "forward", "reverse", "product_size",
     "tm_f", "tm_r", "tm_diff", "gc_f", "gc_r",
@@ -486,44 +490,33 @@ def pairs_to_csv(pairs: List[dict]) -> str:
         variant_flag = pair.get(
             "variant_in_primer", pair.get("snp_in_primer"))
         writer.writerow([
-            orderable["name"],
-            orderable["forward"],
-            orderable["reverse"],
-            _num(orderable["product_size"]),
-            _num(orderable["tm_f"]),
-            _num(orderable["tm_r"]),
-            _tm_diff(orderable),
-            _num(orderable["gc_f"]),
-            _num(orderable["gc_r"]),
-            _num(pair.get("n_off_target")),
-            _num(pair.get("n_ff")),
-            _num(pair.get("n_rr")),
-            _num(pair.get("n_fr_offtarget")),
+            orderable["name"], orderable["forward"], orderable["reverse"],
+            _num(orderable["product_size"]), _num(orderable["tm_f"]),
+            _num(orderable["tm_r"]), _tm_diff(orderable),
+            _num(orderable["gc_f"]), _num(orderable["gc_r"]),
+            _num(pair.get("n_off_target")), _num(pair.get("n_ff")),
+            _num(pair.get("n_rr")), _num(pair.get("n_fr_offtarget")),
             _num(pair.get("tp5_mismatch_min")),
             _bool_str(pair.get("snp_in_primer", variant_flag)),
             conserved_text,
             orderable["enzyme"] or pair.get("caps_enzyme"),
             _bool_str(pair.get("gel_distinguishable")),
             _num((pair.get("dimers") or {}).get("cross_dimer_dg")),
-            pair.get("risk"),
-            orderable["marker_type"],
-            orderable["enzyme"],
-            orderable["engineered_role"],
-            orderable["engineered_mismatches"],
+            pair.get("risk"), orderable["marker_type"], orderable["enzyme"],
+            orderable["engineered_role"], orderable["engineered_mismatches"],
             pair.get("specificity_status"),
             pair.get("specificity_status_all_db"),
-            pair.get("search_completeness"),
-            _bool_str(variant_flag),
+            pair.get("search_completeness"), _bool_str(variant_flag),
         ])
     return buffer.getvalue()
 ''',
-          )
+)
 
-          # ------------------------------------------------------------------
-          # Regression tests for the audited issues.
-          # ------------------------------------------------------------------
-          test_path = Path('tests/test_post_integration_audit.py')
-          test_path.write_text('''from types import SimpleNamespace
+
+# ---------------------------------------------------------------------------
+# Regression tests for all post-integration findings.
+# ---------------------------------------------------------------------------
+Path("tests/test_post_integration_audit.py").write_text(r'''from types import SimpleNamespace
 
 from primerblast_oss.assay import reclassify_by_anchor
 from primerblast_oss.cli import _thermo_setup, build_parser
@@ -651,8 +644,8 @@ def test_cli_no_thermo_uses_explicit_disable_sentinel():
 def test_design_database_fasta_conflict_is_rejected(tmp_path):
     design = tmp_path / "design.fa"
     other = tmp_path / "other.fa"
-    design.write_text(">chr1\\nAAAA\\n")
-    other.write_text(">chr1\\nCCCC\\n")
+    design.write_text(">chr1\nAAAA\n")
+    other.write_text(">chr1\nCCCC\n")
     fake_genome = SimpleNamespace(fasta=str(design))
     args = SimpleNamespace(
         db=["db"], db_genome=["db=%s" % other], genome_fasta=None,
@@ -686,89 +679,3 @@ def test_csv_keeps_historical_columns_and_appends_new_fields():
     assert "marker_type" in header
     assert "specificity_status_all_db" in header
 ''')
-          PY
-          if ! git diff --quiet; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add primerblast_oss tests
-            git commit -m "fix: address post-integration correctness audit"
-            git push origin HEAD:${{ github.head_ref }}
-          fi
-
-  test:
-    needs: auditfix
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.8", "3.10", "3.12"]
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ github.head_ref }}
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v7
-        with:
-          python-version: ${{ matrix.python-version }}
-      - name: Install
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
-      - name: Unit tests
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set +e
-          pytest -q --tb=short > /tmp/pytest.log 2>&1
-          status=$?
-          cat /tmp/pytest.log
-          if [ "$status" -ne 0 ] && [ "${{ matrix.python-version }}" = "3.12" ]; then
-            {
-              echo '### Temporary post-audit CI diagnostic — Python 3.12'
-              echo '```text'
-              tail -150 /tmp/pytest.log
-              echo '```'
-            } > /tmp/pytest-comment.md
-            gh pr comment "${{ github.event.pull_request.number }}" --body-file /tmp/pytest-comment.md
-          fi
-          exit "$status"
-      - name: Module self-tests
-        run: |
-          python primerblast_oss/caps.py
-          python primerblast_oss/outputs.py
-          python primerblast_oss/bed.py
-          python primerblast_oss/vcf.py
-
-  thermo-test:
-    needs: auditfix
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ github.head_ref }}
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v7
-        with:
-          python-version: "3.12"
-      - name: Install optional thermodynamics support
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev,thermo]"
-      - name: Run thermodynamics-enabled tests
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set +e
-          pytest -q --tb=short > /tmp/pytest-thermo.log 2>&1
-          status=$?
-          cat /tmp/pytest-thermo.log
-          if [ "$status" -ne 0 ]; then
-            {
-              echo '### Temporary post-audit CI diagnostic — thermo'
-              echo '```text'
-              tail -150 /tmp/pytest-thermo.log
-              echo '```'
-            } > /tmp/pytest-thermo-comment.md
-            gh pr comment "${{ github.event.pull_request.number }}" --body-file /tmp/pytest-thermo-comment.md
-          fi
-          exit "$status"

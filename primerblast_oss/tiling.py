@@ -1,36 +1,49 @@
-"""Tiling design: cover an entire region with overlapping amplicons.
-
-NCBI Primer-BLAST designs one amplicon around a single target and tends to
-cluster primers on one side of a long template. For sequencing or scanning a
-whole gene you want a *series* of overlapping amplicons spanning the region.
-This module walks left-to-right, forcing each successive amplicon into the
-next window and preferring specific / gel-resolvable pairs.
-"""
+"""Tiling design: cover an entire region with overlapping amplicons."""
 from __future__ import annotations
 
 from dataclasses import replace
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 
 from .design import DesignParams, PrimerPair, clean_sequence, design_primers
 from .specificity import SpecParams, pair_specificity
-from .pipeline import _score_pair
+from .pipeline import (
+    _score_pair,
+    resolve_genome_for_database,
+    thermo_metadata,
+)
 
 
 def _evaluate(pair: PrimerPair, databases: Sequence[str], sp: SpecParams,
               blastn_bin: Optional[str], size_tolerance: int,
-              genome=None, thermo_params=None, thermo_gate: bool = True,
+              genome=None, genomes_by_db: Optional[Mapping[str, object]] = None,
+              thermo_params=None, thermo_gate: bool = True,
               dimer_params=None) -> None:
-    per_db = [
-        pair_specificity(pair.forward, pair.reverse, db,
-                         designed_size=pair.product_size, sp=sp,
-                         blastn_bin=blastn_bin, size_tolerance=size_tolerance,
-                         genome=genome, thermo_params=thermo_params,
-                         thermo_gate=thermo_gate)
-        for db in databases
-    ]
-    from . import dimers as _dimers
-    dimer = (_dimers.analyze_pair(pair.forward, pair.reverse, dimer_params)
-             if _dimers.available() else None)
+    per_db = []
+    for database in databases:
+        database_genome, association = resolve_genome_for_database(
+            database, databases, genome=genome, genomes_by_db=genomes_by_db)
+        result = pair_specificity(
+            pair.forward,
+            pair.reverse,
+            database,
+            designed_size=pair.product_size,
+            sp=sp,
+            blastn_bin=blastn_bin,
+            size_tolerance=size_tolerance,
+            genome=database_genome,
+            thermo_params=thermo_params,
+            thermo_gate=thermo_gate,
+        )
+        result.update(thermo_metadata(
+                database_genome, thermo_params, thermo_gate, association,
+                result.get("thermo_site_stats")))
+        per_db.append(result)
+
+    from . import dimers as dimer_module
+    dimer = (
+        dimer_module.analyze_pair(pair.forward, pair.reverse, dimer_params)
+        if dimer_module.available() else None
+    )
     _score_pair(pair, per_db, dimer)
 
 
@@ -38,7 +51,7 @@ def design_tiling(
     template_id: str,
     sequence: str,
     databases: Sequence[str],
-    region: Optional[Tuple[int, int]] = None,   # 0-based inclusive [start, end]
+    region: Optional[Tuple[int, int]] = None,
     amplicon_min: int = 400,
     amplicon_max: int = 800,
     overlap: int = 40,
@@ -50,93 +63,97 @@ def design_tiling(
     candidates_per_tile: int = 8,
     max_tiles: int = 200,
     genome=None,
+    genomes_by_db: Optional[Mapping[str, object]] = None,
     thermo_params=None,
     thermo_gate: bool = True,
     dimer_params=None,
 ) -> List[Dict]:
     seq = clean_sequence(sequence)
-    L = len(seq)
-    r0, r1 = region if region else (0, L - 1)
-    r0 = max(0, r0)
-    r1 = min(L - 1, r1)
+    sequence_length = len(seq)
+    region_start, region_end = region if region else (0, sequence_length - 1)
+    region_start = max(0, region_start)
+    region_end = min(sequence_length - 1, region_end)
 
-    dp_base = design_params or DesignParams()
-    sp = spec_params or SpecParams()
+    base_design = design_params or DesignParams()
+    specificity = spec_params or SpecParams()
 
     tiles: List[Dict] = []
-    cur = r0
-    prev_right: Optional[int] = None
-    covered_to = r0 - 1
+    current = region_start
+    previous_right: Optional[int] = None
+    covered_to = region_start - 1
 
-    while covered_to < r1 and len(tiles) < max_tiles:
-        win_start = cur
-        # near the region end, pull the window back so the final amplicon can
-        # still reach r1 instead of leaving an uncovered tail.
-        final_window = (r1 - win_start + 1) < amplicon_max
+    while covered_to < region_end and len(tiles) < max_tiles:
+        window_start = current
+        final_window = (region_end - window_start + 1) < amplicon_max
         if final_window:
-            win_start = max(r0, r1 - amplicon_max + 1)
-        win_len = min(amplicon_max, r1 - win_start + 1)
-        if win_len < amplicon_min:
-            break  # not enough template left for a full amplicon
+            window_start = max(region_start, region_end - amplicon_max + 1)
+        window_length = min(amplicon_max, region_end - window_start + 1)
+        if window_length < amplicon_min:
+            break
 
-        # for a short final window, let the product shrink to fit it
-        amp_lo = min(amplicon_min, win_len)
-        dp = replace(
-            dp_base,
-            product_size_ranges=[(amp_lo, win_len)],
-            included_region=(win_start, win_len),
+        amplicon_low = min(amplicon_min, window_length)
+        design = replace(
+            base_design,
+            product_size_ranges=[(amplicon_low, window_length)],
+            included_region=(window_start, window_length),
             target=None,
             num_return=candidates_per_tile,
         )
         try:
-            pairs, _ = design_primers(template_id, seq, dp, primer3_bin)
+            pairs, _explain = design_primers(
+                template_id, seq, design, primer3_bin)
         except Exception:
             pairs = []
         if not pairs:
-            # nothing fits here; jump forward by most of a window and retry
-            if win_start >= r1 - amplicon_min:
+            if window_start >= region_end - amplicon_min:
                 break
-            cur = win_start + max(1, amplicon_min // 2)
+            current = window_start + max(1, amplicon_min // 2)
             continue
 
         for pair in pairs:
-            _evaluate(pair, databases, sp, blastn_bin, size_tolerance,
-                      genome=genome, thermo_params=thermo_params,
-                      thermo_gate=thermo_gate, dimer_params=dimer_params)
-
-        # prefer specific, then gel-resolvable; then position: normally the
-        # leftmost amplicon (walks coverage forward), but in the final
-        # end-anchored window the rightmost one (reaches the region end).
-        def key(p: PrimerPair):
-            s = p.specificity
-            pos = -p.right_start if final_window else p.left_start
-            return (
-                0 if s.get("specific_all_db") else 1,
-                0 if s.get("gel_distinguishable") else 1,
-                pos,
-                -s.get("score", 0.0),
+            _evaluate(
+                pair,
+                databases,
+                specificity,
+                blastn_bin,
+                size_tolerance,
+                genome=genome,
+                genomes_by_db=genomes_by_db,
+                thermo_params=thermo_params,
+                thermo_gate=thermo_gate,
+                dimer_params=dimer_params,
             )
-        best = sorted(pairs, key=key)[0]
 
-        gap_to_prev = None
-        if prev_right is not None:
-            # positive => overlap with previous amplicon; negative => a gap
-            gap_to_prev = prev_right - best.left_start + 1
+        def sort_key(pair: PrimerPair):
+            result = pair.specificity
+            position = -pair.right_start if final_window else pair.left_start
+            return (
+                0 if result.get("specific_all_db") else 1,
+                0 if result.get("gel_distinguishable") else 1,
+                result.get("rank") == "I",
+                position,
+                -result.get("score", 0.0),
+            )
+
+        best = sorted(pairs, key=sort_key)[0]
+        gap_to_previous = None
+        if previous_right is not None:
+            gap_to_previous = previous_right - best.left_start + 1
 
         tiles.append({
             "index": len(tiles) + 1,
             "pair": best,
             "covers": (best.left_start, best.right_start),
-            "gap_to_prev": gap_to_prev,
+            "gap_to_prev": gap_to_previous,
         })
 
-        prev_right = best.right_start
+        previous_right = best.right_start
         covered_to = max(covered_to, best.right_start)
-        if final_window or best.right_start >= r1 - overlap:
-            break                          # reached (or did our best for) the end
-        next_cur = best.right_start - overlap + 1
-        if next_cur <= win_start:          # guarantee forward progress
-            next_cur = win_start + max(1, amplicon_min // 2)
-        cur = next_cur
+        if final_window or best.right_start >= region_end - overlap:
+            break
+        next_current = best.right_start - overlap + 1
+        if next_current <= window_start:
+            next_current = window_start + max(1, amplicon_min // 2)
+        current = next_current
 
     return tiles

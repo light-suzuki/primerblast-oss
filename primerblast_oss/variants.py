@@ -1,38 +1,52 @@
-"""Variant-aware checks: SNPs under primers and amplicon conservation.
-
-Two breeding-critical questions NCBI Primer-BLAST cannot answer locally:
-  * does a known SNP/indel (from a VCF) sit under a primer -- especially its
-    3' end, where it wrecks amplification or, deliberately, enables an
-    allele-specific assay?
-  * is the amplicon conserved across several reference / parent genomes, so the
-    same primers work on all of them?
-"""
+"""Variant-aware checks: primer footprints and amplicon conservation."""
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Sequence
+from dataclasses import dataclass
+from typing import Dict, List, Sequence
 
 
 @dataclass
 class PrimerFootprint:
-    primer: str             # "F" or "R"
+    primer: str
     chrom: str
-    start: int              # 1-based genomic, 5' <= 3' span on the top strand
+    start: int
     end: int
-    three_prime_coord: int  # genomic coordinate of the primer's 3' base
+    three_prime_coord: int
+    strand: str
 
 
 def footprints_from_amplicon(amp, len_f: int, len_r: int) -> List[PrimerFootprint]:
-    """Genomic footprints of the two primers of an on-target amplicon.
+    """Return genomic footprints for named primers F and R.
 
-    `amp` is an Amplicon: amp.start = 5' of the plus-strand primer, amp.end =
-    5' of the minus-strand primer (both 1-based genomic)."""
-    chrom = amp.subject
-    fwd = PrimerFootprint("F", chrom, amp.start, amp.start + len_f - 1,
-                          three_prime_coord=amp.start + len_f - 1)
-    rev = PrimerFootprint("R", chrom, amp.end - len_r + 1, amp.end,
-                          three_prime_coord=amp.end - len_r + 1)
-    return [fwd, rev]
+    ``Amplicon.fwd_primer`` names the primer on the genomic plus strand (left
+    side), while ``rev_primer`` names the primer on the genomic minus strand
+    (right side). This may be F/R or R/F depending on target orientation.
+    Results remain ordered as F then R for API compatibility.
+    """
+    lengths = {"F": len_f, "R": len_r}
+    if {amp.fwd_primer, amp.rev_primer} != {"F", "R"}:
+        raise ValueError("primer footprints require one F and one R site")
+
+    left_len = lengths[amp.fwd_primer]
+    right_len = lengths[amp.rev_primer]
+    left = PrimerFootprint(
+        primer=amp.fwd_primer,
+        chrom=amp.subject,
+        start=amp.start,
+        end=amp.start + left_len - 1,
+        three_prime_coord=amp.start + left_len - 1,
+        strand="+",
+    )
+    right = PrimerFootprint(
+        primer=amp.rev_primer,
+        chrom=amp.subject,
+        start=amp.end - right_len + 1,
+        end=amp.end,
+        three_prime_coord=amp.end - right_len + 1,
+        strand="-",
+    )
+    by_name = {left.primer: left, right.primer: right}
+    return [by_name["F"], by_name["R"]]
 
 
 @dataclass
@@ -40,55 +54,106 @@ class SiteVariant:
     primer: str
     chrom: str
     pos: int
+    end: int
     ref: str
     alt: List[str]
-    in_3prime_5bp: bool     # variant within the 3'-terminal 5 bp of the primer
+    kind: str
+    in_3prime_5bp: bool
     distance_from_3prime: int
+
+
+def _variant_end(variant) -> int:
+    end = getattr(variant, "end", None)
+    if end is not None:
+        return int(end)
+    return int(variant.pos) + max(1, len(str(variant.ref))) - 1
+
+
+def variant_kind(variant) -> str:
+    """Classify a VCF-like record conservatively from REF and ALT lengths."""
+    ref = str(variant.ref)
+    alts = [str(a) for a in variant.alt]
+    if not alts or any(a.startswith("<") or "[" in a or "]" in a for a in alts):
+        return "complex"
+    ref_len = len(ref)
+    alt_lens = [len(a) for a in alts]
+    if ref_len == 1 and all(length == 1 for length in alt_lens):
+        return "snp"
+    if all(length == ref_len for length in alt_lens):
+        return "mnp"
+    if all(length > ref_len for length in alt_lens):
+        return "insertion"
+    if all(length < ref_len for length in alt_lens):
+        return "deletion"
+    return "complex"
+
+
+def _distance_to_interval(coord: int, start: int, end: int) -> int:
+    if start <= coord <= end:
+        return 0
+    return min(abs(coord - start), abs(coord - end))
+
+
+def variants_under_primers(footprints: Sequence[PrimerFootprint],
+                           variants: Sequence) -> List[SiteVariant]:
+    """Return VCF records whose reference span overlaps a primer footprint.
+
+    Insertions are treated conservatively at their VCF anchor base. For records
+    spanning several reference bases, the closest affected base determines
+    distance from the primer 3' end.
+    """
+    out: List[SiteVariant] = []
+    for footprint in footprints:
+        for variant in variants:
+            if variant.chrom != footprint.chrom:
+                continue
+            start = int(variant.pos)
+            end = _variant_end(variant)
+            if end < footprint.start or start > footprint.end:
+                continue
+            distance = _distance_to_interval(footprint.three_prime_coord, start, end)
+            out.append(SiteVariant(
+                primer=footprint.primer,
+                chrom=variant.chrom,
+                pos=start,
+                end=end,
+                ref=variant.ref,
+                alt=list(variant.alt),
+                kind=variant_kind(variant),
+                in_3prime_5bp=distance < 5,
+                distance_from_3prime=distance,
+            ))
+    return out
 
 
 def snps_under_primers(footprints: Sequence[PrimerFootprint],
                        variants: Sequence) -> List[SiteVariant]:
-    """Variants overlapping any primer footprint, flagged if they fall in the
-    3'-terminal 5 bp (the amplification-critical zone)."""
-    out: List[SiteVariant] = []
-    for fp in footprints:
-        for v in variants:
-            if v.chrom != fp.chrom:
-                continue
-            if v.pos < fp.start or v.pos > fp.end:
-                continue
-            dist = abs(v.pos - fp.three_prime_coord)
-            out.append(SiteVariant(
-                primer=fp.primer, chrom=v.chrom, pos=v.pos, ref=v.ref,
-                alt=list(v.alt), in_3prime_5bp=dist < 5, distance_from_3prime=dist))
-    return out
+    """Backward-compatible alias for :func:`variants_under_primers`."""
+    return variants_under_primers(footprints, variants)
 
 
 def amplicon_variants(chrom: str, start: int, end: int,
                       variants: Sequence) -> List:
-    """Variants inside the amplicon span (the polymorphisms a CAPS/dCAPS marker
-    would genotype)."""
+    """Variants whose reference span overlaps the amplicon."""
     lo, hi = min(start, end), max(start, end)
-    return [v for v in variants if v.chrom == chrom and lo <= v.pos <= hi]
+    return [variant for variant in variants
+            if variant.chrom == chrom
+            and _variant_end(variant) >= lo
+            and int(variant.pos) <= hi]
 
 
 def conservation_from_per_db(per_db: Sequence[Dict], designed_size: int,
                              tol: int = 15) -> Dict:
-    """Which reference databases conserve the amplicon.
-
-    A reference conserves it if it yields a proper forward+reverse product of
-    ~the designed size (mismatches allowed -- the primers still bind, which is
-    what "conserved" means for a working assay)."""
     conserved: List[str] = []
     details: Dict[str, Dict] = {}
-    for d in per_db:
-        db = d["db"].split("/")[-1]
-        products = list(d.get("on_target", [])) + list(d.get("off_target", []))
+    for result in per_db:
+        db = result["db"].split("/")[-1]
+        products = list(result.get("on_target", [])) + list(result.get("off_target", []))
         hit = None
-        for a in products:
-            proper = {a.fwd_primer, a.rev_primer} == {"F", "R"}
-            if proper and abs(a.size - designed_size) <= tol:
-                hit = a
+        for amplicon in products:
+            proper = {amplicon.fwd_primer, amplicon.rev_primer} == {"F", "R"}
+            if proper and abs(amplicon.size - designed_size) <= tol:
+                hit = amplicon
                 break
         details[db] = {
             "conserved": hit is not None,

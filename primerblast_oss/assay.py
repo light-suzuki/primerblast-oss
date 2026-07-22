@@ -1,215 +1,542 @@
-"""High-level assay design: the full breeding-oriented pipeline.
-
-target (gene / interval / SNP / coords)
-  -> extract template from a local genome (+flank, strand-aware)
-  -> Primer3 design
-  -> specificity across one or more reference genomes (intended vs F/F, R/R, F/R
-     off-targets, with genomic coordinates and 3'-end mismatch)
-  -> SNPs under primers (VCF) and amplicon conservation across references
-  -> optional CAPS/dCAPS enzyme scan for a SNP
-  -> experimenter risk (low/medium/high)
-Returns plain dicts ready for the CSV / BED / HTML / order-table writers.
-"""
+"""High-level breeding assay design pipeline."""
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Sequence
+from typing import Dict, List, Mapping, Optional, Sequence
 
 from .design import DesignParams
-from .specificity import SpecParams
+from .specificity import (
+    SEARCH_COMPLETE,
+    SpecParams,
+    combine_search_completeness,
+)
 from .pipeline import run_pipeline
-from .genome import Genome, revcomp
+from .genome import Genome
 from .regions import GenomicRegion, Template, extract_template
 from .variants import (
-    footprints_from_amplicon, snps_under_primers, amplicon_variants,
+    amplicon_variants,
     conservation_from_per_db,
+    footprints_from_amplicon,
+    snps_under_primers,
+    variant_kind,
 )
 from .risk import assess_risk
 
 
-def _orientation_kind(a) -> str:
-    if {a.fwd_primer, a.rev_primer} == {"F", "R"}:
+def _orientation_kind(amplicon) -> str:
+    if {amplicon.fwd_primer, amplicon.rev_primer} == {"F", "R"}:
         return "FR"
-    if a.fwd_primer == a.rev_primer == "F":
+    if amplicon.fwd_primer == amplicon.rev_primer == "F":
         return "FF"
-    if a.fwd_primer == a.rev_primer == "R":
+    if amplicon.fwd_primer == amplicon.rev_primer == "R":
         return "RR"
     return "other"
 
 
-def _amp_dict(a) -> Dict:
+def _amp_dict(amplicon) -> Dict:
     return {
-        "subject": a.subject, "start": a.start, "end": a.end, "size": a.size,
-        "orientation": f"{a.fwd_primer}/{a.rev_primer}", "on_target": a.on_target,
-        "fwd_mismatch": a.fwd_mismatch, "rev_mismatch": a.rev_mismatch,
-        "fwd_tp5": a.fwd_tp5, "rev_tp5": a.rev_tp5,
+        "subject": amplicon.subject,
+        "start": amplicon.start,
+        "end": amplicon.end,
+        "size": amplicon.size,
+        "orientation": "%s/%s" % (amplicon.fwd_primer, amplicon.rev_primer),
+        "on_target": amplicon.on_target,
+        "fwd_mismatch": amplicon.fwd_mismatch,
+        "rev_mismatch": amplicon.rev_mismatch,
+        "fwd_tp5": amplicon.fwd_tp5,
+        "rev_tp5": amplicon.rev_tp5,
     }
 
 
-def _overlaps(a, chrom: str, lo: int, hi: int) -> bool:
-    if a.subject != chrom:
+def _overlaps(amplicon, chrom: str, low: int, high: int) -> bool:
+    if amplicon.subject != chrom:
         return False
-    a_lo, a_hi = min(a.start, a.end), max(a.start, a.end)
-    return a_lo <= hi and a_hi >= lo
+    amplicon_low = min(amplicon.start, amplicon.end)
+    amplicon_high = max(amplicon.start, amplicon.end)
+    return amplicon_low <= high and amplicon_high >= low
 
 
-def reclassify_by_anchor(design_res: Dict, chrom: str, ext_start: int, ext_end: int,
-                         designed_size: int, gel_min_gap: int = 50) -> Dict:
-    """Re-decide intended vs off-target using the template's genomic locus.
-
-    The generic per-db result marks *every* perfect-size proper product as
-    on_target; but only the product at the template's own locus is truly
-    intended. Perfect products elsewhere are paralog/duplication off-targets --
-    exactly the case the generic heuristic hides."""
-    all_products = list(design_res.get("on_target", [])) + list(design_res.get("off_target", []))
-    on, off = [], []
-    for a in all_products:
-        proper = {a.fwd_primer, a.rev_primer} == {"F", "R"}
-        intended = (proper and _overlaps(a, chrom, ext_start, ext_end)
-                    and a.fwd_mismatch == 0 and a.rev_mismatch == 0)
-        a.on_target = intended
-        (on if intended else off).append(a)
-    ref_size = designed_size
-    comig = [a for a in off if abs(a.size - ref_size) < gel_min_gap]
+def expected_amplicon_from_design(pair, template: Template) -> Dict:
+    left_5p = template.to_genomic(pair.left_start)
+    right_5p = template.to_genomic(pair.right_start)
+    if template.anchor_strand == "+":
+        start, end = left_5p, right_5p
+        left_name, right_name = "F", "R"
+    else:
+        start, end = right_5p, left_5p
+        left_name, right_name = "R", "F"
+    if start > end:
+        start, end = end, start
+        left_name, right_name = right_name, left_name
     return {
-        **design_res, "on_target": on, "off_target": off,
-        "n_on_target": len(on), "n_off_target": len(off),
-        "n_comigrating": len(comig),
-        "gel_distinguishable": len(comig) == 0,
-        "specific": len(off) == 0 and len(on) >= 1,
+        "subject": template.region.chrom,
+        "start": start,
+        "end": end,
+        "size": end - start + 1,
+        "orientation": "%s/%s" % (left_name, right_name),
+        "fwd_primer": left_name,
+        "rev_primer": right_name,
+    }
+
+
+def _positions_from_expected(expected: Dict, len_f: int,
+                             len_r: int) -> Dict[str, List[int]]:
+    lengths = {"F": len_f, "R": len_r}
+    left_name = expected["fwd_primer"]
+    right_name = expected["rev_primer"]
+    left = [expected["start"], expected["start"] + lengths[left_name] - 1]
+    right = [expected["end"] - lengths[right_name] + 1, expected["end"]]
+    by_name = {left_name: left, right_name: right}
+    return {
+        "left": left,
+        "right": right,
+        "forward": by_name["F"],
+        "reverse": by_name["R"],
+    }
+
+
+def reclassify_by_anchor(
+    design_res: Dict,
+    chrom: Optional[str] = None,
+    ext_start: Optional[int] = None,
+    ext_end: Optional[int] = None,
+    designed_size: Optional[int] = None,
+    gel_min_gap: int = 50,
+    *,
+    template: Optional[Template] = None,
+    pair=None,
+    coordinate_tolerance: int = 0,
+    size_tolerance: int = 0,
+    expected_primer_mismatches: Optional[Mapping[str, int]] = None,
+) -> Dict:
+    allowed_mismatches = {
+        name: max(0, int(value))
+        for name, value in (expected_primer_mismatches or {}).items()
+    }
+    all_products = (
+        list(design_res.get("on_target", []))
+        + list(design_res.get("off_target", []))
+    )
+    for amplicon in all_products:
+        amplicon.on_target = False
+
+    expected = None
+    candidates = []
+    if template is not None and pair is not None:
+        expected = expected_amplicon_from_design(pair, template)
+        reference_size = expected["size"]
+        for amplicon in all_products:
+            exact = (
+                amplicon.subject == expected["subject"]
+                and abs(amplicon.start - expected["start"]) <= coordinate_tolerance
+                and abs(amplicon.end - expected["end"]) <= coordinate_tolerance
+                and amplicon.fwd_primer == expected["fwd_primer"]
+                and amplicon.rev_primer == expected["rev_primer"]
+                and abs(amplicon.size - expected["size"]) <= size_tolerance
+                and amplicon.fwd_mismatch
+                <= allowed_mismatches.get(amplicon.fwd_primer, 0)
+                and amplicon.rev_mismatch
+                <= allowed_mismatches.get(amplicon.rev_primer, 0)
+            )
+            if exact:
+                candidates.append(amplicon)
+    else:
+        if chrom is None or ext_start is None or ext_end is None:
+            raise ValueError(
+                "reclassify_by_anchor needs template+pair or legacy interval arguments")
+        reference_size = designed_size
+        for amplicon in all_products:
+            proper = {amplicon.fwd_primer, amplicon.rev_primer} == {"F", "R"}
+            if (proper and _overlaps(amplicon, chrom, ext_start, ext_end)
+                    and amplicon.fwd_mismatch
+                    <= allowed_mismatches.get(amplicon.fwd_primer, 0)
+                    and amplicon.rev_mismatch
+                    <= allowed_mismatches.get(amplicon.rev_primer, 0)):
+                candidates.append(amplicon)
+
+    if len(candidates) == 1:
+        intended_status = "unique"
+        candidates[0].on_target = True
+        on_target = [candidates[0]]
+    elif not candidates:
+        intended_status = "missing"
+        on_target = []
+    else:
+        intended_status = "ambiguous"
+        on_target = []
+        for candidate in candidates:
+            candidate.__dict__["ambiguous_intended_candidate"] = True
+
+    off_target = [amplicon for amplicon in all_products if not amplicon.on_target]
+    comigrating = [
+        amplicon for amplicon in off_target
+        if reference_size is not None
+        and abs(amplicon.size - reference_size) < gel_min_gap
+    ]
+    nearest_gap = (
+        min(abs(amplicon.size - reference_size) for amplicon in off_target)
+        if reference_size is not None and off_target else None
+    )
+
+    search_completeness = design_res.get("search_completeness", SEARCH_COMPLETE)
+    observed_specific = intended_status == "unique" and len(off_target) == 0
+    if not observed_specific:
+        specific = False
+        specificity_status = "non_specific"
+    elif search_completeness == SEARCH_COMPLETE:
+        specific = True
+        specificity_status = "specific"
+    else:
+        specific = None
+        specificity_status = "indeterminate"
+
+    return {
+        **design_res,
+        "n_products": len(all_products),
+        "on_target": on_target,
+        "off_target": off_target,
+        "n_on_target": len(on_target),
+        "n_off_target": len(off_target),
+        "n_comigrating": len(comigrating),
+        "nearest_offtarget_gap": nearest_gap,
+        "gel_distinguishable": len(comigrating) == 0,
+        "specific_observed": observed_specific,
+        "specific": specific,
+        "specificity_status": specificity_status,
+        "intended_status": intended_status,
+        "expected_amplicon": expected,
+    }
+
+
+def _variant_record_dict(variant) -> Dict:
+    end = getattr(
+        variant, "end", int(variant.pos) + max(1, len(str(variant.ref))) - 1)
+    return {
+        "pos": int(variant.pos),
+        "end": int(end),
+        "ref": variant.ref,
+        "alt": list(variant.alt),
+        "kind": variant_kind(variant),
     }
 
 
 def analyze_pair(pair, per_db: Sequence[Dict], design_db: str,
                  template: Optional[Template], variants: Sequence,
                  caps_info: Optional[Dict], gel_min_gap: int = 50,
-                 dimer_params=None) -> Dict:
-    """Build a full summary dict for one designed pair."""
+                 dimer_params=None,
+                 expected_primer_mismatches: Optional[Mapping[str, int]] = None) -> Dict:
     len_f, len_r = len(pair.forward), len(pair.reverse)
-    design_res = next((d for d in per_db if d["db"] == design_db), per_db[0])
+    design_res = next(
+        (result for result in per_db if result["db"] == design_db), per_db[0])
     if template is not None:
         design_res = reclassify_by_anchor(
-            design_res, template.region.chrom, template.ext_start, template.ext_end,
-            pair.product_size, gel_min_gap)
+            design_res,
+            template=template,
+            pair=pair,
+            gel_min_gap=gel_min_gap,
+            expected_primer_mismatches=expected_primer_mismatches,
+        )
+
+    per_db_views = [
+        design_res if result["db"] == design_res["db"] else result
+        for result in per_db
+    ]
+    overall_completeness = combine_search_completeness([
+        view.get("search_completeness", SEARCH_COMPLETE) for view in per_db_views
+    ])
+    db_specific_values = [view.get("specific") for view in per_db_views]
+    if any(value is False for value in db_specific_values):
+        specific_all_db = False
+        specificity_status_all_db = "non_specific"
+    elif any(value is None for value in db_specific_values):
+        specific_all_db = None
+        specificity_status_all_db = "indeterminate"
+    elif db_specific_values and all(value is True for value in db_specific_values):
+        specific_all_db = True
+        specificity_status_all_db = "specific"
+    else:
+        specific_all_db = False
+        specificity_status_all_db = "non_specific"
 
     per_db_products = []
-    for db_res in per_db:
-        view = design_res if db_res["db"] == design_res["db"] else db_res
+    for view in per_db_views:
         per_db_products.append({
             "db": view["db"],
             "n_products": view.get("n_products", 0),
             "n_on_target": view.get("n_on_target", 0),
             "n_off_target": view.get("n_off_target", 0),
             "n_comigrating": view.get("n_comigrating", 0),
-            "specific": view.get("specific", False),
+            "specific": view.get("specific"),
+            "specific_observed": view.get("specific_observed"),
+            "specificity_status": view.get("specificity_status"),
+            "search_completeness": view.get(
+                "search_completeness", SEARCH_COMPLETE),
+            "primer_search_completeness": view.get(
+                "primer_search_completeness", {}),
+            "completeness_recommendation": view.get(
+                "completeness_recommendation"),
+            "thermo_status": view.get("thermo_status"),
+            "thermo_evaluated": view.get("thermo_evaluated", False),
+            "thermo_genome_fasta": view.get("thermo_genome_fasta"),
+            "thermo_genome_association": view.get(
+                "thermo_genome_association"),
+            "intended_status": view.get("intended_status"),
+            "expected_amplicon": view.get("expected_amplicon"),
             "gel_distinguishable": view.get("gel_distinguishable", True),
             "nearest_offtarget_gap": view.get("nearest_offtarget_gap"),
-            "products": [_amp_dict(a) for a in (
-                list(view.get("on_target", [])) + list(view.get("off_target", []))
+            "products": [_amp_dict(amplicon) for amplicon in (
+                list(view.get("on_target", []))
+                + list(view.get("off_target", []))
             )],
         })
 
-    on = list(design_res.get("on_target", []))
-    off = list(design_res.get("off_target", []))
-    n_ff = sum(1 for a in off if _orientation_kind(a) == "FF")
-    n_rr = sum(1 for a in off if _orientation_kind(a) == "RR")
-    n_fr = sum(1 for a in off if _orientation_kind(a) == "FR")
-    offtarget_min_tp5 = min((min(a.fwd_tp5, a.rev_tp5) for a in off), default=None)
+    on_target = list(design_res.get("on_target", []))
+    off_target = list(design_res.get("off_target", []))
+    intended_status = design_res.get(
+        "intended_status", "unique" if len(on_target) == 1 else "missing")
+    n_ff = sum(_orientation_kind(amplicon) == "FF" for amplicon in off_target)
+    n_rr = sum(_orientation_kind(amplicon) == "RR" for amplicon in off_target)
+    n_fr = sum(_orientation_kind(amplicon) == "FR" for amplicon in off_target)
+    offtarget_min_tp5 = min(
+        (min(amplicon.fwd_tp5, amplicon.rev_tp5) for amplicon in off_target),
+        default=None,
+    )
 
-    # genomic footprints + SNPs under primers (needs an intended amplicon)
-    site_snps: List = []
-    snp_in_primer = snp_in_primer_3prime = False
-    amp_span_variants: List = []
-    intended = on[0] if on else None
+    intended = on_target[0] if len(on_target) == 1 else None
+    site_variants: List = []
+    amplicon_span_variants: List = []
+    footprints = (
+        footprints_from_amplicon(intended, len_f, len_r)
+        if intended is not None else []
+    )
     if intended is not None and variants:
-        fps = footprints_from_amplicon(intended, len_f, len_r)
-        site_snps = snps_under_primers(fps, variants)
-        snp_in_primer = len(site_snps) > 0
-        snp_in_primer_3prime = any(s.in_3prime_5bp for s in site_snps)
-        amp_span_variants = amplicon_variants(intended.subject, intended.start,
-                                              intended.end, variants)
+        site_variants = snps_under_primers(footprints, variants)
+        amplicon_span_variants = amplicon_variants(
+            intended.subject, intended.start, intended.end, variants)
+    variant_in_primer = bool(site_variants)
+    variant_in_primer_3prime = any(
+        site.in_3prime_5bp for site in site_variants)
 
-    conservation = conservation_from_per_db(per_db, pair.product_size)
+    conservation = conservation_from_per_db(per_db_views, pair.product_size)
 
-    from . import dimers as _dimers
-    dimer = (_dimers.analyze_pair(pair.forward, pair.reverse, dimer_params)
-             if _dimers.available() else None)
+    from . import dimers as dimer_module
+    dimer = (
+        dimer_module.analyze_pair(pair.forward, pair.reverse, dimer_params)
+        if dimer_module.available() else None
+    )
 
     risk = assess_risk(
+        intended_status=intended_status,
+        search_completeness=overall_completeness,
         n_comigrating_offtarget=design_res.get("n_comigrating", 0),
-        n_ff=n_ff, n_rr=n_rr, n_fr_offtarget=n_fr,
+        n_ff=n_ff,
+        n_rr=n_rr,
+        n_fr_offtarget=n_fr,
         offtarget_min_tp5=offtarget_min_tp5,
-        snp_in_primer=snp_in_primer, snp_in_primer_3prime=snp_in_primer_3prime,
-        tm_diff=abs(pair.tm_f - pair.tm_r), gc_f=pair.gc_f, gc_r=pair.gc_r,
+        snp_in_primer=variant_in_primer,
+        snp_in_primer_3prime=variant_in_primer_3prime,
+        tm_diff=abs(pair.tm_f - pair.tm_r),
+        gc_f=pair.gc_f,
+        gc_r=pair.gc_r,
         gel_distinguishable=design_res.get("gel_distinguishable", True),
-        conserved_fraction=(conservation["n_conserved"] / conservation["n_refs"]
-                            if conservation["n_refs"] else None),
+        conserved_fraction=(
+            conservation["n_conserved"] / conservation["n_refs"]
+            if conservation["n_refs"] else None
+        ),
         dimer_concern=(dimer["n_concerning"] > 0 if dimer else False),
         cross_dimer_dg=(dimer["cross_dimer_dg"] if dimer else None),
     )
 
-    left_pos = [intended.start, intended.start + len_f - 1] if intended else \
-        [pair.left_start + 1, pair.left_3p + 1]
-    right_pos = [intended.end - len_r + 1, intended.end] if intended else \
-        [pair.right_3p + 1, pair.right_start + 1]
+    expected = design_res.get("expected_amplicon")
+    if expected is None and template is not None:
+        expected = expected_amplicon_from_design(pair, template)
+    if expected is not None:
+        positions = _positions_from_expected(expected, len_f, len_r)
+    else:
+        positions = {
+            "left": [pair.left_start + 1, pair.left_3p + 1],
+            "right": [pair.right_3p + 1, pair.right_start + 1],
+            "forward": [pair.left_start + 1, pair.left_3p + 1],
+            "reverse": [pair.right_3p + 1, pair.right_start + 1],
+        }
+
+    primer_variant_dicts = [{
+        "primer": site.primer,
+        "chrom": site.chrom,
+        "pos": site.pos,
+        "end": site.end,
+        "ref": site.ref,
+        "alt": list(site.alt),
+        "kind": site.kind,
+        "in_3prime_5bp": site.in_3prime_5bp,
+        "distance_from_3prime": site.distance_from_3prime,
+    } for site in site_variants]
+    amplicon_variant_dicts = [
+        _variant_record_dict(variant) for variant in amplicon_span_variants
+    ]
+    thermo_status_by_db = {
+        view["db"]: view.get("thermo_status") for view in per_db_views
+    }
+    thermo_genomes_by_db = {
+        view["db"]: view.get("thermo_genome_fasta") for view in per_db_views
+    }
 
     return {
-        "name": f"{pair.template_id}_P{pair.index+1}",
-        "forward": pair.forward, "reverse": pair.reverse,
+        "name": "%s_P%s" % (pair.template_id, pair.index + 1),
+        "forward": pair.forward,
+        "reverse": pair.reverse,
         "product_size": pair.product_size,
-        "tm_f": round(pair.tm_f, 1), "tm_r": round(pair.tm_r, 1),
-        "gc_f": round(pair.gc_f, 1), "gc_r": round(pair.gc_r, 1),
-        "left_pos": left_pos, "right_pos": right_pos,
-        "risk": risk.level, "risk_score": risk.score, "risk_reasons": risk.reasons,
-        "n_off_target": len(off), "n_ff": n_ff, "n_rr": n_rr, "n_fr_offtarget": n_fr,
+        "tm_f": round(pair.tm_f, 1),
+        "tm_r": round(pair.tm_r, 1),
+        "gc_f": round(pair.gc_f, 1),
+        "gc_r": round(pair.gc_r, 1),
+        "left_pos": positions["left"],
+        "right_pos": positions["right"],
+        "forward_pos": positions["forward"],
+        "reverse_pos": positions["reverse"],
+        "intended_status": intended_status,
+        "expected_amplicon": expected,
+        "specific": design_res.get("specific"),
+        "specific_observed": design_res.get("specific_observed"),
+        "specificity_status": design_res.get("specificity_status"),
+        "specific_all_db": specific_all_db,
+        "specificity_status_all_db": specificity_status_all_db,
+        "search_completeness": overall_completeness,
+        "search_complete_all_db": overall_completeness == SEARCH_COMPLETE,
+        "incomplete_databases": [
+            view["db"] for view in per_db_views
+            if view.get("search_completeness", SEARCH_COMPLETE) != SEARCH_COMPLETE
+        ],
+        "thermo_status_by_db": thermo_status_by_db,
+        "thermo_genomes_by_db": thermo_genomes_by_db,
+        "risk": risk.level,
+        "risk_score": risk.score,
+        "risk_reasons": risk.reasons,
+        "n_off_target": len(off_target),
+        "n_ff": n_ff,
+        "n_rr": n_rr,
+        "n_fr_offtarget": n_fr,
         "tp5_mismatch_min": offtarget_min_tp5,
-        "snp_in_primer": snp_in_primer, "snp_in_primer_3prime": snp_in_primer_3prime,
-        "amplicon_snps": [{"pos": v.pos, "ref": v.ref, "alt": list(v.alt)}
-                          for v in amp_span_variants],
+        "variant_in_primer": variant_in_primer,
+        "variant_in_primer_3prime": variant_in_primer_3prime,
+        "snp_in_primer": variant_in_primer,
+        "snp_in_primer_3prime": variant_in_primer_3prime,
+        "primer_variants": primer_variant_dicts,
+        "amplicon_variants": amplicon_variant_dicts,
+        "amplicon_snps": amplicon_variant_dicts,
         "conserved_refs": conservation["conserved_in"],
         "conservation": conservation,
         "caps_enzyme": (caps_info or {}).get("best_enzyme"),
+        "marker_type": (caps_info or {}).get("best_marker_type"),
         "caps": caps_info,
         "gel_distinguishable": design_res.get("gel_distinguishable", True),
         "dimers": ({
-            "worst_dg": dimer["worst_dg"], "cross_dimer_dg": dimer["cross_dimer_dg"],
-            "n_concerning": dimer["n_concerning"], "ok": dimer["ok"],
-            "concerning": [{"kind": s.kind, "a": s.a, "b": s.b, "tm": s.tm, "dg": s.dg}
-                           for s in dimer["structures"] if s.concerning],
+            "worst_dg": dimer["worst_dg"],
+            "cross_dimer_dg": dimer["cross_dimer_dg"],
+            "n_concerning": dimer["n_concerning"],
+            "ok": dimer["ok"],
+            "concerning": [
+                {"kind": structure.kind, "a": structure.a, "b": structure.b,
+                 "tm": structure.tm, "dg": structure.dg}
+                for structure in dimer["structures"] if structure.concerning
+            ],
         } if dimer else None),
         "per_db_products": per_db_products,
-        "products": [_amp_dict(a) for a in on + off],
+        "products": [
+            _amp_dict(amplicon) for amplicon in on_target + off_target
+        ],
     }
 
 
 def build_caps(template: Template, pair, snp_local_index: int,
                alt_base: str, gel_min_gap: int = 25) -> Optional[Dict]:
-    """CAPS/dCAPS scan: build the two allele amplicons (ref vs alt at the SNP)
-    and find enzymes that digest them differently."""
-    from .caps import caps_scan, enzymes_gained_lost
-    seq = template.seq
-    lo = pair.left_start
-    hi = pair.right_start
-    if not (lo <= snp_local_index <= hi):
+    """Build exact natural-CAPS digest results for the designed amplicon."""
+    from .caps import caps_scan, enzymes_gained_lost, result_to_dict
+
+    sequence = template.seq
+    low = pair.left_start
+    high = pair.right_start
+    if not (low <= snp_local_index <= high):
         return None
-    amp_ref = seq[lo:hi + 1]
-    rel = snp_local_index - lo
-    amp_alt = amp_ref[:rel] + alt_base.upper() + amp_ref[rel + 1:]
-    results = caps_scan(amp_ref, amp_alt, gel_min_gap=gel_min_gap)
-    gl = enzymes_gained_lost(amp_ref, amp_alt)
-    best = None
-    for r in results:
-        if r.distinguishable:
-            best = r
-            break
+    amplicon_ref = sequence[low:high + 1].upper()
+    relative_index = snp_local_index - low
+    ref_base = amplicon_ref[relative_index]
+    amplicon_alt = (
+        amplicon_ref[:relative_index]
+        + alt_base.upper()
+        + amplicon_ref[relative_index + 1:]
+    )
+    results = caps_scan(
+        amplicon_ref, amplicon_alt, gel_min_gap=gel_min_gap)
+    gained_lost = enzymes_gained_lost(amplicon_ref, amplicon_alt)
+    best = next(
+        (result for result in results if result.distinguishable), None)
     return {
+        "best_marker_type": "CAPS" if best else None,
         "best_enzyme": best.enzyme if best else None,
         "best_distinguishable": bool(best),
         "allele_ref_fragments": best.allele_a_fragments if best else None,
         "allele_alt_fragments": best.allele_b_fragments if best else None,
         "min_gel_gap": best.min_gel_gap if best else None,
-        "gained": gl.get("gained", []), "lost": gl.get("lost", []),
-        "n_candidate_enzymes": sum(1 for r in results if r.distinguishable),
+        "best_result": result_to_dict(best) if best else None,
+        "natural_candidates": [result_to_dict(result) for result in results],
+        "gained": gained_lost.get("gained", []),
+        "lost": gained_lost.get("lost", []),
+        "n_candidate_enzymes": sum(
+            result.distinguishable for result in results),
+        "snp_local_index": snp_local_index,
+        "snp_amplicon_index": relative_index,
+        "ref_base": ref_base,
+        "alt_base": alt_base.upper(),
+        "dcaps": None,
     }
+
+
+def _attach_dcaps(
+    caps_info: Dict,
+    template: Template,
+    pair,
+    snp_local: int,
+    alt_base: str,
+    databases: Sequence[str],
+    spec_params: SpecParams,
+    blastn_bin: Optional[str],
+    genomes_by_db: Mapping[str, object],
+    thermo_params,
+    thermo_gate: bool,
+    dimer_params,
+    variants: Sequence,
+    max_candidates: int,
+) -> Dict:
+    from .dcaps_workflow import evaluate_dcaps_candidates
+
+    dcaps = evaluate_dcaps_candidates(
+        template,
+        pair,
+        snp_local,
+        alt_base,
+        databases,
+        spec_params=spec_params,
+        blastn_bin=blastn_bin,
+        genomes_by_db=genomes_by_db,
+        thermo_params=thermo_params,
+        thermo_gate=thermo_gate,
+        dimer_params=dimer_params,
+        variants=variants,
+        max_candidates_to_screen=max_candidates,
+    )
+    caps_info["dcaps"] = dcaps
+    best = dcaps.get("best")
+    if best and best.get("orderable"):
+        caps_info["best_marker_type"] = "dCAPS"
+        caps_info["best_enzyme"] = best["enzyme"]
+        caps_info["best_distinguishable"] = True
+        caps_info["allele_ref_fragments"] = best["digest"][
+            "allele_a_fragments"]
+        caps_info["allele_alt_fragments"] = best["digest"][
+            "allele_b_fragments"]
+        caps_info["min_gel_gap"] = best["digest"]["min_gel_gap"]
+        caps_info["best_result"] = best
+    return caps_info
 
 
 def run_assay(
@@ -220,110 +547,187 @@ def run_assay(
     design_params: Optional[DesignParams] = None,
     spec_params: Optional[SpecParams] = None,
     variants: Optional[Sequence] = None,
-    caps_snp: Optional[Dict] = None,   # {"genomic_pos":int, "alt":str}
+    caps_snp: Optional[Dict] = None,
     primer3_bin: Optional[str] = None,
     blastn_bin: Optional[str] = None,
+    genomes_by_db: Optional[Mapping[str, object]] = None,
     thermo_params=None,
     thermo_gate: bool = True,
     dimer_params=None,
+    dcaps_pairs_to_screen: int = 3,
+    dcaps_candidates_per_pair: int = 6,
 ) -> Dict:
-    """Design and fully evaluate primers for one target region."""
     template = extract_template(genome, region, flank=flank)
     design_db = databases[0]
+    associated_genomes = dict(genomes_by_db or {})
+    associated_genomes.setdefault(design_db, genome)
 
-    # for a CAPS/dCAPS assay the amplicon must span the SNP: target it so every
-    # designed product flanks it.
-    dp = design_params or DesignParams()
+    design_params = design_params or DesignParams()
+    specificity = spec_params or SpecParams()
     if caps_snp is not None:
-        snp_local0 = _genomic_to_local(template, caps_snp["genomic_pos"])
-        if snp_local0 is not None:
+        snp_local = _genomic_to_local(template, caps_snp["genomic_pos"])
+        if snp_local is not None:
             from dataclasses import replace
-            dp = replace(dp, target=(snp_local0, 1))
+            design_params = replace(design_params, target=(snp_local, 1))
 
     result = run_pipeline(
-        template.id, template.seq, databases,
-        design_params=dp, spec_params=spec_params,
-        primer3_bin=primer3_bin, blastn_bin=blastn_bin,
-        genome=genome, thermo_params=thermo_params, thermo_gate=thermo_gate,
+        template.id,
+        template.seq,
+        databases,
+        design_params=design_params,
+        spec_params=specificity,
+        primer3_bin=primer3_bin,
+        blastn_bin=blastn_bin,
+        genomes_by_db=associated_genomes,
+        thermo_params=thermo_params,
+        thermo_gate=thermo_gate,
+        dimer_params=dimer_params,
     )
 
     variants = variants or []
-    gel_min_gap = spec_params.gel_min_gap_bp if spec_params else 50
+    gel_min_gap = specificity.gel_min_gap_bp
     pair_dicts: List[Dict] = []
-    for pair in result.pairs:
-        per_db = pair.specificity["per_db"]
+    for pair_index, pair in enumerate(result.pairs):
         caps_info = None
         if caps_snp is not None:
-            snp_local = _genomic_to_local(template, caps_snp["genomic_pos"])
+            snp_local = _genomic_to_local(
+                template, caps_snp["genomic_pos"])
             if snp_local is not None:
-                caps_info = build_caps(template, pair, snp_local, caps_snp["alt"])
-        pair_dicts.append(
-            analyze_pair(pair, per_db, design_db, template, variants, caps_info,
-                         gel_min_gap=gel_min_gap, dimer_params=dimer_params))
+                caps_info = build_caps(
+                    template, pair, snp_local, caps_snp["alt"])
+                if (caps_info is not None
+                        and not caps_info.get("best_distinguishable")):
+                    if pair_index < dcaps_pairs_to_screen:
+                        caps_info = _attach_dcaps(
+                            caps_info,
+                            template,
+                            pair,
+                            snp_local,
+                            caps_snp["alt"],
+                            databases,
+                            specificity,
+                            blastn_bin,
+                            associated_genomes,
+                            thermo_params,
+                            thermo_gate,
+                            dimer_params,
+                            variants,
+                            dcaps_candidates_per_pair,
+                        )
+                    else:
+                        caps_info["dcaps"] = {
+                            "status": "skipped_pair_limit",
+                            "reason": (
+                                "dCAPS specificity screening is limited to the "
+                                "top %s parent primer pairs" % dcaps_pairs_to_screen),
+                            "candidates": [],
+                            "n_orderable": 0,
+                        }
+        pair_dicts.append(analyze_pair(
+            pair,
+            pair.specificity["per_db"],
+            design_db,
+            template,
+            variants,
+            caps_info,
+            gel_min_gap=gel_min_gap,
+            dimer_params=dimer_params,
+        ))
 
-    # order by risk then specificity score
-    order = {"low": 0, "medium": 1, "high": 2}
-    pair_dicts.sort(key=lambda p: (order.get(p["risk"], 3), -p.get("risk_score", 0)))
-
+    risk_order = {"low": 0, "medium": 1, "high": 2}
+    pair_dicts.sort(key=lambda pair_dict: (
+        risk_order.get(pair_dict["risk"], 3),
+        pair_dict.get("marker_type") is None if caps_snp is not None else False,
+        -pair_dict.get("risk_score", 0),
+    ))
     return {
         "target": {
-            "name": region.name, "chrom": region.chrom,
-            "start": region.start, "end": region.end, "strand": region.strand,
-            "source": region.source, "flank": flank,
+            "name": region.name,
+            "chrom": region.chrom,
+            "start": region.start,
+            "end": region.end,
+            "strand": region.strand,
+            "source": region.source,
+            "flank": flank,
         },
         "template_len": len(template.seq),
         "databases": list(databases),
+        "thermo_genomes": {
+            database: getattr(associated_genomes.get(database), "fasta", None)
+            for database in databases
+        },
+        "caps_metadata": {
+            "cut_coordinates": "top and bottom strand boundaries",
+            "default_recommendation_policy": (
+                "verified cleavage metadata and ordinary-PCR-compatible substrate"),
+            "dcaps_pairs_screened": min(
+                dcaps_pairs_to_screen, len(result.pairs)) if caps_snp else 0,
+            "dcaps_candidates_per_pair": (
+                dcaps_candidates_per_pair if caps_snp else 0),
+        },
         "n_pairs": len(pair_dicts),
         "pairs": pair_dicts,
     }
 
 
 def _genomic_to_local(template: Template, genomic_pos: int) -> Optional[int]:
-    """Inverse of Template.to_genomic: genomic coord -> 0-based template index."""
     if template.anchor_strand == "-":
-        idx = template.anchor_coord - genomic_pos
+        index = template.anchor_coord - genomic_pos
     else:
-        idx = genomic_pos - template.anchor_coord
-    if 0 <= idx < len(template.seq):
-        return idx
-    return None
+        index = genomic_pos - template.anchor_coord
+    return index if 0 <= index < len(template.seq) else None
 
 
 def run_batch(regions: Sequence[GenomicRegion], genome: Genome,
               databases: Sequence[str], **kwargs) -> List[Dict]:
-    """Run run_assay over many targets (genes, intervals, BED). One dict each."""
-    out: List[Dict] = []
+    output: List[Dict] = []
     for region in regions:
         try:
-            out.append(run_assay(region, genome, databases, **kwargs))
-        except Exception as e:  # noqa: BLE001 -- keep the batch going, record failure
-            out.append({"target": {"name": region.name, "chrom": region.chrom,
-                                    "start": region.start, "end": region.end},
-                        "error": str(e), "n_pairs": 0, "pairs": []})
-    return out
+            output.append(run_assay(region, genome, databases, **kwargs))
+        except Exception as error:  # noqa: BLE001
+            output.append({
+                "target": {
+                    "name": region.name,
+                    "chrom": region.chrom,
+                    "start": region.start,
+                    "end": region.end,
+                },
+                "error": str(error),
+                "n_pairs": 0,
+                "pairs": [],
+            })
+    return output
 
 
 def design_qtl_markers(interval: GenomicRegion, genome: Genome,
                        databases: Sequence[str], n_markers: int = 0,
                        spacing: int = 0, marker_flank: int = 300,
                        best_only: bool = True, **kwargs) -> List[Dict]:
-    """Place evenly spaced markers across a QTL interval and design a primer
-    pair at each. With best_only, keep just the lowest-risk pair per marker."""
     from .regions import tile_interval
     points = tile_interval(interval, n_markers=n_markers, spacing=spacing)
     results: List[Dict] = []
-    for pt in points:
-        region = GenomicRegion(pt.chrom, pt.start - marker_flank,
-                               pt.start + marker_flank, "+", pt.name, "qtl-marker")
+    for point in points:
+        region = GenomicRegion(
+            point.chrom,
+            point.start - marker_flank,
+            point.start + marker_flank,
+            "+",
+            point.name,
+            "qtl-marker",
+        )
         try:
-            res = run_assay(region, genome, databases, flank=0, **kwargs)
-        except Exception as e:  # noqa: BLE001
-            results.append({"marker": pt.name, "anchor": pt.start, "error": str(e),
-                            "pairs": []})
+            result = run_assay(region, genome, databases, flank=0, **kwargs)
+        except Exception as error:  # noqa: BLE001
+            results.append({
+                "marker": point.name,
+                "anchor": point.start,
+                "error": str(error),
+                "pairs": [],
+            })
             continue
-        if best_only and res["pairs"]:
-            res = {**res, "pairs": res["pairs"][:1]}
-        res["marker"] = pt.name
-        res["anchor"] = pt.start
-        results.append(res)
+        if best_only and result["pairs"]:
+            result = {**result, "pairs": result["pairs"][:1]}
+        result["marker"] = point.name
+        result["anchor"] = point.start
+        results.append(result)
     return results
