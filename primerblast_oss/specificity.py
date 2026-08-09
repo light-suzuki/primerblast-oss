@@ -10,7 +10,9 @@ from __future__ import annotations
 import shutil
 import subprocess
 from dataclasses import dataclass
-from typing import Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Callable, Dict, List, Mapping, Optional, Sequence, Tuple
+
+from .errors import BlastError, CancelledError, ToolMissingError
 
 _OUTFMT = (
     "6 qseqid sseqid pident length mismatch gapopen qstart qend sstart send "
@@ -157,7 +159,7 @@ def _detect_blastn(explicit: Optional[str]) -> str:
     for candidate in (explicit, "blastn"):
         if candidate and shutil.which(candidate):
             return shutil.which(candidate)  # type: ignore[return-value]
-    raise RuntimeError("blastn not found. Install BLAST+ or pass blastn_bin.")
+    raise ToolMissingError("blastn not found. Install BLAST+ or pass blastn_bin.")
 
 
 def _run_blast(primer: str, db: str, sp: SpecParams, blastn: str) -> str:
@@ -176,7 +178,7 @@ def _run_blast(primer: str, db: str, sp: SpecParams, blastn: str) -> str:
     ]
     proc = subprocess.run(cmd, input=query, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if proc.returncode != 0:
-        raise RuntimeError("blastn failed: %s" % proc.stderr.decode(errors="ignore"))
+        raise BlastError("blastn failed: %s" % proc.stderr.decode(errors="ignore"))
     return proc.stdout.decode(errors="ignore")
 
 
@@ -538,8 +540,11 @@ def in_silico_pcr(
     genome=None,
     thermo_params=None,
     thermo_gate: bool = True,
+    cancel_check: Optional[Callable[[], bool]] = None,
 ) -> Dict:
     sp = sp or SpecParams()
+    if cancel_check is not None and cancel_check():
+        raise CancelledError("in-silico PCR cancelled by caller")
     blastn = _detect_blastn(blastn_bin)
     sites, hit_stats = screen_primers_with_stats(primers, db, sp, blastn)
     sites, viable_sites, thermo_site_stats = annotate_thermo(
@@ -582,8 +587,11 @@ def pair_specificity(
     thermo_params=None,
     thermo_gate: bool = True,
     allowed_primer_mismatches: Optional[Mapping[str, int]] = None,
+    cancel_check: Optional[Callable[[], bool]] = None,
 ) -> Dict:
     sp = sp or SpecParams()
+    if cancel_check is not None and cancel_check():
+        raise CancelledError("pair specificity cancelled by caller")
     blastn = _detect_blastn(blastn_bin)
     primers = {"F": forward, "R": reverse}
     allowed_mismatches = {
