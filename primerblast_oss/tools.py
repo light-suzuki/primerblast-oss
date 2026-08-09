@@ -1,10 +1,14 @@
 """Helpers for building BLAST databases from FASTA."""
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
+import time
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
+
+_INDEX_SUFFIXES = (".nhr", ".nin", ".nsq")
 
 
 class FaidxError(RuntimeError):
@@ -80,6 +84,27 @@ def faidx_fetch(fasta: str, name: str, start: int, end: int) -> str:
     return seq.decode().upper()
 
 
+def _cleanup_temp_files(temp_out: Path) -> List[Path]:
+    """Remove every temporary index file; return the ones that could not be."""
+    leftovers: List[Path] = []
+    for path in temp_out.parent.glob(temp_out.name + ".*"):
+        try:
+            path.unlink()
+        except OSError:
+            leftovers.append(path)
+    return leftovers
+
+
+def _raise_cleanup_failed(kind: str, details: str, temp_out: Path,
+                          leftovers: List[Path]) -> None:
+    message = "makeblastdb %s: %s" % (kind, details)
+    if leftovers:
+        message += (
+            " (could not remove temporary files; leftover temp prefix: %s)"
+            % " ".join(str(path) for path in leftovers))
+    raise RuntimeError(message)
+
+
 def make_blastdb(
     fasta: str,
     out: Optional[str] = None,
@@ -88,6 +113,14 @@ def make_blastdb(
     makeblastdb_bin: Optional[str] = None,
 ) -> str:
     """Build a nucleotide BLAST database. Returns the db path prefix.
+
+    The database is built under a temporary prefix in the same directory as
+    the final prefix and moved there only after the run exits 0 and the core
+    index files (``.nhr``/``.nin``/``.nsq``) are present. A failed or
+    interrupted build therefore never leaves a partial database at the final
+    prefix, and an existing database at that prefix is only ever replaced by
+    a fully built one. If cleanup of the temporary files fails, the leftover
+    temp prefix is named in the error message.
 
     parse_seqids is on by default so downstream tools can extract subject
     regions by accession; the existing local pea DBs were built without it.
@@ -98,10 +131,46 @@ def make_blastdb(
     fasta_p = Path(fasta)
     out = out or str(fasta_p.with_suffix(""))
     title = title or fasta_p.stem
-    cmd = [exe, "-in", fasta, "-dbtype", "nucl", "-out", out, "-title", title]
+    out_p = Path(out)
+    temp_out = out_p.parent / (
+        out_p.name + ".tmp.%d.%d" % (os.getpid(), int(time.time() * 1e6)))
+    cmd = [exe, "-in", fasta, "-dbtype", "nucl", "-out", str(temp_out),
+           "-title", title]
     if parse_seqids:
         cmd.append("-parse_seqids")
     proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if proc.returncode != 0:
-        raise RuntimeError(f"makeblastdb failed: {proc.stderr.decode(errors='ignore')}")
+        leftovers = _cleanup_temp_files(temp_out)
+        _raise_cleanup_failed(
+            "failed", proc.stderr.decode(errors="ignore").strip(), temp_out,
+            leftovers)
+
+    missing = [
+        suffix for suffix in _INDEX_SUFFIXES
+        if not (Path(str(temp_out) + suffix).is_file()
+                and Path(str(temp_out) + suffix).stat().st_size > 0)
+    ]
+    if missing:
+        leftovers = _cleanup_temp_files(temp_out)
+        _raise_cleanup_failed(
+            "finished but did not produce a complete index (missing %s)"
+            % ", ".join(missing), "output may be incomplete", temp_out,
+            leftovers)
+
+    moved = 0
+    for path in sorted(temp_out.parent.glob(temp_out.name + ".*")):
+        final = path.parent / (out_p.name + path.suffix)
+        try:
+            os.replace(str(path), str(final))
+        except OSError as error:
+            leftovers = _cleanup_temp_files(temp_out)
+            _raise_cleanup_failed(
+                "failed to move %s to %s: %s" % (path.name, final, error),
+                "", temp_out, leftovers)
+        moved += 1
+    if moved == 0:
+        leftovers = _cleanup_temp_files(temp_out)
+        _raise_cleanup_failed(
+            "produced no index files", "no files matched %s.*" % temp_out.name,
+            temp_out, leftovers)
     return out
