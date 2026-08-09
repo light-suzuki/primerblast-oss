@@ -120,13 +120,29 @@ def _completeness_warning(result: Dict, indent: str = "") -> List[str]:
         for primer, state in sorted(primer_states.items())
         if state != "complete"
     )
+    malformed_total = sum(result.get("malformed_rows_per_primer", {}).values())
+    malformed_details = ""
+    if malformed_total:
+        reasons = {
+            primer: reason for primer, reason in
+            result.get("malformed_row_reason_per_primer", {}).items()
+            if reason
+        }
+        malformed_details = " (%s)" % "; ".join(
+            "%s: %s" % (primer, reason) for primer, reason in sorted(reasons.items()))
     recommendation = result.get("completeness_recommendation") or (
         "rerun with --exhaustive or a larger --max-target-seqs")
-    return [
+    lines = [
         "%sWARNING: specificity evidence is %s%s" % (
             indent, completeness, " (%s)" % details if details else ""),
         "%s         %s" % (indent, recommendation),
     ]
+    if malformed_total:
+        lines.insert(
+            1,
+            "%s         %d malformed BLAST output row(s) could not be parsed%s"
+            % (indent, malformed_total, malformed_details))
+    return lines
 
 
 def _thermo_line(result: Dict, indent: str = "") -> str:
