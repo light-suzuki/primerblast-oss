@@ -11,6 +11,26 @@ genomes), and can screen against several databases at once.
 
 __version__ = "0.2.0"
 
+from .api import (
+    API_VERSION,
+    capabilities,
+    create_database,
+    design_and_screen,
+    discover_tools,
+    json_safe,
+    pair_specificity_result,
+    pool_in_silico_pcr,
+)
+from .errors import (
+    BlastError,
+    CancelledError,
+    InvalidDatabaseError,
+    MalformedInputError,
+    Primer3Error,
+    PrimerblastError,
+    SearchIncompleteError,
+    ToolMissingError,
+)
 from .design import PrimerPair, design_primers, read_fasta
 from .specificity import (
     PrimingSite, Amplicon, pair_specificity, in_silico_pcr,
@@ -26,6 +46,22 @@ from .risk import assess_risk
 
 __all__ = [
     "__version__",
+    "API_VERSION",
+    "capabilities",
+    "discover_tools",
+    "json_safe",
+    "design_and_screen",
+    "pair_specificity_result",
+    "pool_in_silico_pcr",
+    "create_database",
+    "PrimerblastError",
+    "ToolMissingError",
+    "InvalidDatabaseError",
+    "Primer3Error",
+    "BlastError",
+    "MalformedInputError",
+    "SearchIncompleteError",
+    "CancelledError",
     "PrimerPair",
     "design_primers",
     "read_fasta",

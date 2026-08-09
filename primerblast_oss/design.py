@@ -12,6 +12,8 @@ import subprocess
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Sequence, Tuple
 
+from .errors import Primer3Error, ToolMissingError
+
 
 @dataclass
 class DesignParams:
@@ -134,7 +136,7 @@ def _detect_primer3(explicit: Optional[str]) -> str:
     for cand in (explicit, "primer3_core"):
         if cand and shutil.which(cand):
             return shutil.which(cand)  # type: ignore[return-value]
-    raise RuntimeError(
+    raise ToolMissingError(
         "primer3_core not found. Install the 'primer3' package or pass primer3_bin."
     )
 
@@ -240,5 +242,6 @@ def design_primers(
         [exe], input=boulder.encode(), stdout=subprocess.PIPE, stderr=subprocess.PIPE
     )
     if proc.returncode != 0:
-        raise RuntimeError(f"primer3_core failed: {proc.stderr.decode(errors='ignore')}")
+        raise Primer3Error(
+            f"primer3_core failed: {proc.stderr.decode(errors='ignore')}")
     return _parse_boulder(proc.stdout.decode(errors="ignore"), template_id)

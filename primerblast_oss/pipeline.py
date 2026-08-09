@@ -2,9 +2,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Mapping, Optional, Sequence
+from typing import Callable, Dict, List, Mapping, Optional, Sequence
 
 from .design import DesignParams, PrimerPair, design_primers
+from .errors import CancelledError
 from .specificity import (
     SEARCH_COMPLETE,
     SpecParams,
@@ -194,13 +195,28 @@ def run_pipeline(
     thermo_params=None,
     thermo_gate: bool = True,
     dimer_params=None,
+    progress_callback: Optional[Callable[[str, float], None]] = None,
+    cancel_check: Optional[Callable[[], bool]] = None,
 ) -> PipelineResult:
+    """Design and screen a template against every database.
+
+    ``progress_callback(stage, fraction)`` is called between pairs and
+    ``cancel_check()`` returning True raises
+    :class:`~primerblast_oss.errors.CancelledError` (checked between pairs,
+    so cancellation is coarse-grained).
+    """
     design_params = design_params or DesignParams()
     spec_params = spec_params or SpecParams()
     pairs, explain = design_primers(template_id, sequence, design_params, primer3_bin)
 
     from . import dimers as dimer_module
-    for pair in pairs:
+    for index, pair in enumerate(pairs):
+        if cancel_check is not None and cancel_check():
+            raise CancelledError(
+                "pipeline cancelled before pair %d of %d"
+                % (index + 1, len(pairs)))
+        if progress_callback is not None:
+            progress_callback("design_and_screen", index / max(1, len(pairs)))
         per_db: List[Dict] = []
         for database in databases:
             database_genome, association = resolve_genome_for_database(
