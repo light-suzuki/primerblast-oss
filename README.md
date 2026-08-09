@@ -113,6 +113,15 @@ and offline reproducibility. The evidence to date:
 - **Continuous regression benchmark.** CI builds a synthetic FASTA/BLAST database
   and exercises Primer3 design, BLAST amplicon pairing, duplicate/off-target
   classification, thermodynamic gating, and multiplex dimer checks on every push.
+- **Wet-lab validation panel.** A versioned panel
+  ([`validation_panel/`](validation_panel/README.md)) records prospective
+  experimental outcomes (protocol metadata, observed bands, exclusion
+  provenance) against immutable in-silico predictions, and
+  [`benchmarks/validation_analysis.py`](benchmarks/validation_analysis.py)
+  reports off-target sensitivity / false-positive rate, amplification failure,
+  rank/risk calibration, and CAPS digest concordance. Until real assays are
+  recorded, the panel is defined but uncalibrated
+  ([`validation_panel/RESULTS.md`](validation_panel/RESULTS.md)).
 
 Against **NCBI Primer-BLAST**, no claim of drop-in equivalence is made: NCBI
 retains the advantage in curated, continuously-updated databases, hosted UX, and a
