@@ -126,6 +126,8 @@ class PrimerHitStats:
     high_copy: bool
     at_target_limit: bool = False
     completeness: str = SEARCH_COMPLETE
+    malformed_rows: int = 0
+    malformed_row_reason: Optional[str] = None
 
 
 @dataclass
@@ -263,6 +265,16 @@ def _classify_hit_list(raw_hits: int, priming_sites: int, unique_subjects: int,
     return near_limit, high_copy, completeness
 
 
+def _row_snippet(line: str, limit: int = 120) -> str:
+    """Short, truncated preview of a BLAST output row for error messages.
+
+    The full raw row is never embedded in results (it can be huge); the
+    snippet keeps the offending row identifiable.
+    """
+    stripped = line.strip()
+    return stripped[:limit] + ("..." if len(stripped) > limit else "")
+
+
 def priming_sites_with_stats(
     primer: str, primer_id: str, db: str, sp: SpecParams, blastn: str
 ) -> Tuple[List[PrimingSite], PrimerHitStats]:
@@ -270,20 +282,39 @@ def priming_sites_with_stats(
     sites: List[PrimingSite] = []
     raw_hits = 0
     subjects = set()
+    malformed_rows = 0
+    malformed_reason: Optional[str] = None
     for line in output.splitlines():
         if not line.strip():
             continue
         raw_hits += 1
         fields = line.split("\t")
         if len(fields) < 16:
+            malformed_rows += 1
+            if malformed_reason is None:
+                malformed_reason = "row has %d of 16 expected fields: %s" % (
+                    len(fields), _row_snippet(line))
+            continue
+        try:
+            site = _hit_to_site(fields, primer_id, sp)
+        except ValueError as error:
+            malformed_rows += 1
+            if malformed_reason is None:
+                malformed_reason = "non-numeric field (%s): %s" % (
+                    error, _row_snippet(line))
             continue
         subjects.add(fields[1])
-        site = _hit_to_site(fields, primer_id, sp)
         if site is not None:
             sites.append(site)
 
     near_limit, high_copy, completeness = _classify_hit_list(
         raw_hits, len(sites), len(subjects), sp)
+    if malformed_rows and (
+            _SEARCH_SEVERITY.get(completeness, 0)
+            < _SEARCH_SEVERITY[SEARCH_POSSIBLY_TRUNCATED]):
+        # Unparseable rows mean the hit list is not trustworthy: evidence is
+        # at best partial, never "complete".
+        completeness = SEARCH_POSSIBLY_TRUNCATED
     stats = PrimerHitStats(
         primer=primer_id,
         raw_blast_hits=raw_hits,
@@ -293,6 +324,8 @@ def priming_sites_with_stats(
         high_copy=high_copy,
         at_target_limit=len(subjects) >= max(1, int(sp.max_target_seqs)),
         completeness=completeness,
+        malformed_rows=malformed_rows,
+        malformed_row_reason=malformed_reason,
     )
     return sites, stats
 
@@ -335,6 +368,12 @@ def _search_metadata(hit_stats: Dict[str, PrimerHitStats], sp: SpecParams) -> Di
         "unique_subjects_per_primer": {
             name: stats.unique_subjects for name, stats in hit_stats.items()
         },
+        "malformed_rows_per_primer": {
+            name: stats.malformed_rows for name, stats in hit_stats.items()
+        },
+        "malformed_row_reason_per_primer": {
+            name: stats.malformed_row_reason for name, stats in hit_stats.items()
+        },
         "near_blast_limit": [
             name for name, stats in hit_stats.items() if stats.near_target_limit
         ],
@@ -354,8 +393,14 @@ def _search_metadata(hit_stats: Dict[str, PrimerHitStats], sp: SpecParams) -> Di
         },
         "completeness_recommendation": (
             None if overall == SEARCH_COMPLETE else
-            "Rerun with --exhaustive or a larger --max-target-seqs; if the primer "
-            "remains repeat-limited, redesign it or use an indexed alternative search."
+            ("BLAST output contained unparseable row(s); rerun the search "
+             "(check the BLAST+ version and output format) before trusting "
+             "specificity." if sum(
+                 stats.malformed_rows for stats in hit_stats.values())
+             else
+             "Rerun with --exhaustive or a larger --max-target-seqs; if the "
+             "primer remains repeat-limited, redesign it or use an indexed "
+             "alternative search.")
         ),
     }
 
