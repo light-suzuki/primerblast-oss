@@ -448,7 +448,10 @@ def analyze_pair(pair, per_db: Sequence[Dict], design_db: str,
 
 
 def build_caps(template: Template, pair, snp_local_index: int,
-               alt_base: str, gel_min_gap: int = 25) -> Optional[Dict]:
+               alt_base: str, gel_min_gap: int = 25,
+               gel_ladder: str = "auto",
+               custom_ladder_bands: Optional[Sequence[int]] = None,
+               gel_percent: Optional[float] = None) -> Optional[Dict]:
     """Build exact natural-CAPS digest results for the designed amplicon."""
     from .caps import caps_scan, enzymes_gained_lost, result_to_dict
 
@@ -466,7 +469,13 @@ def build_caps(template: Template, pair, snp_local_index: int,
         + amplicon_ref[relative_index + 1:]
     )
     results = caps_scan(
-        amplicon_ref, amplicon_alt, gel_min_gap=gel_min_gap)
+        amplicon_ref,
+        amplicon_alt,
+        gel_min_gap=gel_min_gap,
+        ladder=gel_ladder,
+        custom_ladder_bands=custom_ladder_bands,
+        gel_percent=gel_percent,
+    )
     gained_lost = enzymes_gained_lost(amplicon_ref, amplicon_alt)
     best = next(
         (result for result in results if result.distinguishable), None)
@@ -477,6 +486,7 @@ def build_caps(template: Template, pair, snp_local_index: int,
         "allele_ref_fragments": best.allele_a_fragments if best else None,
         "allele_alt_fragments": best.allele_b_fragments if best else None,
         "min_gel_gap": best.min_gel_gap if best else None,
+        "gel_analysis": best.gel_analysis if best else None,
         "best_result": result_to_dict(best) if best else None,
         "natural_candidates": [result_to_dict(result) for result in results],
         "gained": gained_lost.get("gained", []),
@@ -506,6 +516,9 @@ def _attach_dcaps(
     dimer_params,
     variants: Sequence,
     max_candidates: int,
+    gel_ladder: str = "auto",
+    custom_ladder_bands: Optional[Sequence[int]] = None,
+    gel_percent: Optional[float] = None,
 ) -> Dict:
     from .dcaps_workflow import evaluate_dcaps_candidates
 
@@ -523,6 +536,9 @@ def _attach_dcaps(
         dimer_params=dimer_params,
         variants=variants,
         max_candidates_to_screen=max_candidates,
+        gel_ladder=gel_ladder,
+        custom_ladder_bands=custom_ladder_bands,
+        gel_percent=gel_percent,
     )
     caps_info["dcaps"] = dcaps
     best = dcaps.get("best")
@@ -535,6 +551,7 @@ def _attach_dcaps(
         caps_info["allele_alt_fragments"] = best["digest"][
             "allele_b_fragments"]
         caps_info["min_gel_gap"] = best["digest"]["min_gel_gap"]
+        caps_info["gel_analysis"] = best["digest"].get("gel_analysis")
         caps_info["best_result"] = best
     return caps_info
 
@@ -554,6 +571,9 @@ def run_assay(
     thermo_params=None,
     thermo_gate: bool = True,
     dimer_params=None,
+    gel_ladder: str = "auto",
+    custom_ladder_bands: Optional[Sequence[int]] = None,
+    gel_percent: Optional[float] = None,
     dcaps_pairs_to_screen: int = 3,
     dcaps_candidates_per_pair: int = 6,
 ) -> Dict:
@@ -594,7 +614,15 @@ def run_assay(
                 template, caps_snp["genomic_pos"])
             if snp_local is not None:
                 caps_info = build_caps(
-                    template, pair, snp_local, caps_snp["alt"])
+                    template,
+                    pair,
+                    snp_local,
+                    caps_snp["alt"],
+                    gel_min_gap=gel_min_gap,
+                    gel_ladder=gel_ladder,
+                    custom_ladder_bands=custom_ladder_bands,
+                    gel_percent=gel_percent,
+                )
                 if (caps_info is not None
                         and not caps_info.get("best_distinguishable")):
                     if pair_index < dcaps_pairs_to_screen:
@@ -613,6 +641,9 @@ def run_assay(
                             dimer_params,
                             variants,
                             dcaps_candidates_per_pair,
+                            gel_ladder=gel_ladder,
+                            custom_ladder_bands=custom_ladder_bands,
+                            gel_percent=gel_percent,
                         )
                     else:
                         caps_info["dcaps"] = {
@@ -664,6 +695,10 @@ def run_assay(
                 dcaps_pairs_to_screen, len(result.pairs)) if caps_snp else 0,
             "dcaps_candidates_per_pair": (
                 dcaps_candidates_per_pair if caps_snp else 0),
+            "gel_ladder": gel_ladder,
+            "custom_ladder_bands": (
+                list(custom_ladder_bands) if custom_ladder_bands else None),
+            "gel_percent": gel_percent,
         },
         "n_pairs": len(pair_dicts),
         "pairs": pair_dicts,
