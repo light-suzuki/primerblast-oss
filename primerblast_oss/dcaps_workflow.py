@@ -221,22 +221,85 @@ def evaluate_dcaps_candidates(
             },
         )
         digest_dict = result_to_dict(digest)
+        from .gel import (
+            analyze_digest_patterns,
+            assess_background_across_databases,
+        )
+        gel_analysis = digest_dict.get("gel_analysis")
+        if not gel_analysis:
+            gel_analysis = analyze_digest_patterns(
+                digest_dict.get("allele_a_fragments", []),
+                digest_dict.get("allele_b_fragments", []),
+                ladder=gel_ladder,
+                custom_ladder_bands=custom_ladder_bands,
+                gel_percent=gel_percent,
+            )
+            digest_dict["gel_analysis"] = gel_analysis
+
+        per_db_products = assay_summary.get("per_db_products")
+        if not per_db_products:
+            per_db_products = []
+            for result_view in per_database:
+                products = []
+                for amplicon in (
+                    list(result_view.get("on_target", []))
+                    + list(result_view.get("off_target", []))
+                ):
+                    products.append({
+                        "size": getattr(amplicon, "size", None),
+                        "on_target": bool(getattr(amplicon, "on_target", False)),
+                    })
+                per_db_products.append({
+                    "db": result_view.get("db"),
+                    "n_off_target": result_view.get("n_off_target", 0),
+                    "products": products,
+                })
+        background = assess_background_across_databases(
+            gel_analysis, per_db_products)
+        intrinsic_pattern_ok = bool(
+            (gel_analysis.get("genotype_discrimination") or {}).get(
+                "distinguishable"))
+        background_ok = background.get("all_databases_distinguishable") is True
+        intended_status = assay_summary.get(
+            "intended_status",
+            "unique" if assay_summary.get("specific") is True else "unknown",
+        )
+        dimer_concern = bool(
+            (assay_summary.get("dimers") or {}).get("n_concerning", 0))
+        primer_3prime_variant = bool(
+            assay_summary.get("variant_in_primer_3prime"))
+        hard_blocker = (
+            intended_status != "unique"
+            or assay_summary.get("search_complete_all_db") is not True
+            or dimer_concern
+            or primer_3prime_variant
+        )
         orderable = (
             digest.distinguishable
-            and assay_summary.get("specific_all_db") is True
-            and assay_summary.get("risk") in ("low", "medium")
-            and assay_summary.get("search_complete_all_db") is True
+            and intrinsic_pattern_ok
+            and background_ok
+            and not hard_blocker
         )
-        if not digest.distinguishable:
+        digest_dict["background_analysis"] = background
+        digest_dict["gel_scorable_all_db"] = (
+            intrinsic_pattern_ok and background_ok)
+
+        if not digest.distinguishable or not intrinsic_pattern_ok:
             recommendation_status = "digest_not_resolvable"
         elif assay_summary.get("specificity_status_all_db") == "indeterminate":
             recommendation_status = "rerun_specificity_exhaustively"
-        elif assay_summary.get("specific_all_db") is not True:
-            recommendation_status = "not_specific_in_all_databases"
-        elif assay_summary.get("risk") == "high":
-            recommendation_status = "high_risk"
-        else:
+        elif intended_status != "unique":
+            recommendation_status = "intended_amplicon_not_unique"
+        elif not background_ok:
+            recommendation_status = "offtarget_background_ambiguous"
+        elif dimer_concern:
+            recommendation_status = "dimer_concern"
+        elif primer_3prime_variant:
+            recommendation_status = "primer_3prime_variant"
+        elif assay_summary.get("specific_all_db") is True:
             recommendation_status = "orderable"
+        else:
+            recommendation_status = "orderable_with_gel_separated_offtargets"
 
         evaluated.append({
             "marker_type": "dCAPS",
@@ -258,6 +321,8 @@ def evaluate_dcaps_candidates(
             "gc_r": candidate_pair.gc_r,
             "digest": digest_dict,
             "specificity": assay_summary,
+            "gel_scorable_all_db": digest_dict.get("gel_scorable_all_db"),
+            "background_analysis": background,
             "orderable": orderable,
             "recommendation_status": recommendation_status,
         })
