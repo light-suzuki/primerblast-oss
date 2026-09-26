@@ -3,7 +3,9 @@ from primerblast_oss.caps import ENZYME_METADATA, caps_scan
 from primerblast_oss.cli import build_parser
 from primerblast_oss.gel import (
     analyze_digest_patterns,
+    assess_background_across_databases,
     best_analysis_from_assay,
+    genotype_pattern_discrimination,
     virtual_gel_svg,
 )
 
@@ -42,6 +44,56 @@ def test_custom_ladder_bands_are_used_exactly():
     assert analysis["ladder"] == "custom"
     assert analysis["ladder_bands"] == [50, 300, 600, 900, 1200]
     assert analysis["gel_percent"] == 2.0
+
+
+def test_genotype_patterns_tolerate_far_offtarget_background_band():
+    pattern = genotype_pattern_discrimination(
+        [430], [293, 137], background_sizes=[800])
+    assert pattern["distinguishable"] is True
+    assert all(
+        item["distinguishable"] for item in pattern["comparisons"].values())
+
+
+def test_background_band_can_collapse_heterozygote_vs_homozygote_pattern():
+    # A 430-bp off-target appears in every lane. BB then gains the AA-specific
+    # 430-bp band and becomes identical to AB for this cut/uncut marker.
+    pattern = genotype_pattern_discrimination(
+        [430], [293, 137], background_sizes=[430])
+    assert pattern["distinguishable"] is False
+    assert pattern["comparisons"]["AB_vs_BB"]["distinguishable"] is False
+
+
+def test_background_is_evaluated_per_database_not_pooled_across_references():
+    analysis = analyze_digest_patterns([430], [293, 137])
+    result = assess_background_across_databases(analysis, [
+        {
+            "db": "clean",
+            "n_off_target": 1,
+            "products": [
+                {"size": 430, "on_target": True},
+                {"size": 800, "on_target": False},
+            ],
+        },
+        {
+            "db": "ambiguous",
+            "n_off_target": 1,
+            "products": [
+                {"size": 430, "on_target": True},
+                {"size": 430, "on_target": False},
+            ],
+        },
+    ])
+    assert result["per_db"][0]["distinguishable"] is True
+    assert result["per_db"][1]["distinguishable"] is False
+    assert result["all_databases_distinguishable"] is False
+
+
+def test_out_of_range_fragments_are_soft_warnings_not_automatic_failure():
+    analysis = analyze_digest_patterns(
+        [12000], [8000, 4000], ladder="1kb", gel_percent=1.0)
+    assert analysis["range_policy"] == "soft_warning_only"
+    assert analysis["outside_gel_range_fragments"]
+    assert analysis["genotype_discrimination"]["distinguishable"] is True
 
 
 def test_virtual_gel_has_marker_and_three_genotype_lanes():
