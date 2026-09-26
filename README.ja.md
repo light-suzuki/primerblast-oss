@@ -110,7 +110,7 @@ python -m primerblast_oss check \
 
 ## 使い方
 
-primerblast-oss は **CLIツール**です。サブコマンド:**design**、**check**、**multiplex**、**multiplex-design**、**tile**、**assay**、**markers**、**makedb**。各サブコマンドの全オプションは `python -m primerblast_oss <subcommand> --help` で確認できます。
+primerblast-oss は **CLIツール**です。サブコマンド:**design**、**check**、**multiplex**、**multiplex-design**、**tile**、**sequence**、**assay**、**markers**、**makedb**。各サブコマンドの全オプションは `python -m primerblast_oss <subcommand> --help` で確認できます。
 
 `multiplex` はプールされたプライマー間のプライマーダイマー互換性をチェックします(`primer3-py` が必要) — 全プライマー総当たりで、一緒に実行できるセットを選びます:
 
@@ -168,6 +168,29 @@ python -m primerblast_oss tile \
   --template-fasta gene.fa \
   --amplicon-min 400 --amplicon-max 700 --overlap 60 \
   --db /path/to/genome_db
+```
+
+### `sequence` — Sanger / resequencing 用の重複アンプリコン
+
+`sequence` は既存のタイリングエンジンを使うシーケンス向け入口です。
+遺伝子、ゲノム区間、生配列、FASTAを入力し、**アンプリコン長**と
+**隣接アンプリコンのoverlap**を指定できます。
+
+```bash
+python -m primerblast_oss sequence \
+  --gene Psat.cameor.v2.1g00050 --gff3 genome.gff3 --genome genome.fa \
+  --db $DB/cameor_v2 --amplicon-size 600-800 --overlap 120
+```
+
+ゲノム上のターゲットでは `--flank` を指定すると、coverage対象は遺伝子/
+区間本体のまま、primerだけ外側にも置けます。coverage gapは明示的に報告
+します。`--m13-tails` を付けると**発注用oligoだけ**にM13 universal tailを
+付加し、ゲノム特異性はannealing部分だけで評価します。
+
+```bash
+python -m primerblast_oss sequence \
+  --interval chr1:100000-104000 --genome genome.fa --db $DB/genome \
+  --amplicon-size 500-700 --overlap 100 --m13-tails --format order
 ```
 
 ### `assay` — 遺伝子 / 区間 / SNP からの完全な育種アッセイ
