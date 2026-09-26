@@ -69,22 +69,23 @@ def test_background_is_evaluated_per_database_not_pooled_across_references():
         {
             "db": "clean",
             "n_off_target": 1,
-            "products": [
-                {"size": 430, "on_target": True},
-                {"size": 800, "on_target": False},
-            ],
+            "offtarget_digest": {
+                "complete": True,
+                "background_fragments": [800],
+            },
         },
         {
             "db": "ambiguous",
             "n_off_target": 1,
-            "products": [
-                {"size": 430, "on_target": True},
-                {"size": 430, "on_target": False},
-            ],
+            "offtarget_digest": {
+                "complete": True,
+                "background_fragments": [430],
+            },
         },
     ])
     assert result["per_db"][0]["distinguishable"] is True
     assert result["per_db"][1]["distinguishable"] is False
+    assert result["all_databases_complete"] is True
     assert result["all_databases_distinguishable"] is False
 
 
