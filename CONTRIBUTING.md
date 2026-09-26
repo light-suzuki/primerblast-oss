@@ -30,8 +30,10 @@ python tests/test_specificity.py
 python tests/test_integration.py
 ```
 
-The `benchmarks/` scripts exercise the full pipeline against a real BLAST
-database; they require a local genome + BLAST DB and are not run in CI.
+The real-genome scripts under `benchmarks/` require a local genome + BLAST
+DB and are not run in ordinary CI. The self-contained
+`benchmarks/continuous_benchmark.py` workflow builds a synthetic database and
+runs weekly (or manually) in GitHub Actions.
 
 ## Guidelines
 
