@@ -370,13 +370,17 @@ def caps_scan(amplicon_a: str, amplicon_b: str,
             enzyme.pcr_compatible and enzyme.recommendable
             and enzyme.cut_model == "verified" and not incomplete
         )
-        distinguishable = eligible and gap >= gel_min_gap
         gel_analysis = analyze_digest_patterns(
             fragments_a,
             fragments_b,
             ladder=ladder,
             custom_ladder_bands=custom_ladder_bands,
             gel_percent=gel_percent,
+        )
+        distinguishable = eligible and (
+            gap >= gel_min_gap
+            or bool((gel_analysis.get("genotype_discrimination") or {}).get(
+                "distinguishable"))
         )
         note_parts = []
         if len(fragments_a) != len(fragments_b):
