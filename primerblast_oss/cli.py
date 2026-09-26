@@ -838,6 +838,7 @@ def _cmd_assay(arguments) -> int:
         gel_percent=gel_percent,
         aspcr_candidates_per_allele=arguments.aspcr_candidates_per_allele,
         aspcr_tetra_candidates=arguments.aspcr_tetra_candidates,
+        aspcr_pairs_to_screen=arguments.aspcr_pairs_to_screen,
     )
     manifest = make_manifest(
         {
@@ -850,6 +851,7 @@ def _cmd_assay(arguments) -> int:
             "gel_percent": gel_percent,
             "aspcr_candidates_per_allele": arguments.aspcr_candidates_per_allele,
             "aspcr_tetra_candidates": arguments.aspcr_tetra_candidates,
+            "aspcr_pairs_to_screen": arguments.aspcr_pairs_to_screen,
         },
         arguments.db,
         template_info=result["target"],
@@ -1109,6 +1111,9 @@ def build_parser() -> argparse.ArgumentParser:
     assay.add_argument(
         "--aspcr-tetra-candidates", type=int, default=6,
         help="tetra-ARMS combinations retained per parent primer pair")
+    assay.add_argument(
+        "--aspcr-pairs-to-screen", type=int, default=2,
+        help="top parent pairs whose best AS-PCR/tetra sets are re-screened by BLAST")
     _add_design_knobs(assay)
     _add_spec_args(assay)
     _add_dimer_args(assay)
