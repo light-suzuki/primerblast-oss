@@ -387,12 +387,29 @@ def assay_to_text(result: Dict) -> str:
                             gel.get("score"), gel.get("rating"),
                             gel.get("ladder"), gel.get("gel_percent")))
                     output.append(
+                        "    marker verdict: %s" % (
+                            caps.get("marker_verdict") or "not evaluated"))
+                    output.append(
                         "    AB bands: %s" % ", ".join(
                             "%sbp%s" % (
                                 band.get("size"),
                                 " x%s" % band.get("copies")
                                 if band.get("copies", 1) > 1 else "")
                             for band in gel.get("heterozygote_bands", [])))
+                    background = caps.get("background_analysis") or {}
+                    for database in background.get("per_db", []):
+                        if database.get("n_off_target", 0):
+                            output.append(
+                                "    [%s] off-target background %s -> %s" % (
+                                    str(database.get("db", "")).split("/")[-1],
+                                    database.get("background_sizes", []),
+                                    "gel-scorable" if database.get(
+                                        "distinguishable") else "ambiguous"))
+                    if gel.get("outside_gel_range_fragments"):
+                        output.append(
+                            "    note: fragments outside recommended gel range "
+                            "are retained as soft warnings: %s" % (
+                                gel.get("outside_gel_range_fragments")))
             else:
                 output.append("    CAPS/dCAPS: no distinguishing enzyme found")
         for database in pair.get("per_db_products", []):
