@@ -425,6 +425,157 @@ def tetra_arms_from_pair(
     return output
 
 
+def _amplicon_dict(amplicon) -> Dict:
+    return {
+        "subject": amplicon.subject,
+        "start": amplicon.start,
+        "end": amplicon.end,
+        "size": amplicon.size,
+        "orientation": amplicon.orientation,
+        "fwd_mismatch": amplicon.fwd_mismatch,
+        "rev_mismatch": amplicon.rev_mismatch,
+    }
+
+
+def _screen_primer_pool(
+    primers: Dict[str, str],
+    databases: Sequence[str],
+    *,
+    spec_params=None,
+    blastn_bin=None,
+    genomes_by_db=None,
+    thermo_params=None,
+    thermo_gate: bool = True,
+    expected_sizes: Sequence[int] = (),
+    size_tolerance: int = 10,
+) -> Dict:
+    from .pipeline import resolve_genome_for_database, thermo_metadata
+    from .specificity import SpecParams, in_silico_pcr
+
+    sp = spec_params or SpecParams()
+    per_db = []
+    for database in databases:
+        genome, association = resolve_genome_for_database(
+            database, databases, genomes_by_db=genomes_by_db)
+        result = in_silico_pcr(
+            primers,
+            database,
+            sp=sp,
+            blastn_bin=blastn_bin,
+            genome=genome,
+            thermo_params=thermo_params,
+            thermo_gate=thermo_gate,
+        )
+        result.update(thermo_metadata(
+            genome, thermo_params, thermo_gate, association,
+            result.get("thermo_site_stats")))
+        products = [_amplicon_dict(product) for product in result["products"]]
+        expected_matches = [
+            product for product in products
+            if any(abs(product["size"] - size) <= size_tolerance
+                   for size in expected_sizes)
+        ]
+        unexpected = [
+            product for product in products if product not in expected_matches
+        ]
+        per_db.append({
+            "db": database,
+            "n_products": len(products),
+            "products": products,
+            "expected_size_matches": expected_matches,
+            "n_unexpected_products": len(unexpected),
+            "unexpected_products": unexpected,
+            "search_completeness": result.get("search_completeness"),
+            "search_complete": result.get("search_complete"),
+            "completeness_recommendation": result.get(
+                "completeness_recommendation"),
+            "thermo_status": result.get("thermo_status"),
+        })
+    return {
+        "status": "screened",
+        "search_complete_all_db": (
+            bool(per_db)
+            and all(view.get("search_complete") is True for view in per_db)
+        ),
+        "max_unexpected_products": max(
+            (view["n_unexpected_products"] for view in per_db), default=0),
+        "per_db": per_db,
+    }
+
+
+def screen_aspcr(
+    aspcr: Dict,
+    databases: Sequence[str],
+    *,
+    spec_params=None,
+    blastn_bin=None,
+    genomes_by_db=None,
+    thermo_params=None,
+    thermo_gate: bool = True,
+    size_tolerance: int = 10,
+) -> Dict:
+    """BLAST-screen the best classical and tetra-ARMS primer sets."""
+    output = dict(aspcr)
+    screens = {}
+    for allele, key in (
+        ("ref", "best_classical_ref"),
+        ("alt", "best_classical_alt"),
+    ):
+        candidate = output.get(key)
+        if not candidate:
+            continue
+        screens["classical_" + allele] = _screen_primer_pool(
+            {
+                "%s_AS" % allele: candidate["primer"],
+                "common_%s" % candidate["common_role"]: candidate["common_primer"],
+            },
+            databases,
+            spec_params=spec_params,
+            blastn_bin=blastn_bin,
+            genomes_by_db=genomes_by_db,
+            thermo_params=thermo_params,
+            thermo_gate=thermo_gate,
+            expected_sizes=[candidate["product_size"]],
+            size_tolerance=size_tolerance,
+        )
+
+    tetra = output.get("best_tetra")
+    if tetra:
+        screens["tetra_arms"] = _screen_primer_pool(
+            {
+                "outer_F": tetra["outer_forward"],
+                "outer_R": tetra["outer_reverse"],
+                "ref_inner_%s" % tetra["ref_inner"]["role"]:
+                    tetra["ref_inner"]["primer"],
+                "alt_inner_%s" % tetra["alt_inner"]["role"]:
+                    tetra["alt_inner"]["primer"],
+            },
+            databases,
+            spec_params=spec_params,
+            blastn_bin=blastn_bin,
+            genomes_by_db=genomes_by_db,
+            thermo_params=thermo_params,
+            thermo_gate=thermo_gate,
+            expected_sizes=[
+                tetra["control_product_size"],
+                tetra["ref_product_size"],
+                tetra["alt_product_size"],
+            ],
+            size_tolerance=size_tolerance,
+        )
+
+    output["specificity_screen"] = {
+        "status": "screened" if screens else "no_candidate",
+        "sets": screens,
+        "search_complete_all_sets": (
+            bool(screens)
+            and all(screen.get("search_complete_all_db") is True
+                    for screen in screens.values())
+        ),
+    }
+    return output
+
+
 def build_aspcr(
     sequence: str,
     parent_pair,
