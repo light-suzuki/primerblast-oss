@@ -155,7 +155,7 @@ def test_short_genomic_target_uses_flanks_but_reports_target_coverage(
     import primerblast_oss.tiling as tiling
 
     fasta = tmp_path / "genome.fa"
-    fasta.write_text(">chr1\n" + "A" * 700 + "\n", encoding="ascii")
+    fasta.write_bytes((">chr1\n" + "A" * 700 + "\n").encode("ascii"))
     (tmp_path / "genome.fa.fai").write_text(
         "chr1\t700\t6\t700\t701\n", encoding="ascii")
     placements = []
@@ -175,7 +175,7 @@ def test_short_genomic_target_uses_flanks_but_reports_target_coverage(
     monkeypatch.setattr(cli, "_thermo_setup", lambda *_a, **_k: ({}, False, False))
     args = build_parser().parse_args([
         "sequence", "--interval", "chr1:301-400", "--strand", strand,
-        "--genome", str(fasta), "--db", "db1", "db2", "--flank", "300",
+        "--genome", str(fasta), "--db", "db1", "--db", "db2", "--flank", "300",
         "--amplicon-size", "500-700", "--format", "json",
     ])
     assert args.func(args) == 0
