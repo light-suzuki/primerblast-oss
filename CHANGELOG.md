@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- Target-aware `sequence` workflow for Sanger/amplicon resequencing. It
+  reuses the tiling engine, accepts gene/interval/FASTA inputs, exposes
+  configurable amplicon length and overlap, reports coverage gaps, maps
+  minus-strand targets back to genomic coordinates, and can add M13 tails to
+  order oligos without changing specificity evaluation.
+
 ### Changed / Fixed
 - Primer-dimer / hairpin analysis now runs in **`design` and `tile`** too (not
   only `assay` / `multiplex`), affecting rank, and dimer ΔG/Tm are shown in the
