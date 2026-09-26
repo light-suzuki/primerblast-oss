@@ -158,12 +158,33 @@ def test_end_to_end_dcaps_rechecks_modified_pair_against_each_database():
 
         workflow.pair_specificity = fake_specificity
         assay.analyze_pair = lambda *args, **kwargs: {
-            "specific": True,
-            "specificity_status": "specific",
-            "specific_all_db": True,
-            "specificity_status_all_db": "specific",
-            "risk": "low",
+            "specific": False,
+            "specificity_status": "non_specific",
+            "specific_all_db": False,
+            "specificity_status_all_db": "non_specific",
+            "intended_status": "unique",
+            "risk": "high",
             "search_complete_all_db": True,
+            "variant_in_primer_3prime": False,
+            "dimers": None,
+            "per_db_products": [
+                {
+                    "db": "dbA",
+                    "n_off_target": 1,
+                    "products": [
+                        {"size": 70, "on_target": True},
+                        {"size": 200, "on_target": False},
+                    ],
+                },
+                {
+                    "db": "dbB",
+                    "n_off_target": 1,
+                    "products": [
+                        {"size": 70, "on_target": True},
+                        {"size": 220, "on_target": False},
+                    ],
+                },
+            ],
         }
         dimers.available = lambda: False
         result = workflow.evaluate_dcaps_candidates(
@@ -186,7 +207,10 @@ def test_end_to_end_dcaps_rechecks_modified_pair_against_each_database():
     assert {entry[0] for entry in seen} == {"dbA", "dbB"}
     assert all(entry[1] == materialized["primer_sequence"] for entry in seen)
     assert result["n_orderable"] == 1
-    assert result["best"]["recommendation_status"] == "orderable"
+    assert result["best"]["specificity"]["specific_all_db"] is False
+    assert result["best"]["gel_scorable_all_db"] is True
+    assert result["best"]["recommendation_status"] == (
+        "orderable_with_gel_separated_offtargets")
 
 
 def test_order_sheet_uses_validated_engineered_primer():
