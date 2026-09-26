@@ -2,8 +2,12 @@
 from primerblast_oss.aspcr import (
     build_aspcr,
     generate_as_primers,
+    screen_aspcr,
     tetra_arms_from_pair,
 )
+from primerblast_oss.assay import _template_allele_base
+from primerblast_oss.regions import GenomicRegion, Template
+from primerblast_oss.specificity import Amplicon
 from primerblast_oss.design import PrimerPair
 
 
@@ -139,3 +143,82 @@ def test_no_deliberate_mismatch_candidate_is_available_for_classical_screening()
     assert all(c["deliberate_mismatch"] is None for c in candidates)
     assert all(c["intended_profile"]["total"] == 0 for c in candidates)
     assert all(c["non_target_profile"]["terminal_mismatch"] for c in candidates)
+
+
+def test_minus_strand_genomic_alt_is_complemented_for_oriented_template():
+    region = GenomicRegion("chr1", 100, 200, "-", "gene")
+    template = Template(
+        id="gene",
+        seq="A" * 121,
+        region=region,
+        ext_start=90,
+        ext_end=210,
+        anchor_coord=210,
+        anchor_strand="-",
+        flank=10,
+    )
+    assert _template_allele_base(template, "A") == "T"
+    assert _template_allele_base(template, "C") == "G"
+
+
+def test_screen_aspcr_screens_best_sets_and_reports_unexpected_products():
+    import primerblast_oss.specificity as specificity
+
+    aspcr = {
+        "best_classical_ref": {
+            "primer": "A" * 20,
+            "common_role": "R",
+            "common_primer": "T" * 20,
+            "product_size": 100,
+        },
+        "best_classical_alt": {
+            "primer": "C" * 20,
+            "common_role": "R",
+            "common_primer": "T" * 20,
+            "product_size": 100,
+        },
+        "best_tetra": {
+            "outer_forward": "A" * 20,
+            "outer_reverse": "T" * 20,
+            "ref_inner": {"role": "F", "primer": "G" * 20},
+            "alt_inner": {"role": "R", "primer": "C" * 20},
+            "control_product_size": 200,
+            "ref_product_size": 120,
+            "alt_product_size": 150,
+        },
+    }
+
+    original = specificity.in_silico_pcr
+    calls = []
+
+    def fake_insilico(primers, database, **kwargs):
+        calls.append((database, tuple(sorted(primers))))
+        products = [
+            Amplicon("chr1", 1, 100, 100, "x", "y", 0, 0),
+            Amplicon("chr2", 1, 333, 333, "x", "y", 0, 0),
+        ]
+        return {
+            "db": database,
+            "products": products,
+            "n_products": len(products),
+            "search_completeness": "complete",
+            "search_complete": True,
+            "thermo_site_stats": {
+                "attempted_per_primer": {},
+                "evaluated_per_primer": {},
+                "unresolved_per_primer": {},
+                "gated_per_primer": {},
+            },
+        }
+
+    specificity.in_silico_pcr = fake_insilico
+    try:
+        screened = screen_aspcr(aspcr, ["dbA", "dbB"])
+    finally:
+        specificity.in_silico_pcr = original
+
+    assert len(calls) == 6  # ref, alt, tetra across two databases
+    sets = screened["specificity_screen"]["sets"]
+    assert sets["classical_ref"]["search_complete_all_db"] is True
+    assert sets["classical_ref"]["max_unexpected_products"] == 1
+    assert sets["tetra_arms"]["max_unexpected_products"] >= 1
