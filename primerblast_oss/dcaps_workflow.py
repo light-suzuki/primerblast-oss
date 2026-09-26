@@ -112,6 +112,9 @@ def evaluate_dcaps_candidates(
     dimer_params=None,
     variants: Optional[Sequence] = None,
     gel_min_gap: int = 25,
+    gel_ladder: str = "auto",
+    custom_ladder_bands: Optional[Sequence[int]] = None,
+    gel_percent: Optional[float] = None,
     max_engineered_mismatches: int = 2,
     max_candidates_to_screen: int = 12,
 ) -> Dict:
@@ -166,6 +169,9 @@ def evaluate_dcaps_candidates(
             alternate_product,
             enzymes={enzyme.name: enzyme},
             gel_min_gap=gel_min_gap,
+            ladder=gel_ladder,
+            custom_ladder_bands=custom_ladder_bands,
+            gel_percent=gel_percent,
         )
         digest = digest_results[0] if digest_results else None
         if digest is None:
@@ -262,6 +268,7 @@ def evaluate_dcaps_candidates(
         risk_order.get(candidate["specificity"].get("risk"), 3),
         candidate["engineered_mismatches"],
         abs(candidate["tm_f"] - candidate["tm_r"]),
+        -((candidate["digest"].get("gel_analysis") or {}).get("score", 0)),
         -candidate["digest"].get("min_gel_gap", 0),
     ))
     return {
