@@ -210,11 +210,11 @@ def assess_background_across_databases(
     *,
     min_log10_gap: float = 0.04,
 ) -> Dict:
-    """Overlay non-target product sizes on CAPS genotype patterns per database.
+    """Overlay digested off-target fragments on genotype patterns per database.
 
-    This intentionally models off-target products by their predicted undigested
-    amplicon size. It is conservative about band overlap but does not yet claim
-    to simulate restriction digestion of every off-target amplicon.
+    Database views should carry offtarget_digest annotations. If an off-target
+    product cannot be reconstructed or digested, that database is indeterminate
+    rather than silently falling back to undigested amplicon size.
     """
     lane_a = [
         int(entry["size"]) for entry in gel_analysis.get("lanes", {}).get("AA", [])
@@ -224,33 +224,49 @@ def assess_background_across_databases(
     ]
     per_db = []
     for database in per_db_products:
-        backgrounds = sorted({
-            int(product["size"])
-            for product in database.get("products", [])
-            if not product.get("on_target") and product.get("size") is not None
-        }, reverse=True)
+        digest = database.get("offtarget_digest") or {}
+        n_off = int(database.get("n_off_target", 0) or 0)
+        if n_off == 0:
+            complete = True
+            backgrounds = []
+        else:
+            complete = bool(digest.get("complete"))
+            backgrounds = [
+                int(value) for value in digest.get("background_fragments", [])
+                if int(value) > 0
+            ]
+
         pattern = genotype_pattern_discrimination(
             lane_a,
             lane_b,
             background_sizes=backgrounds,
             min_log10_gap=min_log10_gap,
         )
+        distinguishable = pattern["distinguishable"] if complete else None
         per_db.append({
             "db": database.get("db"),
-            "n_off_target": database.get("n_off_target", len(backgrounds)),
-            "background_sizes": backgrounds,
-            "distinguishable": pattern["distinguishable"],
+            "n_off_target": n_off,
+            "digest_complete": complete,
+            "background_fragments": backgrounds,
+            "distinguishable": distinguishable,
             "pattern": pattern,
+            "digest": digest,
         })
-    all_ok = bool(per_db) and all(item["distinguishable"] for item in per_db)
+
+    all_complete = bool(per_db) and all(
+        item["digest_complete"] for item in per_db)
+    all_ok = all_complete and all(
+        item["distinguishable"] is True for item in per_db)
     return {
-        "model": "undigested_offtarget_amplicon_sizes",
+        "model": "restriction_digested_reconstructed_offtarget_pcr_products",
+        "all_databases_complete": all_complete,
         "all_databases_distinguishable": all_ok,
         "min_log10_gap": min_log10_gap,
         "per_db": per_db,
         "note": (
-            "Off-target PCR products are overlaid by predicted amplicon size. "
-            "Restriction digestion of off-target products is not simulated."
+            "Off-target PCR products are reconstructed from associated "
+            "reference sequence with primer-incorporated termini, digested by "
+            "the selected enzyme, and overlaid per database."
         ),
     }
 
