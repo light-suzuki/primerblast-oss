@@ -805,7 +805,8 @@ def pair_specificity(
         name: max(0, int(value))
         for name, value in (allowed_primer_mismatches or {}).items()
     }
-    sites, hit_stats = screen_primers_with_stats(primers, db, sp, blastn)
+    sites, hit_stats = screen_primers_with_stats(
+        primers, db, sp, blastn, genome)
     sites, viable_sites, thermo_site_stats = annotate_thermo(
         sites, primers, genome, thermo_params, thermo_gate)
     amplicons = enumerate_amplicons(sites, sp)
