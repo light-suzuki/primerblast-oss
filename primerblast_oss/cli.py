@@ -643,7 +643,9 @@ def _cmd_sequence(arguments) -> int:
             template.id,
             template.seq,
             arguments.db,
-            region=requested_region,
+            # Place primers in the padded template; coverage below still
+            # measures only the requested gene/interval.
+            region=(0, len(template.seq) - 1),
             amplicon_min=amplicon_min,
             amplicon_max=amplicon_max,
             overlap=arguments.overlap,

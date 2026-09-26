@@ -1,4 +1,8 @@
 """Pure-Python tests for sequencing / primer-walking orchestration."""
+import json
+
+import pytest
+
 from primerblast_oss.cli import build_parser
 from primerblast_oss.design import PrimerPair
 from primerblast_oss.regions import GenomicRegion, Template
@@ -141,3 +145,46 @@ def test_sequence_cli_accepts_length_overlap_and_gene_target():
     assert args.amplicon_size == "600-800"
     assert args.overlap == 120
     assert args.m13_tails is True
+
+
+@pytest.mark.parametrize("strand", ["+", "-"])
+def test_short_genomic_target_uses_flanks_but_reports_target_coverage(
+    tmp_path, monkeypatch, capsys, strand
+):
+    import primerblast_oss.cli as cli
+    import primerblast_oss.tiling as tiling
+
+    fasta = tmp_path / "genome.fa"
+    fasta.write_text(">chr1\n" + "A" * 700 + "\n", encoding="ascii")
+    (tmp_path / "genome.fa.fai").write_text(
+        "chr1\t700\t6\t700\t701\n", encoding="ascii")
+    placements = []
+    databases = []
+
+    def design(_id, _seq, params, _bin):
+        placements.append(params.included_region)
+        if params.included_region[1] < 500:
+            return [], {}
+        return [_pair(0, 20, 679, product=660)], {}
+
+    def evaluate(pair, dbs, *_args, **_kwargs):
+        databases.extend(dbs)
+
+    monkeypatch.setattr(tiling, "design_primers", design)
+    monkeypatch.setattr(tiling, "_evaluate", evaluate)
+    monkeypatch.setattr(cli, "_thermo_setup", lambda *_a, **_k: ({}, False, False))
+    args = build_parser().parse_args([
+        "sequence", "--interval", "chr1:301-400", "--strand", strand,
+        "--genome", str(fasta), "--db", "db1", "db2", "--flank", "300",
+        "--amplicon-size", "500-700", "--format", "json",
+    ])
+    assert args.func(args) == 0
+    plan = json.loads(capsys.readouterr().out)
+    assert placements == [(0, 700)]
+    assert databases == ["db1", "db2"]
+    assert plan["region"] == [300, 399]
+    assert plan["coverage"]["target_bases"] == 100
+    assert plan["coverage"]["full_coverage"] is True
+    assert plan["amplicons"][0]["genomic"] == {
+        "chrom": "chr1", "start": 21, "end": 680, "strand": strand,
+    }
