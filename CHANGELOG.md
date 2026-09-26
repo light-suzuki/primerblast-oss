@@ -7,6 +7,12 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- Allele-specific PCR / ARMS design for SNP assays: ref/alt primers terminate
+  at the SNP, optional deliberate -2/-3 mismatches are enumerated, best
+  classical AS-PCR and tetra-primer ARMS sets are generated, AA/AB/BB gel
+  patterns are scored, and top sets are re-screened against local BLAST
+  databases. Allele discrimination and genome-wide off-target evidence remain
+  separate outputs.
 - Gel-aware CAPS/dCAPS ranking based on digest fragment sizes, log-size
   separation, ladder coverage, agarose size ranges, heterozygote band patterns,
   and deterministic M/AA/AB/BB virtual-gel SVG output. Built-in 100 bp and 1 kb
