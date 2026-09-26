@@ -13,7 +13,7 @@ and genetics. It designs PCR primers with **Primer3** and verifies their
 **specificity** entirely offline against local BLAST+ databases — including
 unpublished genomes and several cultivars at once — and adds in-silico PCR,
 whole-region tiling, SNP-under-primer detection, amplicon conservation analysis,
-CAPS/dCAPS marker design, and an experimenter-facing risk score.
+CAPS/dCAPS and allele-specific PCR (AS-PCR / tetra-ARMS) marker design, and an experimenter-facing risk score.
 
 > The core is pure Python (standard library only) and calls out to `primer3_core`
 > and BLAST+. The unit tests require **no external tools or data**.
@@ -337,6 +337,40 @@ criteria**. They remain in the candidate set and are reported as soft warnings
 when they fall outside the selected ladder span or recommended agarose range.
 This lets the experimenter keep an otherwise highly discriminating marker and
 adjust the gel/ladder conditions manually.
+
+### Allele-specific PCR / ARMS from the same SNP assay
+
+When `assay --snp ... --alt ...` is used, the SNP workflow now also builds
+allele-specific PCR candidates in parallel with CAPS/dCAPS. Ref- and alt-specific
+primers place the SNP at the **3' terminal base**. Candidate deliberate
+destabilizing mismatches at the **-2 and -3 positions from the 3' end** are
+enumerated and ranked by the difference between intended- and non-target-allele
+terminal mismatch patterns.
+
+The same parent pair is also used to build **tetra-primer ARMS-PCR** candidates:
+the two outer primers form a control amplicon, while two allele-specific inner
+primers generate different-size ref and alt bands. The expected AA / AB / BB
+patterns are checked for gel separation.
+
+```bash
+python -m primerblast_oss assay \
+  --snp chr1:6385 --alt A \
+  --genome genome.fa --db $DB/cameor_v2 \
+  --aspcr-candidates-per-allele 4 \
+  --aspcr-tetra-candidates 6 \
+  --aspcr-pairs-to-screen 2 \
+  --format json
+```
+
+For the best ref-AS, alt-AS, and tetra-ARMS sets, the tool re-runs genome-wide
+in-silico PCR against the selected databases. The allele-discrimination score
+and genome off-target screen are reported separately.
+
+**Important:** a 3'-terminal mismatch does not guarantee complete allele
+rejection. ARMS designs commonly add a deliberate near-3' mismatch to increase
+discrimination, but polymerase, annealing conditions, and the exact mismatch
+combination matter. These scores rank designs; they are not probabilities of
+successful genotyping and should be validated experimentally.
 
 ### `markers` — evenly spaced markers across a QTL interval
 
