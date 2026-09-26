@@ -225,6 +225,7 @@ def evaluate_dcaps_candidates(
             analyze_digest_patterns,
             assess_background_across_databases,
         )
+        from .amplicon_digest import digest_offtarget_products
         gel_analysis = digest_dict.get("gel_analysis")
         if not gel_analysis:
             gel_analysis = analyze_digest_patterns(
@@ -254,11 +255,18 @@ def evaluate_dcaps_candidates(
                     "n_off_target": result_view.get("n_off_target", 0),
                     "products": products,
                 })
+        per_db_products = digest_offtarget_products(
+            per_db_products,
+            genomes_by_db,
+            {"F": candidate_pair.forward, "R": candidate_pair.reverse},
+            candidate["enzyme"],
+        )
         background = assess_background_across_databases(
             gel_analysis, per_db_products)
         intrinsic_pattern_ok = bool(
             (gel_analysis.get("genotype_discrimination") or {}).get(
                 "distinguishable"))
+        background_complete = background.get("all_databases_complete") is True
         background_ok = background.get("all_databases_distinguishable") is True
         intended_status = assay_summary.get(
             "intended_status",
@@ -271,6 +279,7 @@ def evaluate_dcaps_candidates(
         hard_blocker = (
             intended_status != "unique"
             or assay_summary.get("search_complete_all_db") is not True
+            or not background_complete
             or dimer_concern
             or primer_3prime_variant
         )
@@ -290,6 +299,8 @@ def evaluate_dcaps_candidates(
             recommendation_status = "rerun_specificity_exhaustively"
         elif intended_status != "unique":
             recommendation_status = "intended_amplicon_not_unique"
+        elif not background_complete:
+            recommendation_status = "offtarget_digest_indeterminate"
         elif not background_ok:
             recommendation_status = "offtarget_background_ambiguous"
         elif dimer_concern:
