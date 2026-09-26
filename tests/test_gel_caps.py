@@ -48,6 +48,8 @@ def test_virtual_gel_has_marker_and_three_genotype_lanes():
     analysis = analyze_digest_patterns([430], [293, 137])
     svg = virtual_gel_svg(analysis)
     assert svg.startswith("<svg")
+    assert "100%%" not in svg
+    assert 'width="100%"' in svg
     for lane in ("M", "AA", "AB", "BB"):
         assert ">%s</text>" % lane in svg
     assert "gel score" in svg
