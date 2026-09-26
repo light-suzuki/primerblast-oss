@@ -376,11 +376,25 @@ def assay_to_text(result: Dict) -> str:
         if pair.get("caps"):
             caps = pair["caps"]
             if caps.get("best_enzyme"):
-                output.append("    CAPS: %s  ref %s vs alt %s" % (
+                output.append("    %s: %s  ref %s vs alt %s" % (
+                    caps.get("best_marker_type") or "CAPS",
                     caps["best_enzyme"], caps["allele_ref_fragments"],
                     caps["allele_alt_fragments"]))
+                gel = caps.get("gel_analysis") or {}
+                if gel:
+                    output.append(
+                        "    gel: score %s (%s), %s ladder, %s%% agarose" % (
+                            gel.get("score"), gel.get("rating"),
+                            gel.get("ladder"), gel.get("gel_percent")))
+                    output.append(
+                        "    AB bands: %s" % ", ".join(
+                            "%sbp%s" % (
+                                band.get("size"),
+                                " x%s" % band.get("copies")
+                                if band.get("copies", 1) > 1 else "")
+                            for band in gel.get("heterozygote_bands", [])))
             else:
-                output.append("    CAPS: no distinguishing enzyme found")
+                output.append("    CAPS/dCAPS: no distinguishing enzyme found")
         for database in pair.get("per_db_products", []):
             output.append("    [%s] %s" % (
                 database["db"].split("/")[-1],
