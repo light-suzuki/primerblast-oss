@@ -836,6 +836,8 @@ def _cmd_assay(arguments) -> int:
         gel_ladder=arguments.ladder,
         custom_ladder_bands=custom_ladder_bands,
         gel_percent=gel_percent,
+        aspcr_candidates_per_allele=arguments.aspcr_candidates_per_allele,
+        aspcr_tetra_candidates=arguments.aspcr_tetra_candidates,
     )
     manifest = make_manifest(
         {
@@ -846,6 +848,8 @@ def _cmd_assay(arguments) -> int:
             "gel_ladder": arguments.ladder,
             "custom_ladder_bands": custom_ladder_bands,
             "gel_percent": gel_percent,
+            "aspcr_candidates_per_allele": arguments.aspcr_candidates_per_allele,
+            "aspcr_tetra_candidates": arguments.aspcr_tetra_candidates,
         },
         arguments.db,
         template_info=result["target"],
@@ -1099,6 +1103,12 @@ def build_parser() -> argparse.ArgumentParser:
     assay.add_argument(
         "--virtual-gel",
         help="write the top CAPS/dCAPS M/AA/AB/BB prediction as SVG")
+    assay.add_argument(
+        "--aspcr-candidates-per-allele", type=int, default=4,
+        help="AS-PCR candidates retained for each ref/alt allele")
+    assay.add_argument(
+        "--aspcr-tetra-candidates", type=int, default=6,
+        help="tetra-ARMS combinations retained per parent primer pair")
     _add_design_knobs(assay)
     _add_spec_args(assay)
     _add_dimer_args(assay)
