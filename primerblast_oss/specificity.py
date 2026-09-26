@@ -102,9 +102,15 @@ class PrimingSite:
     tm: Optional[float] = None
     end3_dg: Optional[float] = None
     thermo_viable: Optional[bool] = None
+    mapped_end5: Optional[int] = None
+    alignment_source: str = "blast_hsp"
+    aligned_query: Optional[str] = None
+    aligned_target: Optional[str] = None
 
     @property
     def end5(self) -> int:
+        if self.mapped_end5 is not None:
+            return self.mapped_end5
         return self.end3 - (self.plen - 1) if self.strand == "+" else self.end3 + (self.plen - 1)
 
     @property
@@ -130,6 +136,9 @@ class PrimerHitStats:
     completeness: str = SEARCH_COMPLETE
     malformed_rows: int = 0
     malformed_row_reason: Optional[str] = None
+    realignment_attempted: bool = False
+    realigned_sites: int = 0
+    realignment_failures: int = 0
 
 
 @dataclass
@@ -208,6 +217,172 @@ def _alignment_edit_count(qseq: str, sseq: str) -> int:
     return sum(q != s for q, s in zip(qseq, sseq)) + abs(len(qseq) - len(sseq))
 
 
+
+def _fitting_align_primer(primer: str, target: str) -> Tuple[str, str, int, int]:
+    """Fit a complete primer to a target window with free target end gaps.
+
+    This is a small Needleman-Wunsch variant: every primer base must be
+    represented in the alignment, while unused target prefix/suffix sequence is
+    free. It is used only after BLAST has nominated a candidate locus.
+    """
+    primer = primer.upper()
+    target = target.upper()
+    match, mismatch, gap = 2, -1, -2
+    m, n = len(primer), len(target)
+    scores = [[0] * (n + 1) for _ in range(m + 1)]
+    trace = [[None] * (n + 1) for _ in range(m + 1)]
+
+    for j in range(1, n + 1):
+        trace[0][j] = "L"
+    for i in range(1, m + 1):
+        scores[i][0] = i * gap
+        trace[i][0] = "U"
+
+    for i in range(1, m + 1):
+        for j in range(1, n + 1):
+            candidates = (
+                (scores[i - 1][j - 1] + (
+                    match if primer[i - 1] == target[j - 1] else mismatch), "D"),
+                (scores[i - 1][j] + gap, "U"),
+                (scores[i][j - 1] + gap, "L"),
+            )
+            scores[i][j], trace[i][j] = max(
+                candidates, key=lambda item: item[0])
+
+    end_j = max(range(n + 1), key=lambda j: scores[m][j])
+    i, j = m, end_j
+    aligned_primer: List[str] = []
+    aligned_target: List[str] = []
+    while i > 0:
+        move = trace[i][j]
+        if move == "D":
+            aligned_primer.append(primer[i - 1])
+            aligned_target.append(target[j - 1])
+            i -= 1
+            j -= 1
+        elif move == "U":
+            aligned_primer.append(primer[i - 1])
+            aligned_target.append("-")
+            i -= 1
+        elif move == "L":
+            aligned_primer.append("-")
+            aligned_target.append(target[j - 1])
+            j -= 1
+        else:
+            raise ValueError("unable to trace full-primer alignment")
+    return (
+        "".join(reversed(aligned_primer)),
+        "".join(reversed(aligned_target)),
+        j,
+        end_j,
+    )
+
+
+def _primer_terminal_target_indices(
+    aligned_primer: str, aligned_target: str, target_start: int
+) -> Tuple[Optional[int], Optional[int]]:
+    """Return target indices aligned to the primer 5' and 3' terminal bases."""
+    target_index = target_start
+    query_seen = 0
+    first: Optional[int] = None
+    last: Optional[int] = None
+    primer_bases = sum(base != "-" for base in aligned_primer)
+    for query_base, target_base in zip(aligned_primer, aligned_target):
+        current_target = target_index if target_base != "-" else None
+        if query_base != "-":
+            query_seen += 1
+            if query_seen == 1:
+                first = current_target
+            if query_seen == primer_bases:
+                last = current_target
+        if target_base != "-":
+            target_index += 1
+    return first, last
+
+
+def _realign_hit_to_site(
+    fields: List[str], primer_id: str, primer: str, sp: SpecParams, genome
+) -> Tuple[Optional[PrimingSite], bool]:
+    """Re-evaluate one BLAST candidate against the full primer sequence.
+
+    Returns (site, resolved). A false resolved value means the associated
+    genome could not provide the candidate sequence, so callers must treat the
+    evidence as incomplete rather than as a rejected off-target.
+    """
+    (_query_id, subject_id, _identity, _length, _mismatch, _gapopen,
+     query_start, query_end, subject_start, subject_end, _evalue, _bits,
+     subject_strand, _query_sequence, _subject_sequence, query_length) = fields
+
+    qstart = int(query_start)
+    qend = int(query_end)
+    qlen = int(query_length)
+    sstart = int(subject_start)
+    send = int(subject_end)
+    if qlen != len(primer):
+        qlen = len(primer)
+
+    strand = "+" if subject_strand == "plus" else "-"
+    if strand == "+":
+        approx_5 = sstart - (qstart - 1)
+        approx_3 = send + (qlen - qend)
+    else:
+        approx_5 = sstart + (qstart - 1)
+        approx_3 = send - (qlen - qend)
+
+    slack = 3
+    low = max(1, min(approx_5, approx_3) - slack)
+    high = max(approx_5, approx_3) + slack
+    try:
+        if hasattr(genome, "length"):
+            high = min(int(genome.length(subject_id)), high)
+        target = genome.fetch(subject_id, low, high, strand)
+    except Exception:
+        return None, False
+    if not target:
+        return None, False
+
+    aligned_primer, aligned_target, target_start, _target_end = (
+        _fitting_align_primer(primer, target)
+    )
+    first_index, last_index = _primer_terminal_target_indices(
+        aligned_primer, aligned_target, target_start)
+    if first_index is None or last_index is None:
+        return None, True
+
+    tp_mismatch, terminal_match = _count_3prime_mismatch(
+        aligned_primer, aligned_target, sp.three_prime_window)
+    if sp.require_3prime_terminal_match and not terminal_match:
+        return None, True
+    total_mismatch = _alignment_edit_count(aligned_primer, aligned_target)
+    if total_mismatch > sp.max_total_mismatch or tp_mismatch > sp.max_3prime_mismatch:
+        return None, True
+
+    tp5, _ = _count_3prime_mismatch(aligned_primer, aligned_target, 5)
+    tp10, _ = _count_3prime_mismatch(aligned_primer, aligned_target, 10)
+    if strand == "+":
+        end5 = low + first_index
+        end3 = low + last_index
+    else:
+        end5 = high - first_index
+        end3 = high - last_index
+
+    return PrimingSite(
+        primer=primer_id,
+        subject=subject_id,
+        strand=strand,
+        end3=end3,
+        total_mismatch=total_mismatch,
+        tp_mismatch=tp_mismatch,
+        plen=len(primer),
+        tp5_mismatch=tp5,
+        tp10_mismatch=tp10,
+        mapped_end5=end5,
+        alignment_source="full_length_genome",
+        aligned_query=aligned_primer,
+        aligned_target=aligned_target,
+    ), True
+
+
 def _hit_to_site(fields: List[str], primer_id: str, sp: SpecParams) -> Optional[PrimingSite]:
     (_query_id, subject_id, _identity, _length, _mismatch, _gapopen,
      query_start, query_end, _subject_start, subject_end, _evalue, _bits,
@@ -278,7 +453,8 @@ def _row_snippet(line: str, limit: int = 120) -> str:
 
 
 def priming_sites_with_stats(
-    primer: str, primer_id: str, db: str, sp: SpecParams, blastn: str
+    primer: str, primer_id: str, db: str, sp: SpecParams, blastn: str,
+    genome=None,
 ) -> Tuple[List[PrimingSite], PrimerHitStats]:
     output = _run_blast(primer, db, sp, blastn)
     sites: List[PrimingSite] = []
@@ -286,6 +462,8 @@ def priming_sites_with_stats(
     subjects = set()
     malformed_rows = 0
     malformed_reason: Optional[str] = None
+    realigned_sites = 0
+    realignment_failures = 0
     for line in output.splitlines():
         if not line.strip():
             continue
@@ -298,7 +476,15 @@ def priming_sites_with_stats(
                     len(fields), _row_snippet(line))
             continue
         try:
-            site = _hit_to_site(fields, primer_id, sp)
+            if genome is not None:
+                site, resolved = _realign_hit_to_site(
+                    fields, primer_id, primer, sp, genome)
+                if not resolved:
+                    realignment_failures += 1
+                elif site is not None:
+                    realigned_sites += 1
+            else:
+                site = _hit_to_site(fields, primer_id, sp)
         except ValueError as error:
             malformed_rows += 1
             if malformed_reason is None:
@@ -311,7 +497,7 @@ def priming_sites_with_stats(
 
     near_limit, high_copy, completeness = _classify_hit_list(
         raw_hits, len(sites), len(subjects), sp)
-    if malformed_rows and (
+    if (malformed_rows or realignment_failures) and (
             _SEARCH_SEVERITY.get(completeness, 0)
             < _SEARCH_SEVERITY[SEARCH_POSSIBLY_TRUNCATED]):
         # Unparseable rows mean the hit list is not trustworthy: evidence is
@@ -328,32 +514,36 @@ def priming_sites_with_stats(
         completeness=completeness,
         malformed_rows=malformed_rows,
         malformed_row_reason=malformed_reason,
+        realignment_attempted=genome is not None,
+        realigned_sites=realigned_sites,
+        realignment_failures=realignment_failures,
     )
     return sites, stats
 
 
 def priming_sites(primer: str, primer_id: str, db: str, sp: SpecParams,
-                  blastn: str) -> List[PrimingSite]:
-    sites, _stats = priming_sites_with_stats(primer, primer_id, db, sp, blastn)
+                  blastn: str, genome=None) -> List[PrimingSite]:
+    sites, _stats = priming_sites_with_stats(
+        primer, primer_id, db, sp, blastn, genome)
     return sites
 
 
 def screen_primers(primers: Dict[str, str], db: str, sp: SpecParams,
-                   blastn: str) -> List[PrimingSite]:
+                   blastn: str, genome=None) -> List[PrimingSite]:
     sites: List[PrimingSite] = []
     for name, sequence in primers.items():
-        sites.extend(priming_sites(sequence, name, db, sp, blastn))
+        sites.extend(priming_sites(sequence, name, db, sp, blastn, genome))
     return sites
 
 
 def screen_primers_with_stats(
-    primers: Dict[str, str], db: str, sp: SpecParams, blastn: str
+    primers: Dict[str, str], db: str, sp: SpecParams, blastn: str, genome=None
 ) -> Tuple[List[PrimingSite], Dict[str, PrimerHitStats]]:
     sites: List[PrimingSite] = []
     stats: Dict[str, PrimerHitStats] = {}
     for name, sequence in primers.items():
         primer_sites, primer_stats = priming_sites_with_stats(
-            sequence, name, db, sp, blastn)
+            sequence, name, db, sp, blastn, genome)
         sites.extend(primer_sites)
         stats[name] = primer_stats
     return sites, stats
@@ -375,6 +565,17 @@ def _search_metadata(hit_stats: Dict[str, PrimerHitStats], sp: SpecParams) -> Di
         },
         "malformed_row_reason_per_primer": {
             name: stats.malformed_row_reason for name, stats in hit_stats.items()
+        },
+        "full_length_realignment": {
+            "attempted": {
+                name: stats.realignment_attempted for name, stats in hit_stats.items()
+            },
+            "accepted_sites": {
+                name: stats.realigned_sites for name, stats in hit_stats.items()
+            },
+            "unresolved_candidates": {
+                name: stats.realignment_failures for name, stats in hit_stats.items()
+            },
         },
         "near_blast_limit": [
             name for name, stats in hit_stats.items() if stats.near_target_limit
@@ -400,9 +601,14 @@ def _search_metadata(hit_stats: Dict[str, PrimerHitStats], sp: SpecParams) -> Di
              "specificity." if sum(
                  stats.malformed_rows for stats in hit_stats.values())
              else
-             "Rerun with --exhaustive or a larger --max-target-seqs; if the "
-             "primer remains repeat-limited, redesign it or use an indexed "
-             "alternative search.")
+             ("Some BLAST candidates could not be full-length realigned "
+              "against the associated genome; verify DB/FASTA sequence IDs "
+              "before trusting specificity." if sum(
+                  stats.realignment_failures for stats in hit_stats.values())
+              else
+              "Rerun with --exhaustive or a larger --max-target-seqs; if the "
+              "primer remains repeat-limited, redesign it or use an indexed "
+              "alternative search."))
         ),
     }
 
@@ -546,7 +752,8 @@ def in_silico_pcr(
     if cancel_check is not None and cancel_check():
         raise CancelledError("in-silico PCR cancelled by caller")
     blastn = _detect_blastn(blastn_bin)
-    sites, hit_stats = screen_primers_with_stats(primers, db, sp, blastn)
+    sites, hit_stats = screen_primers_with_stats(
+        primers, db, sp, blastn, genome)
     sites, viable_sites, thermo_site_stats = annotate_thermo(
         sites, primers, genome, thermo_params, thermo_gate)
     amplicons = enumerate_amplicons(sites, sp)
