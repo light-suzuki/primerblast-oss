@@ -7,6 +7,10 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- Gel-aware CAPS/dCAPS ranking based on digest fragment sizes, log-size
+  separation, ladder coverage, agarose size ranges, heterozygote band patterns,
+  and deterministic M/AA/AB/BB virtual-gel SVG output. Built-in 100 bp and 1 kb
+  ladder presets can be replaced by user-supplied band sizes.
 - Target-aware `sequence` workflow for Sanger/amplicon resequencing. It
   reuses the tiling engine, accepts gene/interval/FASTA inputs, exposes
   configurable amplicon length and overlap, reports coverage gaps, maps
