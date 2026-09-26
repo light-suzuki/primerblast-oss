@@ -226,6 +226,8 @@ def _attach_marker_gel_context(
     intended_status: str,
     search_completeness: str,
     specific_all_db,
+    genomes_by_db: Optional[Mapping[str, object]] = None,
+    primers: Optional[Mapping[str, str]] = None,
 ) -> Optional[Dict]:
     if not caps_info:
         return caps_info
@@ -239,12 +241,23 @@ def _attach_marker_gel_context(
     if not gel_analysis:
         return caps_info
 
+    enzyme = caps_info.get("best_enzyme")
+    if enzyme and primers is not None:
+        from .amplicon_digest import digest_offtarget_products
+        annotated = digest_offtarget_products(
+            per_db_products, genomes_by_db, primers, enzyme)
+        if isinstance(per_db_products, list):
+            per_db_products[:] = annotated
+        else:
+            per_db_products = annotated
+
     from .gel import assess_background_across_databases
     background = assess_background_across_databases(
         gel_analysis, per_db_products)
     intrinsic = bool(
         (gel_analysis.get("genotype_discrimination") or {}).get(
             "distinguishable"))
+    background_complete = background.get("all_databases_complete") is True
     background_ok = background.get("all_databases_distinguishable") is True
 
     if intended_status != "unique":
@@ -253,6 +266,8 @@ def _attach_marker_gel_context(
         verdict = "indeterminate_search"
     elif not intrinsic:
         verdict = "ambiguous_genotype_pattern"
+    elif not background_complete:
+        verdict = "indeterminate_offtarget_digest"
     elif not background_ok:
         verdict = "ambiguous_with_offtarget_background"
     elif specific_all_db is True:
@@ -266,6 +281,7 @@ def _attach_marker_gel_context(
         intended_status == "unique"
         and search_completeness == SEARCH_COMPLETE
         and intrinsic
+        and background_complete
         and background_ok
     )
     caps_info["marker_verdict"] = verdict
@@ -276,7 +292,8 @@ def analyze_pair(pair, per_db: Sequence[Dict], design_db: str,
                  template: Optional[Template], variants: Sequence,
                  caps_info: Optional[Dict], gel_min_gap: int = 50,
                  dimer_params=None,
-                 expected_primer_mismatches: Optional[Mapping[str, int]] = None) -> Dict:
+                 expected_primer_mismatches: Optional[Mapping[str, int]] = None,
+                 genomes_by_db: Optional[Mapping[str, object]] = None) -> Dict:
     len_f, len_r = len(pair.forward), len(pair.reverse)
     design_res = next(
         (result for result in per_db if result["db"] == design_db), per_db[0])
@@ -383,6 +400,8 @@ def analyze_pair(pair, per_db: Sequence[Dict], design_db: str,
         intended_status=intended_status,
         search_completeness=overall_completeness,
         specific_all_db=specific_all_db,
+        genomes_by_db=genomes_by_db,
+        primers={"F": pair.forward, "R": pair.reverse},
     )
 
     risk = assess_risk(
@@ -726,6 +745,7 @@ def run_assay(
             caps_info,
             gel_min_gap=gel_min_gap,
             dimer_params=dimer_params,
+            genomes_by_db=associated_genomes,
         ))
 
     risk_order = {"low": 0, "medium": 1, "high": 2}
@@ -733,6 +753,7 @@ def run_assay(
         "specific_clean": 0,
         "gel_scorable_with_separated_offtargets": 1,
         "indeterminate_search": 3,
+        "indeterminate_offtarget_digest": 3,
         "ambiguous_genotype_pattern": 4,
         "ambiguous_with_offtarget_background": 4,
         "invalid_intended": 5,
