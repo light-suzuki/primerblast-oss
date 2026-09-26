@@ -271,6 +271,30 @@ python -m primerblast_oss tile \
   --db /path/to/genome_db
 ```
 
+### `sequence` — overlapping amplicons for Sanger / resequencing
+
+`sequence` is a target-aware wrapper around the tiling engine. Give a gene,
+genomic interval, raw sequence, or FASTA and choose both the desired amplicon
+length and overlap between neighboring products.
+
+```bash
+python -m primerblast_oss sequence \
+  --gene Psat.cameor.v2.1g00050 --gff3 genome.gff3 --genome genome.fa \
+  --db $DB/cameor_v2 --amplicon-size 600-800 --overlap 120
+```
+
+For genomic targets, `--flank` adds sequence outside the requested region for
+primer placement while coverage is still scored against the target itself.
+Coverage gaps are reported explicitly. Optional `--m13-tails` prepends the
+universal M13 sequences to the **order oligos only**; genome specificity is
+evaluated on the annealing portion of each primer.
+
+```bash
+python -m primerblast_oss sequence \
+  --interval chr1:100000-104000 --genome genome.fa --db $DB/genome \
+  --amplicon-size 500-700 --overlap 100 --m13-tails --format order
+```
+
 ### `assay` — full breeding assay from a gene / interval / SNP
 
 Resolves a target from a **local genome + GFF3/VCF**, designs primers, checks
