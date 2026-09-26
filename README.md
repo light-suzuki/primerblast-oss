@@ -312,9 +312,16 @@ python -m primerblast_oss assay \
   --db $DB/cameor_v2 --db $DB/unpublished_cultivar --db $DB/ZW6 \
   --vcf variants.vcf --flank 100 --product-size 150-600 --format html --out report.html
 
-# a CAPS marker spanning a SNP (alt allele given)
+# a CAPS/dCAPS marker spanning a SNP (alt allele given)
+# auto-rank digest patterns by actual fragment sizes and write an M/AA/AB/BB gel
 python -m primerblast_oss assay --snp chr1:6385 --alt A \
-  --genome genome.fa --db $DB/cameor_v2 --flank 250 --format text
+  --genome genome.fa --db $DB/cameor_v2 --flank 250 \
+  --ladder auto --gel-percent auto --virtual-gel marker.svg --format text
+
+# force a 100-bp ladder / 2% agarose model
+python -m primerblast_oss assay --snp chr1:6385 --alt A \
+  --genome genome.fa --db $DB/cameor_v2 \
+  --ladder 100bp --gel-percent 2.0 --format json
 ```
 
 ### `markers` — evenly spaced markers across a QTL interval
