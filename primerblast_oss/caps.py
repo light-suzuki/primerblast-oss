@@ -17,6 +17,11 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple, Union
 
+try:
+    from .gel import analyze_digest_patterns
+except ImportError:  # direct module self-test: python primerblast_oss/caps.py
+    from gel import analyze_digest_patterns
+
 
 IUPAC_CODES: Dict[str, str] = {
     "A": "A", "C": "C", "G": "G", "T": "T",
@@ -366,7 +371,6 @@ def caps_scan(amplicon_a: str, amplicon_b: str,
             and enzyme.cut_model == "verified" and not incomplete
         )
         distinguishable = eligible and gap >= gel_min_gap
-        from .gel import analyze_digest_patterns
         gel_analysis = analyze_digest_patterns(
             fragments_a,
             fragments_b,
