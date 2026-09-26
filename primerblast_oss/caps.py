@@ -108,6 +108,7 @@ class CapsResult:
     methylation_note: str = ""
     cut_model: str = "verified"
     metadata_source: str = _METADATA_SOURCE
+    gel_analysis: Optional[Dict] = None
 
     def __post_init__(self) -> None:
         if self.allele_a_cuts is None:
@@ -345,7 +346,10 @@ def _multiset_diff_min_gap(fragments_a: List[int],
 def caps_scan(amplicon_a: str, amplicon_b: str,
               enzymes: EnzymeInput = None,
               gel_min_gap: int = 25,
-              include_nonrecommended: bool = False) -> List[CapsResult]:
+              include_nonrecommended: bool = False,
+              ladder: str = "auto",
+              custom_ladder_bands: Optional[Sequence[int]] = None,
+              gel_percent: Optional[float] = None) -> List[CapsResult]:
     records = enzyme_records(enzymes, recommended_only=not include_nonrecommended)
     results: List[CapsResult] = []
     for enzyme in records:
@@ -362,6 +366,14 @@ def caps_scan(amplicon_a: str, amplicon_b: str,
             and enzyme.cut_model == "verified" and not incomplete
         )
         distinguishable = eligible and gap >= gel_min_gap
+        from .gel import analyze_digest_patterns
+        gel_analysis = analyze_digest_patterns(
+            fragments_a,
+            fragments_b,
+            ladder=ladder,
+            custom_ladder_bands=custom_ladder_bands,
+            gel_percent=gel_percent,
+        )
         note_parts = []
         if len(fragments_a) != len(fragments_b):
             note_parts.append("cut-count differs")
@@ -390,10 +402,12 @@ def caps_scan(amplicon_a: str, amplicon_b: str,
             methylation_note=enzyme.methylation_note,
             cut_model=enzyme.cut_model,
             metadata_source=enzyme.source,
+            gel_analysis=gel_analysis,
         ))
     results.sort(key=lambda result: (
         result.distinguishable,
         result.recommendation_eligible,
+        (result.gel_analysis or {}).get("score", 0),
         result.min_gel_gap,
     ), reverse=True)
     return results
