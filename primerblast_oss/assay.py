@@ -686,6 +686,7 @@ def run_assay(
     dcaps_candidates_per_pair: int = 6,
     aspcr_candidates_per_allele: int = 4,
     aspcr_tetra_candidates: int = 6,
+    aspcr_pairs_to_screen: int = 2,
 ) -> Dict:
     template = extract_template(genome, region, flank=flank)
     design_db = databases[0]
@@ -736,6 +737,27 @@ def run_assay(
                 max_length=design_params.max_size,
                 opt_length=design_params.opt_size,
             )
+            if pair_index < aspcr_pairs_to_screen:
+                from .aspcr import screen_aspcr
+                aspcr_info = screen_aspcr(
+                    aspcr_info,
+                    databases,
+                    spec_params=specificity,
+                    blastn_bin=blastn_bin,
+                    genomes_by_db=associated_genomes,
+                    thermo_params=thermo_params,
+                    thermo_gate=thermo_gate,
+                    size_tolerance=10,
+                )
+            else:
+                aspcr_info["specificity_screen"] = {
+                    "status": "skipped_pair_limit",
+                    "reason": (
+                        "AS-PCR/tetra-ARMS BLAST screening is limited to the "
+                        "top %s parent primer pairs" % aspcr_pairs_to_screen),
+                    "sets": {},
+                    "search_complete_all_sets": False,
+                }
             caps_info = build_caps(
                 template,
                 pair,
@@ -862,6 +884,8 @@ def run_assay(
                 aspcr_candidates_per_allele if caps_snp else 0),
             "aspcr_tetra_candidates": (
                 aspcr_tetra_candidates if caps_snp else 0),
+            "aspcr_pairs_screened": min(
+                aspcr_pairs_to_screen, len(result.pairs)) if caps_snp else 0,
             "gel_ladder": gel_ladder,
             "custom_ladder_bands": (
                 list(custom_ladder_bands) if custom_ladder_bands else None),
