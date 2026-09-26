@@ -638,6 +638,32 @@ def _attach_dcaps(
     return caps_info
 
 
+def _template_allele_base(template: Template, genomic_base: str) -> str:
+    """Convert a genomic allele base into the oriented template base."""
+    base = genomic_base.upper()
+    if template.anchor_strand == "-":
+        from .genome import revcomp
+        return revcomp(base)
+    return base
+
+
+def _preferred_genotyping_mode(summary: Dict) -> Optional[str]:
+    caps = summary.get("caps") or {}
+    marker_verdict = summary.get("marker_verdict")
+    if caps.get("best_marker_type") and marker_verdict in (
+            "specific_clean", "gel_scorable_with_separated_offtargets"):
+        return caps.get("best_marker_type")
+    aspcr = summary.get("aspcr") or {}
+    tetra = aspcr.get("best_tetra")
+    if tetra and tetra.get("gel_scorable"):
+        return "tetra-ARMS"
+    if aspcr.get("best_classical_ref") and aspcr.get("best_classical_alt"):
+        return "AS-PCR"
+    if caps.get("best_marker_type"):
+        return caps.get("best_marker_type")
+    return None
+
+
 def run_assay(
     region: GenomicRegion,
     genome: Genome,
@@ -658,6 +684,8 @@ def run_assay(
     gel_percent: Optional[float] = None,
     dcaps_pairs_to_screen: int = 3,
     dcaps_candidates_per_pair: int = 6,
+    aspcr_candidates_per_allele: int = 4,
+    aspcr_tetra_candidates: int = 6,
 ) -> Dict:
     template = extract_template(genome, region, flank=flank)
     design_db = databases[0]
@@ -666,8 +694,11 @@ def run_assay(
 
     design_params = design_params or DesignParams()
     specificity = spec_params or SpecParams()
+    snp_local = None
+    local_alt_base = None
     if caps_snp is not None:
         snp_local = _genomic_to_local(template, caps_snp["genomic_pos"])
+        local_alt_base = _template_allele_base(template, caps_snp["alt"])
         if snp_local is not None:
             from dataclasses import replace
             design_params = replace(design_params, target=(snp_local, 1))
@@ -691,15 +722,25 @@ def run_assay(
     pair_dicts: List[Dict] = []
     for pair_index, pair in enumerate(result.pairs):
         caps_info = None
-        if caps_snp is not None:
-            snp_local = _genomic_to_local(
-                template, caps_snp["genomic_pos"])
-            if snp_local is not None:
-                caps_info = build_caps(
+        aspcr_info = None
+        if caps_snp is not None and snp_local is not None and local_alt_base is not None:
+            from .aspcr import build_aspcr
+            aspcr_info = build_aspcr(
+                template.seq,
+                pair,
+                snp_local,
+                local_alt_base,
+                max_classical_per_allele=aspcr_candidates_per_allele,
+                max_tetra=aspcr_tetra_candidates,
+                min_length=design_params.min_size,
+                max_length=design_params.max_size,
+                opt_length=design_params.opt_size,
+            )
+            caps_info = build_caps(
                     template,
                     pair,
                     snp_local,
-                    caps_snp["alt"],
+                    local_alt_base,
                     gel_min_gap=gel_min_gap,
                     gel_ladder=gel_ladder,
                     custom_ladder_bands=custom_ladder_bands,
@@ -713,7 +754,7 @@ def run_assay(
                             template,
                             pair,
                             snp_local,
-                            caps_snp["alt"],
+                            local_alt_base,
                             databases,
                             specificity,
                             blastn_bin,
@@ -736,7 +777,7 @@ def run_assay(
                             "candidates": [],
                             "n_orderable": 0,
                         }
-        pair_dicts.append(analyze_pair(
+        pair_summary = analyze_pair(
             pair,
             pair.specificity["per_db"],
             design_db,
@@ -746,7 +787,22 @@ def run_assay(
             gel_min_gap=gel_min_gap,
             dimer_params=dimer_params,
             genomes_by_db=associated_genomes,
-        ))
+        )
+        pair_summary["aspcr"] = aspcr_info
+        pair_summary["preferred_genotyping_mode"] = _preferred_genotyping_mode(
+            pair_summary)
+        pair_summary["available_genotyping_modes"] = [
+            mode for mode, available in (
+                ("CAPS/dCAPS", bool(
+                    (pair_summary.get("caps") or {}).get("best_marker_type"))),
+                ("AS-PCR", bool(
+                    (aspcr_info or {}).get("best_classical_ref")
+                    and (aspcr_info or {}).get("best_classical_alt"))),
+                ("tetra-ARMS", bool(
+                    (aspcr_info or {}).get("best_tetra"))),
+            ) if available
+        ]
+        pair_dicts.append(pair_summary)
 
     risk_order = {"low": 0, "medium": 1, "high": 2}
     marker_order = {
@@ -760,10 +816,16 @@ def run_assay(
         None: 6,
     }
     if caps_snp is not None:
+        mode_order = {"CAPS": 0, "dCAPS": 0, "tetra-ARMS": 1, "AS-PCR": 2, None: 6}
         pair_dicts.sort(key=lambda pair_dict: (
-            marker_order.get(pair_dict.get("marker_verdict"), 6),
+            mode_order.get(pair_dict.get("preferred_genotyping_mode"), 5),
+            marker_order.get(pair_dict.get("marker_verdict"), 2)
+            if pair_dict.get("preferred_genotyping_mode") in ("CAPS", "dCAPS")
+            else 0,
             -float(((pair_dict.get("caps") or {}).get("gel_analysis") or {}).get(
                 "score", 0)),
+            -float((((pair_dict.get("aspcr") or {}).get("best_tetra") or {}).get(
+                "score", 0))),
             risk_order.get(pair_dict["risk"], 3),
             -pair_dict.get("risk_score", 0),
         ))
@@ -796,6 +858,10 @@ def run_assay(
                 dcaps_pairs_to_screen, len(result.pairs)) if caps_snp else 0,
             "dcaps_candidates_per_pair": (
                 dcaps_candidates_per_pair if caps_snp else 0),
+            "aspcr_candidates_per_allele": (
+                aspcr_candidates_per_allele if caps_snp else 0),
+            "aspcr_tetra_candidates": (
+                aspcr_tetra_candidates if caps_snp else 0),
             "gel_ladder": gel_ladder,
             "custom_ladder_bands": (
                 list(custom_ladder_bands) if custom_ladder_bands else None),
