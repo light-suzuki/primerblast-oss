@@ -7,8 +7,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from primerblast_oss.specificity import (  # noqa: E402
     PrimingSite, SpecParams, Amplicon, enumerate_amplicons,
     _conservative_intended_products, _count_3prime_mismatch, _hit_to_site,
-    _fitting_align_primer, _realign_hit_to_site,
-    nearest_size_gap, priming_sites_with_stats, spec_params_for_profile,
+    _fitting_align_primer, _priming_sites_from_output, _realign_hit_to_site,
+    _run_blast_batch, nearest_size_gap, priming_sites_with_stats,
+    screen_primers_with_stats, spec_params_for_profile,
 )
 
 
@@ -292,6 +293,125 @@ def test_full_realign_applies_terminal_3prime_rule_after_recovery():
     )
     assert resolved is True and relaxed is not None
     assert relaxed.total_mismatch == 1
+
+
+
+def _batch_valid_line(query_id, subject, start, sequence):
+    end = start + len(sequence) - 1
+    return "\t".join([
+        query_id, subject, "100.0", str(len(sequence)), "0", "0",
+        "1", str(len(sequence)), str(start), str(end),
+        "1e-5", "40", "plus", sequence, sequence, str(len(sequence)),
+    ])
+
+
+def test_batched_screen_matches_single_primer_parser():
+    import primerblast_oss.specificity as specificity
+    primer = "ACGTACGTACGTACGTACGT"
+    primers = {"Primer A": primer, "Primer/B": primer}
+    output = "\n".join([
+        _batch_valid_line("PBO00000000", "chr1", 101, primer),
+        _batch_valid_line("PBO00000001", "chr2", 501, primer),
+    ])
+    old = specificity._run_blast_batch
+    specificity._run_blast_batch = lambda *_args, **_kwargs: (
+        output, {"PBO00000000": "Primer A", "PBO00000001": "Primer/B"})
+    try:
+        sites, stats = screen_primers_with_stats(
+            primers, "db", SpecParams(), "blastn")
+    finally:
+        specificity._run_blast_batch = old
+
+    expected_a, expected_stats_a = _priming_sites_from_output(
+        primer, "Primer A",
+        _batch_valid_line("PBO00000000", "chr1", 101, primer),
+        SpecParams(),
+    )
+    expected_b, expected_stats_b = _priming_sites_from_output(
+        primer, "Primer/B",
+        _batch_valid_line("PBO00000001", "chr2", 501, primer),
+        SpecParams(),
+    )
+    assert [(x.primer, x.subject, x.end3) for x in sites] == [
+        (x.primer, x.subject, x.end3) for x in expected_a + expected_b
+    ]
+    assert stats["Primer A"].raw_blast_hits == expected_stats_a.raw_blast_hits
+    assert stats["Primer/B"].raw_blast_hits == expected_stats_b.raw_blast_hits
+
+
+def test_batched_screen_invokes_blast_once_for_large_pool():
+    import primerblast_oss.specificity as specificity
+    primers = {"P%d" % i: "ACGTACGTACGTACGTACGT" for i in range(100)}
+    calls = []
+    old = specificity._run_blast_batch
+
+    def fake_batch(pool, *_args, **_kwargs):
+        calls.append(len(pool))
+        return "", {"PBO%08d" % i: name for i, name in enumerate(pool)}
+
+    specificity._run_blast_batch = fake_batch
+    try:
+        sites, stats = screen_primers_with_stats(
+            primers, "db", SpecParams(), "blastn")
+    finally:
+        specificity._run_blast_batch = old
+    assert sites == []
+    assert calls == [100]
+    assert set(stats) == set(primers)
+
+
+def test_batch_internal_query_ids_do_not_use_user_labels():
+    import primerblast_oss.specificity as specificity
+
+    class Result:
+        returncode = 0
+        stdout = b""
+        stderr = b""
+
+    seen = {}
+    old = specificity.subprocess.run
+
+    def fake_run(_cmd, input=None, **_kwargs):
+        seen["query"] = input.decode()
+        return Result()
+
+    specificity.subprocess.run = fake_run
+    try:
+        output, mapping = _run_blast_batch(
+            {"name with spaces": "A" * 20, "name/with|punct": "C" * 20},
+            "db", SpecParams(), "blastn")
+    finally:
+        specificity.subprocess.run = old
+
+    assert output == ""
+    assert mapping == {
+        "PBO00000000": "name with spaces",
+        "PBO00000001": "name/with|punct",
+    }
+    assert ">PBO00000000\n" in seen["query"]
+    assert ">PBO00000001\n" in seen["query"]
+    assert "name with spaces" not in seen["query"]
+    assert "name/with|punct" not in seen["query"]
+
+
+def test_batched_screen_rejects_unknown_query_id():
+    import primerblast_oss.specificity as specificity
+    primer = "ACGTACGTACGTACGTACGT"
+    old = specificity._run_blast_batch
+    specificity._run_blast_batch = lambda *_args, **_kwargs: (
+        _batch_valid_line("UNKNOWN", "chr1", 101, primer),
+        {"PBO00000000": "F"},
+    )
+    try:
+        try:
+            screen_primers_with_stats(
+                {"F": primer}, "db", SpecParams(), "blastn")
+        except Exception as error:
+            assert "unknown query id" in str(error)
+        else:
+            raise AssertionError("unknown batched qseqid should fail")
+    finally:
+        specificity._run_blast_batch = old
 
 
 if __name__ == "__main__":
