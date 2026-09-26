@@ -200,8 +200,8 @@ optional extra — see [Web GUI (optional)](#web-gui-optional) near the end.
 ## Usage
 
 primerblast-oss is a **CLI tool**. Subcommands: **design**, **check**,
-**multiplex**, **multiplex-design**, **tile**, **assay**, **markers**,
-**makedb**. Run `python -m primerblast_oss <subcommand> --help` for the full
+**multiplex**, **multiplex-design**, **tile**, **sequence**, **assay**,
+**markers**, **makedb**. Run `python -m primerblast_oss <subcommand> --help` for the full
 option list of any one.
 
 `multiplex` checks primer-dimer compatibility across a pool of primers (needs
@@ -323,6 +323,20 @@ python -m primerblast_oss assay --snp chr1:6385 --alt A \
   --genome genome.fa --db $DB/cameor_v2 \
   --ladder 100bp --gel-percent 2.0 --format json
 ```
+
+For CAPS/dCAPS, biological specificity and experimental readability are
+reported separately. A pair can therefore be non-specific at the sequence
+level but still receive
+`marker_verdict=gel_scorable_with_separated_offtargets` when predicted
+off-target products remain clearly separated from the AA/AB/BB diagnostic band
+patterns in every screened database. Off-target bands are overlaid per
+database, not pooled across references.
+
+Very short or very long diagnostic fragments are **not automatic rejection
+criteria**. They remain in the candidate set and are reported as soft warnings
+when they fall outside the selected ladder span or recommended agarose range.
+This lets the experimenter keep an otherwise highly discriminating marker and
+adjust the gel/ladder conditions manually.
 
 ### `markers` — evenly spaced markers across a QTL interval
 
