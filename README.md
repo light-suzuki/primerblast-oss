@@ -110,9 +110,10 @@ and offline reproducibility. The evidence to date:
   PrimerServer2. Every difference is a single borderline product near a Tm or
   3'-alignment threshold, not an error (§8b). Still a modest sample, and NCBI
   screens its own *Arabidopsis* assembly rather than the local FASTA.
-- **Continuous regression benchmark.** CI builds a synthetic FASTA/BLAST database
-  and exercises Primer3 design, BLAST amplicon pairing, duplicate/off-target
-  classification, thermodynamic gating, and multiplex dimer checks on every push.
+- **Continuous regression benchmark.** A separate scheduled GitHub Actions workflow
+  builds a synthetic FASTA/BLAST database and exercises Primer3 design, BLAST
+  amplicon pairing, duplicate/off-target classification, thermodynamic gating,
+  and multiplex dimer checks weekly (and on manual dispatch).
 - **Wet-lab validation panel.** A versioned panel
   ([`validation_panel/`](validation_panel/README.md)) records prospective
   experimental outcomes (protocol metadata, observed bands, exclusion
