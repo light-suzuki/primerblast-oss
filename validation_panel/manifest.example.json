@@ -1,0 +1,290 @@
+{
+  "schema_version": "1.0",
+  "panel_version": "1.0",
+  "description": "Example prospective wet-lab validation panel. Example entries are pending unless explicitly excluded.",
+  "assays": [
+    {
+      "assay_id": "VP-001",
+      "category": "unique_locus",
+      "primers": {
+        "forward": "AAAAAAAAAAAAAAAAAAAA",
+        "reverse": "TTTTTTTTTTTTTTTTTTTT",
+        "sequence_sha256": "4aaa482a9beb7b05c49ddc4540ca73cd1dd95f4d21de3cfb95cd12a0a0ba7d0f"
+      },
+      "prediction": {
+        "expected_band_sizes": [
+          200
+        ],
+        "expected_off_target_sizes": [],
+        "rank": "A",
+        "risk_score": 90,
+        "risk_level": "low",
+        "search_completeness": "complete"
+      },
+      "protocol": {
+        "replicates_planned": 2,
+        "annealing_temperature_c": null,
+        "magnesium_mm": null,
+        "cycles": null,
+        "gel_percent": null,
+        "ladder": null
+      },
+      "observed": {
+        "status": "pending",
+        "band_count": null,
+        "band_sizes": [],
+        "replicate_agreement": null,
+        "exclusion_reason": null,
+        "caps_concordant": null
+      }
+    },
+    {
+      "assay_id": "VP-002",
+      "category": "recent_paralog",
+      "primers": {
+        "forward": "AAAAAAAAAAAAAAAAAAAA",
+        "reverse": "TTTTTTTTTTTTTTTTTTTT",
+        "sequence_sha256": "4aaa482a9beb7b05c49ddc4540ca73cd1dd95f4d21de3cfb95cd12a0a0ba7d0f"
+      },
+      "prediction": {
+        "expected_band_sizes": [
+          210
+        ],
+        "expected_off_target_sizes": [],
+        "rank": "B",
+        "risk_score": 65,
+        "risk_level": "medium",
+        "search_completeness": "complete"
+      },
+      "protocol": {
+        "replicates_planned": 2,
+        "annealing_temperature_c": null,
+        "magnesium_mm": null,
+        "cycles": null,
+        "gel_percent": null,
+        "ladder": null
+      },
+      "observed": {
+        "status": "pending",
+        "band_count": null,
+        "band_sizes": [],
+        "replicate_agreement": null,
+        "exclusion_reason": null,
+        "caps_concordant": null
+      }
+    },
+    {
+      "assay_id": "VP-003",
+      "category": "tandem_duplication",
+      "primers": {
+        "forward": "AAAAAAAAAAAAAAAAAAAA",
+        "reverse": "TTTTTTTTTTTTTTTTTTTT",
+        "sequence_sha256": "4aaa482a9beb7b05c49ddc4540ca73cd1dd95f4d21de3cfb95cd12a0a0ba7d0f"
+      },
+      "prediction": {
+        "expected_band_sizes": [
+          220
+        ],
+        "expected_off_target_sizes": [],
+        "rank": "C",
+        "risk_score": 30,
+        "risk_level": "high",
+        "search_completeness": "complete"
+      },
+      "protocol": {
+        "replicates_planned": 2,
+        "annealing_temperature_c": null,
+        "magnesium_mm": null,
+        "cycles": null,
+        "gel_percent": null,
+        "ladder": null
+      },
+      "observed": {
+        "status": "pending",
+        "band_count": null,
+        "band_sizes": [],
+        "replicate_agreement": null,
+        "exclusion_reason": null,
+        "caps_concordant": null
+      }
+    },
+    {
+      "assay_id": "VP-004",
+      "category": "repeat",
+      "primers": {
+        "forward": "AAAAAAAAAAAAAAAAAAAA",
+        "reverse": "TTTTTTTTTTTTTTTTTTTT",
+        "sequence_sha256": "4aaa482a9beb7b05c49ddc4540ca73cd1dd95f4d21de3cfb95cd12a0a0ba7d0f"
+      },
+      "prediction": {
+        "expected_band_sizes": [
+          230
+        ],
+        "expected_off_target_sizes": [],
+        "rank": "I",
+        "risk_score": 30,
+        "risk_level": "high",
+        "search_completeness": "possibly_truncated"
+      },
+      "protocol": {
+        "replicates_planned": 2,
+        "annealing_temperature_c": null,
+        "magnesium_mm": null,
+        "cycles": null,
+        "gel_percent": null,
+        "ladder": null
+      },
+      "observed": {
+        "status": "pending",
+        "band_count": null,
+        "band_sizes": [],
+        "replicate_agreement": null,
+        "exclusion_reason": null,
+        "caps_concordant": null
+      }
+    },
+    {
+      "assay_id": "VP-005",
+      "category": "organellar",
+      "primers": {
+        "forward": "AAAAAAAAAAAAAAAAAAAA",
+        "reverse": "TTTTTTTTTTTTTTTTTTTT",
+        "sequence_sha256": "4aaa482a9beb7b05c49ddc4540ca73cd1dd95f4d21de3cfb95cd12a0a0ba7d0f"
+      },
+      "prediction": {
+        "expected_band_sizes": [
+          240
+        ],
+        "expected_off_target_sizes": [],
+        "rank": "C",
+        "risk_score": 65,
+        "risk_level": "medium",
+        "search_completeness": "complete"
+      },
+      "protocol": {
+        "replicates_planned": 2,
+        "annealing_temperature_c": null,
+        "magnesium_mm": null,
+        "cycles": null,
+        "gel_percent": null,
+        "ladder": null
+      },
+      "observed": {
+        "status": "pending",
+        "band_count": null,
+        "band_sizes": [],
+        "replicate_agreement": null,
+        "exclusion_reason": null,
+        "caps_concordant": null
+      }
+    },
+    {
+      "assay_id": "VP-006",
+      "category": "primer_site_variant",
+      "primers": {
+        "forward": "AAAAAAAAAAAAAAAAAAAA",
+        "reverse": "TTTTTTTTTTTTTTTTTTTT",
+        "sequence_sha256": "4aaa482a9beb7b05c49ddc4540ca73cd1dd95f4d21de3cfb95cd12a0a0ba7d0f"
+      },
+      "prediction": {
+        "expected_band_sizes": [
+          250
+        ],
+        "expected_off_target_sizes": [],
+        "rank": "B",
+        "risk_score": 65,
+        "risk_level": "medium",
+        "search_completeness": "complete"
+      },
+      "protocol": {
+        "replicates_planned": 2,
+        "annealing_temperature_c": null,
+        "magnesium_mm": null,
+        "cycles": null,
+        "gel_percent": null,
+        "ladder": null
+      },
+      "observed": {
+        "status": "pending",
+        "band_count": null,
+        "band_sizes": [],
+        "replicate_agreement": null,
+        "exclusion_reason": null,
+        "caps_concordant": null
+      }
+    },
+    {
+      "assay_id": "VP-007",
+      "category": "caps_marker",
+      "primers": {
+        "forward": "AAAAAAAAAAAAAAAAAAAA",
+        "reverse": "TTTTTTTTTTTTTTTTTTTT",
+        "sequence_sha256": "4aaa482a9beb7b05c49ddc4540ca73cd1dd95f4d21de3cfb95cd12a0a0ba7d0f"
+      },
+      "prediction": {
+        "expected_band_sizes": [
+          260
+        ],
+        "expected_off_target_sizes": [],
+        "rank": "A",
+        "risk_score": 90,
+        "risk_level": "low",
+        "search_completeness": "complete",
+        "caps": {
+          "enzyme": "TaqI"
+        }
+      },
+      "protocol": {
+        "replicates_planned": 2,
+        "annealing_temperature_c": null,
+        "magnesium_mm": null,
+        "cycles": null,
+        "gel_percent": null,
+        "ladder": null
+      },
+      "observed": {
+        "status": "pending",
+        "band_count": null,
+        "band_sizes": [],
+        "replicate_agreement": null,
+        "exclusion_reason": null,
+        "caps_concordant": null
+      }
+    },
+    {
+      "assay_id": "VP-008",
+      "category": "negative_control",
+      "primers": {
+        "forward": "AAAAAAAAAAAAAAAAAAAA",
+        "reverse": "TTTTTTTTTTTTTTTTTTTT",
+        "sequence_sha256": "4aaa482a9beb7b05c49ddc4540ca73cd1dd95f4d21de3cfb95cd12a0a0ba7d0f"
+      },
+      "prediction": {
+        "expected_band_sizes": [
+          270
+        ],
+        "expected_off_target_sizes": [],
+        "rank": "D",
+        "risk_score": 30,
+        "risk_level": "high",
+        "search_completeness": "complete"
+      },
+      "protocol": {
+        "replicates_planned": 2,
+        "annealing_temperature_c": null,
+        "magnesium_mm": null,
+        "cycles": null,
+        "gel_percent": null,
+        "ladder": null
+      },
+      "observed": {
+        "status": "excluded",
+        "band_count": null,
+        "band_sizes": [],
+        "replicate_agreement": null,
+        "exclusion_reason": "example QC exclusion",
+        "caps_concordant": null
+      }
+    }
+  ]
+}
