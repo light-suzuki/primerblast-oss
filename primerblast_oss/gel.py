@@ -259,7 +259,7 @@ def virtual_gel_svg(
     chunks = [
         '<svg xmlns="http://www.w3.org/2000/svg" width="%s" height="%s" '
         'viewBox="0 0 %s %s">' % (width, height, width, height),
-        '<rect width="100%%" height="100%%" fill="white"/>',
+        '<rect width="100%" height="100%" fill="white"/>',
         '<rect x="55" y="%s" width="%s" height="%s" fill="#eceff1" '
         'stroke="#9aa0a6"/>' % (margin_top, width - 75, plot_h),
     ]
