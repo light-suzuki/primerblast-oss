@@ -218,6 +218,18 @@ python -m primerblast_oss assay --snp chr1:6385 --alt A \
   --ladder 100bp --gel-percent 2.0 --format json
 ```
 
+CAPS/dCAPSでは、**配列レベルの特異性**と**ゲル上の判別可能性**を
+別々に報告します。そのため副増幅があって `specific_all_db=false` でも、
+各データベースでその副増幅バンドをAA/AB/BBの全レーンに重ねた後も
+3遺伝子型を明確に識別できれば
+`marker_verdict=gel_scorable_with_separated_offtargets` として候補に残します。
+複数リファレンスの副増幅は混ぜず、データベースごとに評価します。
+
+また、診断断片が短すぎる・長すぎる場合も**自動失格にはしません**。
+選択したラダー範囲や推奨アガロース濃度の範囲外なら警告と減点を付けますが、
+遺伝子型のバンドパターンが十分識別できる候補は残します。実験者側で
+ラダーやゲル濃度を変えて使える設計です。
+
 ### `markers` — QTL区間にわたる等間隔マーカー
 
 ```bash
