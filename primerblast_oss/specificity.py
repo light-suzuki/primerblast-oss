@@ -568,9 +568,8 @@ def priming_sites(primer: str, primer_id: str, db: str, sp: SpecParams,
 
 def screen_primers(primers: Dict[str, str], db: str, sp: SpecParams,
                    blastn: str, genome=None) -> List[PrimingSite]:
-    sites: List[PrimingSite] = []
-    for name, sequence in primers.items():
-        sites.extend(priming_sites(sequence, name, db, sp, blastn, genome))
+    sites, _stats = screen_primers_with_stats(
+        primers, db, sp, blastn, genome)
     return sites
 
 
