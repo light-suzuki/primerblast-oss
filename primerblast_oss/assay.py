@@ -737,46 +737,46 @@ def run_assay(
                 opt_length=design_params.opt_size,
             )
             caps_info = build_caps(
-                    template,
-                    pair,
-                    snp_local,
-                    local_alt_base,
-                    gel_min_gap=gel_min_gap,
-                    gel_ladder=gel_ladder,
-                    custom_ladder_bands=custom_ladder_bands,
-                    gel_percent=gel_percent,
-                )
-                if (caps_info is not None
-                        and not caps_info.get("best_distinguishable")):
-                    if pair_index < dcaps_pairs_to_screen:
-                        caps_info = _attach_dcaps(
-                            caps_info,
-                            template,
-                            pair,
-                            snp_local,
-                            local_alt_base,
-                            databases,
-                            specificity,
-                            blastn_bin,
-                            associated_genomes,
-                            thermo_params,
-                            thermo_gate,
-                            dimer_params,
-                            variants,
-                            dcaps_candidates_per_pair,
-                            gel_ladder=gel_ladder,
-                            custom_ladder_bands=custom_ladder_bands,
-                            gel_percent=gel_percent,
-                        )
-                    else:
-                        caps_info["dcaps"] = {
-                            "status": "skipped_pair_limit",
-                            "reason": (
-                                "dCAPS specificity screening is limited to the "
-                                "top %s parent primer pairs" % dcaps_pairs_to_screen),
-                            "candidates": [],
-                            "n_orderable": 0,
-                        }
+                template,
+                pair,
+                snp_local,
+                local_alt_base,
+                gel_min_gap=gel_min_gap,
+                gel_ladder=gel_ladder,
+                custom_ladder_bands=custom_ladder_bands,
+                gel_percent=gel_percent,
+            )
+            if (caps_info is not None
+                    and not caps_info.get("best_distinguishable")):
+                if pair_index < dcaps_pairs_to_screen:
+                    caps_info = _attach_dcaps(
+                        caps_info,
+                        template,
+                        pair,
+                        snp_local,
+                        local_alt_base,
+                        databases,
+                        specificity,
+                        blastn_bin,
+                        associated_genomes,
+                        thermo_params,
+                        thermo_gate,
+                        dimer_params,
+                        variants,
+                        dcaps_candidates_per_pair,
+                        gel_ladder=gel_ladder,
+                        custom_ladder_bands=custom_ladder_bands,
+                        gel_percent=gel_percent,
+                    )
+                else:
+                    caps_info["dcaps"] = {
+                        "status": "skipped_pair_limit",
+                        "reason": (
+                            "dCAPS specificity screening is limited to the "
+                            "top %s parent primer pairs" % dcaps_pairs_to_screen),
+                        "candidates": [],
+                        "n_orderable": 0,
+                    }
         pair_summary = analyze_pair(
             pair,
             pair.specificity["per_db"],
