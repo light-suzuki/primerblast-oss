@@ -219,6 +219,59 @@ def _variant_record_dict(variant) -> Dict:
     }
 
 
+def _attach_marker_gel_context(
+    caps_info: Optional[Dict],
+    per_db_products: Sequence[Dict],
+    *,
+    intended_status: str,
+    search_completeness: str,
+    specific_all_db,
+) -> Optional[Dict]:
+    if not caps_info:
+        return caps_info
+    gel_analysis = caps_info.get("gel_analysis")
+    if not gel_analysis:
+        best = caps_info.get("best_result") or {}
+        if caps_info.get("best_marker_type") == "dCAPS":
+            gel_analysis = ((best.get("digest") or {}).get("gel_analysis"))
+        else:
+            gel_analysis = best.get("gel_analysis")
+    if not gel_analysis:
+        return caps_info
+
+    from .gel import assess_background_across_databases
+    background = assess_background_across_databases(
+        gel_analysis, per_db_products)
+    intrinsic = bool(
+        (gel_analysis.get("genotype_discrimination") or {}).get(
+            "distinguishable"))
+    background_ok = background.get("all_databases_distinguishable") is True
+
+    if intended_status != "unique":
+        verdict = "invalid_intended"
+    elif search_completeness != SEARCH_COMPLETE:
+        verdict = "indeterminate_search"
+    elif not intrinsic:
+        verdict = "ambiguous_genotype_pattern"
+    elif not background_ok:
+        verdict = "ambiguous_with_offtarget_background"
+    elif specific_all_db is True:
+        verdict = "specific_clean"
+    else:
+        verdict = "gel_scorable_with_separated_offtargets"
+
+    caps_info["gel_analysis"] = gel_analysis
+    caps_info["background_analysis"] = background
+    caps_info["gel_scorable_all_db"] = (
+        intended_status == "unique"
+        and search_completeness == SEARCH_COMPLETE
+        and intrinsic
+        and background_ok
+    )
+    caps_info["marker_verdict"] = verdict
+    return caps_info
+
+
 def analyze_pair(pair, per_db: Sequence[Dict], design_db: str,
                  template: Optional[Template], variants: Sequence,
                  caps_info: Optional[Dict], gel_min_gap: int = 50,
@@ -324,6 +377,14 @@ def analyze_pair(pair, per_db: Sequence[Dict], design_db: str,
         if dimer_module.available() else None
     )
 
+    caps_info = _attach_marker_gel_context(
+        caps_info,
+        per_db_products,
+        intended_status=intended_status,
+        search_completeness=overall_completeness,
+        specific_all_db=specific_all_db,
+    )
+
     risk = assess_risk(
         intended_status=intended_status,
         search_completeness=overall_completeness,
@@ -427,6 +488,8 @@ def analyze_pair(pair, per_db: Sequence[Dict], design_db: str,
         "conservation": conservation,
         "caps_enzyme": (caps_info or {}).get("best_enzyme"),
         "marker_type": (caps_info or {}).get("best_marker_type"),
+        "marker_verdict": (caps_info or {}).get("marker_verdict"),
+        "gel_scorable_all_db": (caps_info or {}).get("gel_scorable_all_db"),
         "caps": caps_info,
         "gel_distinguishable": design_res.get("gel_distinguishable", True),
         "dimers": ({
@@ -666,11 +729,28 @@ def run_assay(
         ))
 
     risk_order = {"low": 0, "medium": 1, "high": 2}
-    pair_dicts.sort(key=lambda pair_dict: (
-        risk_order.get(pair_dict["risk"], 3),
-        pair_dict.get("marker_type") is None if caps_snp is not None else False,
-        -pair_dict.get("risk_score", 0),
-    ))
+    marker_order = {
+        "specific_clean": 0,
+        "gel_scorable_with_separated_offtargets": 1,
+        "indeterminate_search": 3,
+        "ambiguous_genotype_pattern": 4,
+        "ambiguous_with_offtarget_background": 4,
+        "invalid_intended": 5,
+        None: 6,
+    }
+    if caps_snp is not None:
+        pair_dicts.sort(key=lambda pair_dict: (
+            marker_order.get(pair_dict.get("marker_verdict"), 6),
+            -float(((pair_dict.get("caps") or {}).get("gel_analysis") or {}).get(
+                "score", 0)),
+            risk_order.get(pair_dict["risk"], 3),
+            -pair_dict.get("risk_score", 0),
+        ))
+    else:
+        pair_dicts.sort(key=lambda pair_dict: (
+            risk_order.get(pair_dict["risk"], 3),
+            -pair_dict.get("risk_score", 0),
+        ))
     return {
         "target": {
             "name": region.name,
