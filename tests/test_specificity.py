@@ -7,6 +7,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from primerblast_oss.specificity import (  # noqa: E402
     PrimingSite, SpecParams, Amplicon, enumerate_amplicons,
     _conservative_intended_products, _count_3prime_mismatch, _hit_to_site,
+    _fitting_align_primer, _realign_hit_to_site,
     nearest_size_gap, priming_sites_with_stats, spec_params_for_profile,
 )
 
@@ -186,6 +187,111 @@ def test_priming_site_stats_warn_high_copy_hits(monkeypatch=None):
     assert stats.unique_subjects == 1
     assert stats.near_target_limit is False
     assert stats.high_copy is True
+
+
+
+class _RealignGenome:
+    def __init__(self, sequence):
+        self.sequence = sequence.upper()
+
+    def length(self, _name):
+        return len(self.sequence)
+
+    def fetch(self, _name, start, end, strand="+"):
+        from primerblast_oss.genome import revcomp
+        seq = self.sequence[start - 1:end]
+        return revcomp(seq) if strand == "-" else seq
+
+
+def _realign_fields(qstart, qend, sstart, send, strand="plus", qlen=20):
+    q = "ACGTACGTACGTACGTACGT"
+    length = abs(send - sstart) + 1
+    return [
+        "primer", "chr1", "100.0", str(length), "0", "0",
+        str(qstart), str(qend), str(sstart), str(send),
+        "1e-5", "40", strand, q[max(0, qstart - 1):qend],
+        q[max(0, qstart - 1):qend], str(qlen),
+    ]
+
+
+def test_fitting_alignment_keeps_full_primer_and_free_target_flanks():
+    primer = "ACGT"
+    aq, at, start, end = _fitting_align_primer(primer, "TTACGGTGG")
+    assert aq == "AC-GT"
+    assert at == "ACGGT"
+    assert (start, end) == (2, 7)
+
+
+def test_full_realign_recovers_missing_5prime_hsp_bases():
+    primer = "ACGTACGTACGTACGTACGT"
+    genome = _RealignGenome("N" * 100 + primer + "N" * 30)
+    fields = _realign_fields(4, 20, 104, 120)
+    site, resolved = _realign_hit_to_site(
+        fields, "F", primer, SpecParams(), genome)
+    assert resolved is True and site is not None
+    assert (site.end5, site.end3) == (101, 120)
+    assert site.total_mismatch == 0
+    assert site.alignment_source == "full_length_genome"
+
+
+def test_full_realign_recovers_3prime_bases_not_present_in_hsp():
+    primer = "ACGTACGTACGTACGTACGT"
+    genome = _RealignGenome("N" * 100 + primer + "N" * 30)
+    fields = _realign_fields(1, 17, 101, 117)
+    assert _hit_to_site(fields, "F", SpecParams()) is None
+    site, resolved = _realign_hit_to_site(
+        fields, "F", primer, SpecParams(), genome)
+    assert resolved is True and site is not None
+    assert site.end3 == 120 and site.total_mismatch == 0
+
+
+def test_full_realign_counts_internal_indel_and_preserves_footprint():
+    primer = "ACGTACGTACGTACGTACGT"
+    target = primer[:10] + "G" + primer[10:]
+    genome = _RealignGenome("N" * 100 + target + "N" * 30)
+    fields = _realign_fields(1, 20, 101, 121)
+    site, resolved = _realign_hit_to_site(
+        fields, "F", primer,
+        SpecParams(max_total_mismatch=1, max_3prime_mismatch=1), genome)
+    assert resolved is True and site is not None
+    assert site.total_mismatch == 1
+    assert (site.end5, site.end3) == (101, 121)
+    assert "-" in site.aligned_query
+
+
+def test_full_realign_maps_reverse_strand_coordinates():
+    from primerblast_oss.genome import revcomp
+    primer = "ACGTACGTACGTACGTACGT"
+    genome = _RealignGenome("N" * 100 + revcomp(primer) + "N" * 30)
+    fields = _realign_fields(1, 20, 120, 101, strand="minus")
+    site, resolved = _realign_hit_to_site(
+        fields, "R", primer, SpecParams(), genome)
+    assert resolved is True and site is not None
+    assert site.strand == "-"
+    assert (site.end5, site.end3) == (120, 101)
+
+
+def test_full_realign_applies_terminal_3prime_rule_after_recovery():
+    primer = "ACGTACGTACGTACGTACGT"
+    replacement = "A" if primer[-1] != "A" else "C"
+    target = primer[:-1] + replacement
+    genome = _RealignGenome("N" * 100 + target + "N" * 30)
+    fields = _realign_fields(1, 19, 101, 119)
+    site, resolved = _realign_hit_to_site(
+        fields, "F", primer, SpecParams(), genome)
+    assert resolved is True and site is None
+
+    relaxed, resolved = _realign_hit_to_site(
+        fields, "F", primer,
+        SpecParams(
+            max_total_mismatch=1,
+            max_3prime_mismatch=1,
+            require_3prime_terminal_match=False,
+        ),
+        genome,
+    )
+    assert resolved is True and relaxed is not None
+    assert relaxed.total_mismatch == 1
 
 
 if __name__ == "__main__":
