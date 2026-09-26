@@ -171,9 +171,8 @@ def _detect_blastn(explicit: Optional[str]) -> str:
     raise ToolMissingError("blastn not found. Install BLAST+ or pass blastn_bin.")
 
 
-def _run_blast(primer: str, db: str, sp: SpecParams, blastn: str) -> str:
-    query = (">primer\n%s\n" % primer).encode()
-    cmd = [
+def _blast_command(db: str, sp: SpecParams, blastn: str) -> List[str]:
+    return [
         blastn, "-task", "blastn-short", "-db", db, "-query", "-",
         "-outfmt", _OUTFMT,
         "-word_size", str(sp.word_size),
@@ -185,10 +184,45 @@ def _run_blast(primer: str, db: str, sp: SpecParams, blastn: str) -> str:
         "-soft_masking", "false",
         "-num_threads", str(sp.num_threads),
     ]
-    proc = subprocess.run(cmd, input=query, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+
+def _run_blast(primer: str, db: str, sp: SpecParams, blastn: str) -> str:
+    query = (">primer\n%s\n" % primer).encode()
+    proc = subprocess.run(
+        _blast_command(db, sp, blastn),
+        input=query, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if proc.returncode != 0:
         raise BlastError("blastn failed: %s" % proc.stderr.decode(errors="ignore"))
     return proc.stdout.decode(errors="ignore")
+
+
+def _run_blast_batch(
+    primers: Dict[str, str], db: str, sp: SpecParams, blastn: str
+) -> Tuple[str, Dict[str, str]]:
+    """Run all primers against one database in a single BLAST process.
+
+    Internal query IDs are deliberately independent of user primer names so
+    whitespace or punctuation in labels cannot make BLAST output ambiguous.
+    The returned mapping is internal query ID to original primer name.
+    """
+    id_to_name: Dict[str, str] = {}
+    records: List[str] = []
+    for index, (name, sequence) in enumerate(primers.items()):
+        query_id = "PBO%08d" % index
+        id_to_name[query_id] = name
+        records.append(">%s\n%s\n" % (query_id, sequence))
+    if not records:
+        return "", id_to_name
+
+    proc = subprocess.run(
+        _blast_command(db, sp, blastn),
+        input="".join(records).encode(),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if proc.returncode != 0:
+        raise BlastError("blastn failed: %s" % proc.stderr.decode(errors="ignore"))
+    return proc.stdout.decode(errors="ignore"), id_to_name
 
 
 def _count_3prime_mismatch(qseq: str, sseq: str, window: int) -> Tuple[int, bool]:
@@ -452,11 +486,10 @@ def _row_snippet(line: str, limit: int = 120) -> str:
     return stripped[:limit] + ("..." if len(stripped) > limit else "")
 
 
-def priming_sites_with_stats(
-    primer: str, primer_id: str, db: str, sp: SpecParams, blastn: str,
-    genome=None,
+def _priming_sites_from_output(
+    primer: str, primer_id: str, output: str, sp: SpecParams, genome=None,
 ) -> Tuple[List[PrimingSite], PrimerHitStats]:
-    output = _run_blast(primer, db, sp, blastn)
+    """Parse one primer's BLAST rows into priming sites and completeness stats."""
     sites: List[PrimingSite] = []
     raw_hits = 0
     subjects = set()
@@ -500,8 +533,6 @@ def priming_sites_with_stats(
     if (malformed_rows or realignment_failures) and (
             _SEARCH_SEVERITY.get(completeness, 0)
             < _SEARCH_SEVERITY[SEARCH_POSSIBLY_TRUNCATED]):
-        # Unparseable rows mean the hit list is not trustworthy: evidence is
-        # at best partial, never "complete".
         completeness = SEARCH_POSSIBLY_TRUNCATED
     stats = PrimerHitStats(
         primer=primer_id,
@@ -521,6 +552,13 @@ def priming_sites_with_stats(
     return sites, stats
 
 
+def priming_sites_with_stats(
+    primer: str, primer_id: str, db: str, sp: SpecParams, blastn: str,
+    genome=None,
+) -> Tuple[List[PrimingSite], PrimerHitStats]:
+    output = _run_blast(primer, db, sp, blastn)
+    return _priming_sites_from_output(primer, primer_id, output, sp, genome)
+
 def priming_sites(primer: str, primer_id: str, db: str, sp: SpecParams,
                   blastn: str, genome=None) -> List[PrimingSite]:
     sites, _stats = priming_sites_with_stats(
@@ -530,20 +568,35 @@ def priming_sites(primer: str, primer_id: str, db: str, sp: SpecParams,
 
 def screen_primers(primers: Dict[str, str], db: str, sp: SpecParams,
                    blastn: str, genome=None) -> List[PrimingSite]:
-    sites: List[PrimingSite] = []
-    for name, sequence in primers.items():
-        sites.extend(priming_sites(sequence, name, db, sp, blastn, genome))
+    sites, _stats = screen_primers_with_stats(
+        primers, db, sp, blastn, genome)
     return sites
 
 
 def screen_primers_with_stats(
     primers: Dict[str, str], db: str, sp: SpecParams, blastn: str, genome=None
 ) -> Tuple[List[PrimingSite], Dict[str, PrimerHitStats]]:
+    """Screen a primer pool with one BLAST invocation per database."""
+    if not primers:
+        return [], {}
+
+    output, id_to_name = _run_blast_batch(primers, db, sp, blastn)
+    rows_by_name: Dict[str, List[str]] = {name: [] for name in primers}
+    for line in output.splitlines():
+        if not line.strip():
+            continue
+        query_id = line.split("\t", 1)[0]
+        name = id_to_name.get(query_id)
+        if name is None:
+            raise BlastError(
+                "BLAST returned an unknown query id %r in batched output" % query_id)
+        rows_by_name[name].append(line)
+
     sites: List[PrimingSite] = []
     stats: Dict[str, PrimerHitStats] = {}
     for name, sequence in primers.items():
-        primer_sites, primer_stats = priming_sites_with_stats(
-            sequence, name, db, sp, blastn, genome)
+        primer_sites, primer_stats = _priming_sites_from_output(
+            sequence, name, "\n".join(rows_by_name[name]), sp, genome)
         sites.extend(primer_sites)
         stats[name] = primer_stats
     return sites, stats
