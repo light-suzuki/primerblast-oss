@@ -88,4 +88,6 @@ textarea { line-height: 1.7; }
 .panel { animation: none; }
 .file-tools { grid-column: 1 / -1; }
 .gel-preview img { display: block; max-width: 100%; height: auto; margin: 18px auto; }
+.tabs { overflow-y: hidden; }
+.err pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 .primer-list code { overflow-wrap: anywhere; white-space: normal; }

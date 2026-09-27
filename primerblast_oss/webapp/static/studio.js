@@ -186,7 +186,7 @@ function validateStudio(form, mode) {
       if (!match || +match[1] < 1 || +match[2] < +match[1]) invalid(name, 'studio.range');
     }
   }
-  if (first) first.focus();
+  if (first) { const details = first.closest('details'); if (details) details.open = true; first.focus(); }
   return !first;
 }
 runMode = async function(mode, form) {
@@ -251,10 +251,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const source = $('#sequence-src');
   const sync = () => $$('[data-seq-src]').forEach(el => { el.style.display = el.dataset.seqSrc === source.value || (el.dataset.seqSrc === 'genomic' && source.value !== 'sequence') ? '' : 'none'; });
   source.addEventListener('change', sync); source.form.addEventListener('reset', () => setTimeout(sync, 0)); sync();
-  $$('.panel[data-mode]').forEach(form => form.addEventListener('reset', () => {
+  $$('.panel[data-mode]').forEach(form => { form.noValidate = true; form.addEventListener('reset', () => {
     $$('.field-error', form).forEach(el => el.remove());
     $$('[aria-invalid]', form).forEach(el => { el.removeAttribute('aria-invalid'); el.removeAttribute('aria-describedby'); });
-  }));
+  }); });
   const assay = $('[data-mode="assay"]');
   const settings = document.createElement('details'); settings.className = 'adv';
   settings.innerHTML = `<summary data-i18n="studio.gel"></summary><fieldset><label><span data-i18n="studio.ladder"></span><select name="gel_ladder"><option value="auto" data-i18n="studio.auto"></option><option value="100bp">100 bp</option><option value="1kb">1 kb</option><option value="custom" data-i18n="studio.custom"></option></select></label><label><span data-i18n="studio.gelPercent"></span><select name="gel_percent"><option value="auto" data-i18n="studio.auto"></option><option>1</option><option>1.5</option><option>2</option><option>2.5</option><option>3</option><option>4</option></select></label><label><span data-i18n="studio.customBands"></span><input name="ladder_bands" placeholder="100,200,300,500,1000"></label><label><span data-i18n="studio.screenLimit"></span><input name="aspcr_pairs_to_screen" type="number" min="0" max="10" value="2"></label></fieldset>`;
