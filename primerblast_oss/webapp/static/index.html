@@ -108,6 +108,13 @@ h1 { margin: 0; font-size: 21px; letter-spacing: .2px; font-weight: 800; color: 
 
 /* ---------- tabs ---------- */
 .tabs { display: flex; gap: 5px; margin: 18px 0 0; flex-wrap: wrap; }
+:root:not([data-ui="pro"]) [data-tab="assay"],
+:root:not([data-ui="pro"]) [data-tab="markers"],
+:root:not([data-ui="pro"]) [data-tab="sequence"],
+:root:not([data-ui="pro"]) [data-tab="enzymes"],
+:root:not([data-ui="pro"]) [data-goto="assay"],
+:root:not([data-ui="pro"]) [data-goto="markers"],
+:root:not([data-ui="pro"]) [data-goto="sequence"] { display: none; }
 .tab { border: 1px solid transparent; background: transparent; color: var(--muted);
   padding: 9px 15px; border-radius: 10px 10px 0 0; cursor: pointer; font-weight: 600; font-size: 13.5px;
   display: inline-flex; align-items: center; gap: 6px; transition: color .12s, background .12s; }
@@ -649,8 +656,8 @@ const I18N = {
     "app.title": "primerblast-oss",
     "app.subtitle": "Local Primer-BLAST · design, in-silico PCR & breeding assays — fully offline",
     "lang.toggle": "日本語",
-    "ui.beginner": "Beginner",
-    "ui.pro": "Pro",
+    "ui.beginner": "PCR tools",
+    "ui.pro": "Legacy tools",
     "status.checking": "checking tools…",
     "status.ok": "primer3 + BLAST+ ready",
     "status.missing": "missing tools:",
@@ -904,8 +911,8 @@ const I18N = {
     "app.title": "primerblast-oss",
     "app.subtitle": "ローカル版 Primer-BLAST · プライマー設計・in-silico PCR・育種アッセイをオフラインで",
     "lang.toggle": "English",
-    "ui.beginner": "初心者",
-    "ui.pro": "プロ",
+    "ui.beginner": "PCRツール",
+    "ui.pro": "従来の全機能",
     "status.checking": "ツール確認中…",
     "status.ok": "primer3 + BLAST+ 利用可能",
     "status.missing": "不足ツール:",

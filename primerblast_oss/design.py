@@ -225,6 +225,24 @@ def _parse_boulder(out: str, template_id: str) -> Tuple[List[PrimerPair], str]:
     return pairs, explain
 
 
+def run_boulder(input_text: str, primer3_bin: Optional[str] = None,
+                timeout: Optional[float] = None) -> str:
+    """Run Primer3 locally for embedded callers, retaining their Boulder settings."""
+    exe = _detect_primer3(primer3_bin)
+    try:
+        proc = subprocess.run([exe], input=input_text.encode("utf-8"),
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise Primer3Error("primer3_core execution failed: %s" % exc) from exc
+    if proc.returncode != 0:
+        raise Primer3Error("primer3_core failed: %s" % proc.stderr.decode(errors="replace"))
+    output = proc.stdout.decode("utf-8", errors="replace")
+    for line in output.splitlines():
+        if line.startswith("PRIMER_ERROR=") and line.partition("=")[2].strip():
+            raise Primer3Error(line.partition("=")[2])
+    return output
+
+
 def design_primers(
     template_id: str,
     sequence: str,
@@ -236,12 +254,5 @@ def design_primers(
     seq = clean_sequence(sequence)
     if len(seq) < params.min_size * 2:
         raise ValueError(f"Template '{template_id}' too short ({len(seq)} bp) for design.")
-    exe = _detect_primer3(primer3_bin)
     boulder = _build_boulder(template_id, seq, params)
-    proc = subprocess.run(
-        [exe], input=boulder.encode(), stdout=subprocess.PIPE, stderr=subprocess.PIPE
-    )
-    if proc.returncode != 0:
-        raise Primer3Error(
-            f"primer3_core failed: {proc.stderr.decode(errors='ignore')}")
-    return _parse_boulder(proc.stdout.decode(errors="ignore"), template_id)
+    return _parse_boulder(run_boulder(boulder, primer3_bin), template_id)

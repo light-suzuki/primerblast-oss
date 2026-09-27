@@ -41,7 +41,7 @@ thermo = ["primer3-py>=2.0"]
 
 [tool.setuptools]
 packages = ["primerblast_oss", "primerblast_oss.webapp"]
-license-files = ["LICENSE", "THIRD_PARTY_BIOPYTHON_LICENSE.rst"]
+license-files = ["LICENSE", "THIRD_PARTY_BIOPYTHON_LICENSE.rst", "THIRD_PARTY_GENE_RESEARCH_LICENSE.txt"]
 
 [tool.setuptools.package-data]
 "primerblast_oss" = ["restriction_catalog.json"]
