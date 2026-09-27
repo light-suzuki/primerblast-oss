@@ -123,7 +123,8 @@ function restrictionSequences(pair,context,derived) {
   return {allele_a_sequence:seq,allele_b_sequence:seq.slice(0,snp)+caps.alt_base+seq.slice(snp+1)};
 }
 function restrictionSitesView(result,sequences) {
-  let html=`<p class="hint">${esc(t('seq.cutLegend'))}</p>`;
+  let html=typeof enzymeResultDetails === 'function' ? enzymeResultDetails(result) : '';
+  html+=`<p class="hint">${esc(t('seq.cutLegend'))}</p>`;
   for (const [name,allele] of [['AA','a'],['BB','b']]) {
     const sequence=sequences[`allele_${allele}_sequence`];
     const cuts=(result[`allele_${allele}_cuts`]||[]).filter(cut=>cut.complete);

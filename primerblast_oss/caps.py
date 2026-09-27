@@ -11,6 +11,7 @@ BsaI ``GGTCTC(1/5)`` is represented as 7/11.
 
 The curated recognition and cleavage notation follows the New England Biolabs
 recognition-specificity chart and product documentation, curated 2026-07-20.
+The extended offline panel uses Biopython 1.87 / REBASE 404 (2024).
 """
 from __future__ import annotations
 
@@ -19,8 +20,10 @@ from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple, Uni
 
 try:
     from .gel import analyze_digest_patterns
+    from .restriction_catalog import catalog, enzyme_info
 except ImportError:  # direct module self-test: python primerblast_oss/caps.py
     from gel import analyze_digest_patterns
+    from restriction_catalog import catalog, enzyme_info
 
 
 IUPAC_CODES: Dict[str, str] = {
@@ -184,6 +187,18 @@ ENZYME_METADATA: Dict[str, RestrictionEnzyme] = {
     "MfeI": _enzyme("MfeI", "CAATTG", 1, 5),
 }
 
+# Extend known, single-pair cleavage models without replacing curated exceptions.
+# Multiple-cut and unknown geometries remain available in the reference catalog.
+for _entry in catalog()["enzymes"]:
+    if _entry["name"] in ENZYME_METADATA or not _entry["prediction_supported"]:
+        continue
+    _top, _bottom = _entry["cuts"][0]
+    ENZYME_METADATA[_entry["name"]] = _enzyme(
+        _entry["name"], _entry["recognition"], _top, _bottom,
+        recommendable=_entry["commercial_in_snapshot"],
+        methylation_note="Sequence-based prediction; verify supplier substrate, methylation and reaction conditions.",
+        source="Biopython 1.87 / REBASE 404 (2024); " + _entry["reference_url"])
+
 # Historical public API.
 ENZYMES: Dict[str, str] = {
     name: enzyme.recognition for name, enzyme in ENZYME_METADATA.items()
@@ -199,6 +214,10 @@ def _coerce_enzyme(name: str,
         return value
     recognition = str(value).upper()
     known = ENZYME_METADATA.get(name)
+    if known is None:
+        info = enzyme_info(name)
+        if info:
+            known = ENZYME_METADATA.get(info["name"])
     if known is not None and known.recognition == recognition:
         return known
     # Unknown custom enzymes remain searchable, but are excluded from automatic
@@ -226,6 +245,17 @@ def enzyme_records(enzymes: EnzymeInput = None,
             if record.recommendable and record.pcr_compatible
             and record.cut_model == "verified"
         ]
+        if enzymes is None:
+            # Isoschizomers share computation, but keep separate catalog records.
+            # Prefer the curated names and never merge different cleavage offsets.
+            seen = set()
+            unique = []
+            for record in records:
+                key = (record.recognition, record.top_cut, record.bottom_cut)
+                if key not in seen:
+                    unique.append(record)
+                    seen.add(key)
+            records = unique
     return records
 
 
@@ -285,6 +315,13 @@ def cut_events(sequence: str,
     if isinstance(enzyme, RestrictionEnzyme):
         record = enzyme
     else:
+        info = enzyme_info(enzyme)
+        if info:
+            record = ENZYME_METADATA.get(info["name"])
+            if record is None:
+                raise ValueError("Cleavage prediction unavailable for " + info["name"])
+            sites = find_sites(sequence, {record.name: record})
+            return [cut_event_for_site(site, record, len(sequence)) for site in sites]
         recognition = enzyme.upper()
         record = next((
             candidate for candidate in ENZYME_METADATA.values()
@@ -648,7 +685,13 @@ def apply_engineered_changes(sequence: str, changes: Sequence[dict]) -> str:
 
 
 def result_to_dict(result: CapsResult) -> dict:
-    return asdict(result)
+    data = asdict(result)
+    info = enzyme_info(result.enzyme)
+    if info and info["recognition"] == result.recognition and info["cuts"] == [[result.top_cut_offset, result.bottom_cut_offset]]:
+        data.update({key: info[key] for key in (
+            "same_cut_enzymes", "different_cut_enzymes", "pattern", "reference_url")})
+        data["product_names"] = info.get("product_names", [])
+    return data
 
 
 if __name__ == "__main__":

@@ -5,6 +5,7 @@ build/
 dist/
 .pytest_cache/
 *.json
+!primerblast_oss/restriction_catalog.json
 !benchmarks/*.json
 !benchmarks/results/*.json
 /tmp/

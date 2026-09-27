@@ -198,6 +198,11 @@ select { border: 2px solid #164ca2; color: #17212f; background: #edf3ff; padding
 .help-card dd { margin: 4px 0 0; }
 .help-notes { display: grid; gap: 16px; }
 .help-hidden { display: none !important; }
+.enzyme-library .cleavage-sequence { max-width: 100%; overflow-x: auto; font-size: 15px; line-height: 1.8; }
+.enzyme-library .help-card { overflow-wrap: anywhere; }
+.enzyme-pages { display: flex; gap: 12px; margin: 18px 0; }
+.enzyme-pages button { padding: 9px 16px; font: inherit; border: 1px solid #174b96; border-radius: 5px; background: #174b96; color: #fff; cursor: pointer; }
+.enzyme-pages button:disabled { background: #e5eaf0; color: #526172; border-color: #aab7c5; cursor: default; }
 :root[data-ui="beginner"] .tab[data-tab="tile"].active { display: inline-block; }
 @media (max-width: 900px) { .help-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 600px) { .help-grid { grid-template-columns: 1fr; } }
