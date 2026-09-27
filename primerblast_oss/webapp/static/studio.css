@@ -174,5 +174,9 @@ select { border: 2px solid #164ca2; color: #17212f; background: #edf3ff; padding
 .experiment-choice input { min-height: 0; width: 18px; height: 18px; margin: 2px 0; accent-color: #164ca2; }
 .experiment-choice em { grid-column: 2; font-style: normal; color: #455266; font-size: 13px; }
 .experiment-choice.chosen { background: #edf3ff; border-color: #164ca2; }
+.pcr-choices { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.reference-picker { margin: 20px 0; padding: 16px 20px; border-left: 4px solid #164ca2; background: #edf3ff; }
+.reference-picker select { width: 100%; background: white; margin-top: 8px; }
+.reference-status span { display: block; font-size: 14px; margin-top: 6px; }
 @media (max-width: 780px) { .mode-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .experiment-choices { grid-template-columns: 1fr; } }
 @media (max-width: 600px) { .mode-grid { grid-template-columns: 1fr; } }

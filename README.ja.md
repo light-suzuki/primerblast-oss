@@ -392,7 +392,22 @@ design / in-silico PCR / tiling / assay / QTL markers / build DB のタブを提
 予測バンド・仮想ゲル、AS-PCR／tetra-ARMS用配列を表示し、解析の詳細を展開できます。
 探索未完了は判定保留として扱います。表示されるものは計算上の候補で、Wet検証済みではありません。
 
+GUIでリファレンスを先に選ぶと、FASTA・GFF3・検索DBのパスが埋まります。
+同じ名前の索引付きFASTAとGFF3がDBの隣に一組だけある場合に自動登録し、
+複数の注釈がある場合は推測しません。明示的な組合せはサーバー側の
+`~/.codex/primerblast-oss/references.json`（または `PRIMERBLAST_REFERENCES` で指定したJSON）に登録できます:
+
+```json
+[{"name":"参照ゲノム名","genome":"/data/genome.fa","gff3":"/data/genes.gff3","database":"/data/blast/genome"}]
+```
+
+パスはサーバーから読める絶対パスを指定し、FASTAの `.fai` 索引を用意してください。
+遺伝子IDは全角・半角、前後の空白、大文字・小文字、`gene:` 接頭辞を吸収し、
+GFF3のID・Name・Alias・gene_id・locus_tagを検索します。曖昧な別名は候補IDを示して停止します。
+バージョン番号や転写産物の接尾辞は、別の標的に変わりうるため自動削除しません。
+
 ## テスト
+
 
 ユニットテストは純Pythonで、**外部ツールもデータも不要**です:
 

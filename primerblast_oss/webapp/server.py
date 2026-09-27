@@ -162,14 +162,14 @@ def _templates(p: Dict) -> List[Tuple[str, str]]:
 # mode handlers -> JSON-serializable dict
 # --------------------------------------------------------------------------- #
 def _find_gene_seqid(gff3_path: str, gene: str) -> Optional[str]:
-    """Fast pre-scan: return the chromosome (col 1) of the first GFF3 line
-    mentioning the gene, so the full parse can be bounded to one seqid.
+    """Bound the parse only when normalized gene matches share one seqid.
 
-    Match complete gene attributes, including Ensembl's gene: ID prefix."""
+    Cross-chromosome aliases must reach the full parser's ambiguity check."""
     import gzip
-    from ..gff3 import _parse_attributes
+    from ..gff3 import _parse_attributes, gene_attribute_keys, normalize_gene_key
     opener = gzip.open if gff3_path.endswith(".gz") else open
-    keys = {gene, "gene:" + gene}
+    key = normalize_gene_key(gene)
+    seqids = set()
     try:
         with opener(gff3_path, "rt", encoding="utf-8", errors="ignore") as fh:
             for line in fh:
@@ -179,11 +179,11 @@ def _find_gene_seqid(gff3_path: str, gene: str) -> Optional[str]:
                 if len(fields) != 9 or fields[2].lower() != "gene":
                     continue
                 attributes = _parse_attributes(fields[8])
-                if attributes.get("ID") in keys or attributes.get("Name") == gene:
-                    return fields[0] or None
+                if key in gene_attribute_keys(attributes):
+                    seqids.add(fields[0])
     except OSError:
         return None
-    return None
+    return next(iter(seqids)) if len(seqids) == 1 else None
 
 
 def _gene_to_template(p: Dict):
@@ -603,6 +603,9 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json(health())
             elif path == "/api/databases":
                 self._send_json({"databases": discover_databases()})
+            elif path == "/api/references":
+                from .references import reference_catalog
+                self._send_json(reference_catalog(discover_databases()))
             elif path.startswith("/api/job/"):
                 job_id = unquote(path[len("/api/job/"):])
                 job = JOBS.get(job_id)
