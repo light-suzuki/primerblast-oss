@@ -583,6 +583,145 @@ def _cmd_tile(arguments) -> int:
     return 0
 
 
+def _cmd_sequence(arguments) -> int:
+    from .design import clean_sequence
+    from .genome import Genome
+    from .regions import extract_template, resolve_gene, resolve_interval
+    from .sequencing import (
+        build_sequence_plan,
+        local_region_for_template,
+        order_table as sequencing_order_table,
+        plan_to_text,
+    )
+
+    ranges = _parse_size_ranges(arguments.amplicon_size)
+    if len(ranges) != 1:
+        raise ValueError("sequence --amplicon-size accepts one LOW-HIGH range")
+    amplicon_min, amplicon_max = ranges[0]
+    if arguments.overlap < 0:
+        raise ValueError("sequence --overlap must be >= 0")
+    if arguments.overlap >= amplicon_max:
+        raise ValueError("sequence --overlap must be smaller than amplicon maximum")
+
+    design = DesignParams(
+        opt_size=arguments.opt_size,
+        min_size=arguments.min_size,
+        max_size=arguments.max_size,
+        opt_tm=arguments.opt_tm,
+        min_tm=arguments.min_tm,
+        max_tm=arguments.max_tm,
+        min_gc=arguments.min_gc,
+        max_gc=arguments.max_gc,
+    )
+    specificity = _spec_from_args(arguments)
+    dimer_params = _dimer_params_from_args(arguments)
+    plans = []
+
+    if arguments.gene or arguments.interval:
+        if not arguments.genome:
+            raise ValueError("sequence --gene/--interval requires --genome")
+        design_genome = Genome(arguments.genome)
+        if arguments.gene:
+            if not arguments.gff3:
+                raise ValueError("sequence --gene requires --gff3")
+            region = resolve_gene(
+                arguments.gff3, arguments.gene,
+                feature=arguments.gene_feature, flank=0)
+        else:
+            chromosome, span = arguments.interval.split(":")
+            start, end = span.split("-")
+            region = resolve_interval(
+                chromosome, int(start), int(end),
+                strand=arguments.strand,
+                name=arguments.name or arguments.interval)
+        template = extract_template(
+            design_genome, region, flank=arguments.flank)
+        requested_region = local_region_for_template(template)
+        genomes_by_db, thermo_params, thermo_gate = _thermo_setup(
+            arguments, design_genome=design_genome)
+        tiles = design_tiling(
+            template.id,
+            template.seq,
+            arguments.db,
+            # Place primers in the padded template; coverage below still
+            # measures only the requested gene/interval.
+            region=(0, len(template.seq) - 1),
+            amplicon_min=amplicon_min,
+            amplicon_max=amplicon_max,
+            overlap=arguments.overlap,
+            design_params=design,
+            spec_params=specificity,
+            primer3_bin=arguments.primer3_bin,
+            blastn_bin=arguments.blastn_bin,
+            size_tolerance=arguments.size_tolerance,
+            candidates_per_tile=arguments.candidates_per_tile,
+            genomes_by_db=genomes_by_db,
+            thermo_params=thermo_params,
+            thermo_gate=thermo_gate,
+            dimer_params=dimer_params,
+        )
+        plans.append(build_sequence_plan(
+            tiles,
+            template.id,
+            requested_region,
+            arguments.db,
+            genomic_template=template,
+            requested_overlap=arguments.overlap,
+            amplicon_range=(amplicon_min, amplicon_max),
+            m13_tails=arguments.m13_tails,
+            forward_tail=arguments.m13_forward_tail,
+            reverse_tail=arguments.m13_reverse_tail,
+        ))
+    else:
+        genomes_by_db, thermo_params, thermo_gate = _thermo_setup(arguments)
+        for template_id, sequence in _templates(arguments):
+            cleaned = clean_sequence(sequence)
+            if not cleaned:
+                raise ValueError("sequence template is empty")
+            requested_region = (0, len(cleaned) - 1)
+            tiles = design_tiling(
+                template_id,
+                cleaned,
+                arguments.db,
+                region=requested_region,
+                amplicon_min=amplicon_min,
+                amplicon_max=amplicon_max,
+                overlap=arguments.overlap,
+                design_params=design,
+                spec_params=specificity,
+                primer3_bin=arguments.primer3_bin,
+                blastn_bin=arguments.blastn_bin,
+                size_tolerance=arguments.size_tolerance,
+                candidates_per_tile=arguments.candidates_per_tile,
+                genomes_by_db=genomes_by_db,
+                thermo_params=thermo_params,
+                thermo_gate=thermo_gate,
+                dimer_params=dimer_params,
+            )
+            plans.append(build_sequence_plan(
+                tiles,
+                template_id,
+                requested_region,
+                arguments.db,
+                requested_overlap=arguments.overlap,
+                amplicon_range=(amplicon_min, amplicon_max),
+                m13_tails=arguments.m13_tails,
+                forward_tail=arguments.m13_forward_tail,
+                reverse_tail=arguments.m13_reverse_tail,
+            ))
+
+    if arguments.format == "json":
+        payload = plans[0] if len(plans) == 1 else {
+            "mode": "sequence", "plans": plans}
+        output = json.dumps(payload, indent=2, default=str)
+    elif arguments.format == "order":
+        output = "\n".join(sequencing_order_table(plan) for plan in plans)
+    else:
+        output = "\n\n".join(plan_to_text(plan) for plan in plans)
+    _emit(output, arguments.out)
+    return 0
+
+
 def _load_variants(vcf_path):
     if not vcf_path:
         return []
@@ -858,6 +997,44 @@ def build_parser() -> argparse.ArgumentParser:
     _add_dimer_args(tile)
     _add_out_args(tile, formats=("text", "json"))
     tile.set_defaults(func=_cmd_tile)
+
+    sequence = subcommands.add_parser(
+        "sequence",
+        help="design overlapping sequencing amplicons with configurable overlap")
+    seq_source = sequence.add_mutually_exclusive_group(required=True)
+    seq_source.add_argument("--template", help="template DNA sequence")
+    seq_source.add_argument("--template-fasta", help="FASTA with one or more templates")
+    seq_source.add_argument("--gene", help="gene id (requires --genome and --gff3)")
+    seq_source.add_argument("--interval", help="chrom:start-end (requires --genome)")
+    sequence.add_argument("--template-id", default="template")
+    sequence.add_argument("--gene-feature", default="cds",
+                          choices=["gene", "mrna", "exon", "cds"])
+    sequence.add_argument("--genome", help="design-reference FASTA (.fai indexed)")
+    sequence.add_argument("--gff3")
+    sequence.add_argument("--name")
+    sequence.add_argument("--strand", choices=["+", "-"], default="+")
+    sequence.add_argument(
+        "--flank", type=int, default=100,
+        help="extra genomic sequence outside the target for primer placement")
+    sequence.add_argument(
+        "--amplicon-size", default="500-800",
+        help="one desired amplicon-size range LOW-HIGH")
+    sequence.add_argument(
+        "--overlap", type=int, default=100,
+        help="requested overlap between neighboring sequencing amplicons")
+    sequence.add_argument("--candidates-per-tile", type=int, default=8)
+    sequence.add_argument(
+        "--m13-tails", action="store_true",
+        help="prepend universal M13 tails to order sequences only")
+    sequence.add_argument(
+        "--m13-forward-tail", default="TGTAAAACGACGGCCAGT")
+    sequence.add_argument(
+        "--m13-reverse-tail", default="CAGGAAACAGCTATGACC")
+    _add_design_knobs(sequence)
+    _add_spec_args(sequence)
+    _add_dimer_args(sequence)
+    _add_out_args(sequence, formats=("text", "json", "order"))
+    sequence.set_defaults(func=_cmd_sequence)
 
     assay = subcommands.add_parser(
         "assay", help="design + specificity + variants + CAPS + risk")
