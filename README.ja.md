@@ -392,7 +392,29 @@ design / in-silico PCR / tiling / assay / QTL markers / build DB のタブを提
 予測バンド・仮想ゲル、AS-PCR／tetra-ARMS用配列を表示し、解析の詳細を展開できます。
 探索未完了は判定保留として扱います。表示されるものは計算上の候補で、Wet検証済みではありません。
 
+GUIでリファレンスを先に選ぶと、FASTA・GFF3・検索DBのパスが埋まります。
+同じ名前の索引付きFASTAとGFF3がDBの隣に一組だけある場合に自動登録し、
+複数の注釈がある場合は推測しません。明示的な組合せはサーバー側の
+`~/.codex/primerblast-oss/references.json`（または `PRIMERBLAST_REFERENCES` で指定したJSON）に登録できます:
+
+```json
+[{"name":"参照ゲノム名","genome":"/data/genome.fa","gff3":"/data/genes.gff3","database":"/data/blast/genome"}]
+```
+
+パスはサーバーから読める絶対パスを指定し、FASTAの `.fai` 索引を用意してください。
+遺伝子IDは全角・半角、前後の空白、大文字・小文字、`gene:` 接頭辞を吸収し、
+GFF3のID・Name・Alias・gene_id・locus_tagを検索します。曖昧な別名は候補IDを示して停止します。
+バージョン番号や転写産物の接尾辞は、別の標的に変わりうるため自動削除しません。
+
+遺伝子IDの数字入力補助は、選んだゲノムの注釈サンプルから形式を読み取ります。
+ナズナの `AT［染色体］G［番号］` やエンドウのIDで、固定文字と先頭の0を補います。
+混在した形式では推測せず直接入力を使います。JSON登録には、例えば
+`"gene_id_format":{"prefix":"Psat.cameor.v2.","separator":"g","digits":5,"chromosomes":["1","2","3","4","5","6","7"]}`
+を追加して形式を指定できます。`GET /api/references` の同じローカル情報を、将来のエージェント層でも利用できます。
+未公開データ・ローカル設定・生レポートは公開リポジトリに追加しないでください。
+
 ## テスト
+
 
 ユニットテストは純Pythonで、**外部ツールもデータも不要**です:
 

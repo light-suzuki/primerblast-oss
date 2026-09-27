@@ -29,6 +29,7 @@ def measure(function):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--db", required=True)
+    parser.add_argument("--reference-label", default="local-reference")
     parser.add_argument("--primer", required=True)
     parser.add_argument("--sizes", default="10,100,500")
     parser.add_argument("--threads", type=int, default=4)
@@ -57,7 +58,7 @@ def main():
             "batch_python_peak_mib": round(batch_peak, 3),
         })
 
-    payload = {"database": args.db, "results": rows}
+    payload = {"database": args.reference_label, "results": rows}
     print(json.dumps(payload, indent=2))
     if args.json_out:
         with open(args.json_out, "w") as handle:

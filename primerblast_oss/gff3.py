@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import gzip
 import io
+import re
+import unicodedata
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Sequence, Tuple
 
@@ -56,6 +58,19 @@ def _parse_attributes(field9: str) -> Dict[str, str]:
     return attrs
 
 
+def normalize_gene_key(value: str) -> str:
+    """Normalize typography, not biological identifier suffixes or punctuation."""
+    key = unicodedata.normalize("NFKC", value).strip().casefold()
+    return re.sub(r"^gene\s*:\s*", "", key).strip()
+
+
+def gene_attribute_keys(attributes: Dict[str, str]) -> List[str]:
+    keys = [attributes[key] for key in ("ID", "Name", "gene_id", "locus_tag")
+            if attributes.get(key)]
+    keys.extend(attributes.get("Alias", "").split(","))
+    return [normalize_gene_key(key) for key in keys if key]
+
+
 @dataclass
 class Feature:
     """A single GFF3 record. Coordinates are 1-based, inclusive."""
@@ -94,6 +109,8 @@ class Gff3:
         self.features: List[Feature] = features
         # Index genes by their ID and (when present) their Name for lookup.
         self._by_gene_key: Dict[str, Feature] = {}
+        self._by_gene_id: Dict[str, List[Feature]] = {}
+        self._normalized_genes: Dict[str, List[Feature]] = {}
         # Bucket features by seqid to keep overlap queries reasonable.
         self._by_seqid: Dict[str, List[Feature]] = {}
         for feat in features:
@@ -101,12 +118,26 @@ class Gff3:
             if feat.type == "gene":
                 if feat.id:
                     self._by_gene_key.setdefault(feat.id, feat)
+                    self._by_gene_id.setdefault(feat.id, []).append(feat)
                 if feat.name:
                     self._by_gene_key.setdefault(feat.name, feat)
+                for key in set(gene_attribute_keys(feat.attributes)):
+                    self._normalized_genes.setdefault(key, []).append(feat)
 
     def gene(self, gene_id: str) -> Optional[Feature]:
         """Look up a gene by its ID or Name."""
-        return self._by_gene_key.get(gene_id) or self._by_gene_key.get("gene:" + gene_id)
+        # Exact stable IDs take precedence over aliases. Never guess between
+        # two genes with a shared symbol or normalized spelling.
+        literal = unicodedata.normalize("NFKC", gene_id).strip()
+        exact = self._by_gene_id.get(literal, [])
+        key = normalize_gene_key(gene_id)
+        matches = self._normalized_genes.get(key, [])
+        stable_ids = [feat for feat in matches if feat.id and normalize_gene_key(feat.id) == key]
+        matches = exact or stable_ids or matches
+        if len(matches) > 1:
+            ids = ", ".join(feat.id or feat.name or "?" for feat in matches[:8])
+            raise ValueError(f"Ambiguous gene ID '{gene_id}': {ids}. Use an exact stable gene ID.")
+        return matches[0] if matches else None
 
     def features_in(
         self,

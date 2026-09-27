@@ -542,6 +542,30 @@ CAPS/dCAPS bands, virtual gels, and AS-PCR/tetra-ARMS oligos with raw evidence i
 expandable details. Unfinished searches remain unresolved. All results are
 computational candidates, rather than wet-validated assays.
 
+Choose a reference first to fill FASTA, GFF3 and search database paths. The GUI
+recognizes an indexed FASTA and a uniquely named sibling GFF3 beside a database;
+it does not guess between multiple annotations. Explicit profiles can be listed
+in the server-side `~/.codex/primerblast-oss/references.json`, or in the JSON file
+named by `PRIMERBLAST_REFERENCES`:
+
+```json
+[{"name":"Reference name","genome":"/data/genome.fa","gff3":"/data/genes.gff3","database":"/data/blast/genome"}]
+```
+
+Use absolute server-readable paths and provide the FASTA `.fai` index. Gene
+lookup accepts full-width characters, surrounding whitespace, case differences
+and `gene:` prefixes, and searches GFF3 ID, Name, Alias, gene_id and locus_tag.
+Ambiguous aliases report candidate IDs instead of selecting a gene. Version
+and transcript suffixes are preserved because removing them can change the target.
+
+The numeric gene-ID helper uses a bounded sample of the selected reference's
+annotation: fixed text and leading zeros are supplied for formats such as
+Arabidopsis `AT[chromosome]G[number]` and pea gene IDs. Mixed formats retain
+manual entry. Profiles can explicitly set `gene_id_format`, for example
+`{"prefix":"Psat.cameor.v2.","separator":"g","digits":5,"chromosomes":["1","2","3","4","5","6","7"]}`.
+The same local `GET /api/references` information is available for a future
+agent layer. Do not commit private inputs, local catalogs or raw private reports.
+
 ### Binding maps and saved projects / 結合位置とデータ保存
 
 Design, sequencing and breeding-assay results show forward/reverse binding

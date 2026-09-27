@@ -1,6 +1,6 @@
 # Benchmark results
 
-Machine: EVO-X1 (WSL2 Ubuntu). Tools: `primer3_core` 2.6.x, BLAST+ 2.12.0+.
+Machine: local workstation (WSL2 Ubuntu). Tools: `primer3_core` 2.6.x, BLAST+ 2.12.0+.
 Genomes: local pea (*Pisum sativum*) cultivar assemblies, ~3.8–3.9 Gbp each,
 built as BLASTDB v5.
 
@@ -380,7 +380,7 @@ No result in this section constitutes Wet validation.
 ## Reproduce
 
 ```bash
-DB=/home/user/.codex/blast_databases
+DB="$HOME/.codex/blast_databases"
 # design (single- and multi-db)
 python benchmarks/run_benchmark.py
 python benchmarks/run_benchmark.py --db $DB/pisum_v2 --db $DB/unpublished_cultivar --db $DB/pisum_zw6

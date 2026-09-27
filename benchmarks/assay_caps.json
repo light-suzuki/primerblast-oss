@@ -1044,6 +1044,6 @@
       "source": "snp",
       "flank": 250
     },
-    "host": "EVO-X1"
+    "host": "local-workstation"
   }
 }
