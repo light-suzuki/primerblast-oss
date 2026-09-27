@@ -3,6 +3,7 @@ import io
 import json
 import subprocess
 import sys
+import pytest
 
 from primerblast_oss import agent_cli, workflows
 from primerblast_oss.webapp import server
@@ -55,3 +56,20 @@ def test_application_and_agent_do_not_import_gui_server():
     result = subprocess.run([sys.executable, "-c", "import primerblast_oss.agent_cli, sys; assert 'primerblast_oss.webapp.server' not in sys.modules"],
                             capture_output=True, encoding="utf-8")
     assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize("result", [float("nan"), {"not_json": {1, 2}}])
+def test_unencodable_engine_result_returns_json_error(monkeypatch, capsys, result):
+    monkeypatch.setitem(workflows.HANDLERS, "check", lambda _: result)
+    monkeypatch.setattr(sys, "stdin", io.StringIO('\ufeff{"operation":"check","params":{},"request_id":"r1"}'))
+    assert agent_cli.command(argparse.Namespace(action="run", input="-", allow_db_write=False)) == 1
+    output = json.loads(capsys.readouterr().out)
+    assert output["error"]["code"] == "execution_failed" and output["request_id"] == "r1"
+
+
+@pytest.mark.parametrize("number", ["NaN", "Infinity", "-Infinity"])
+def test_nonfinite_input_is_rejected_before_execution(monkeypatch, capsys, number):
+    monkeypatch.setitem(workflows.HANDLERS, "check", lambda _: pytest.fail("must not execute"))
+    monkeypatch.setattr(sys, "stdin", io.StringIO('{"operation":"check","params":{"value":' + number + '}}'))
+    assert agent_cli.command(argparse.Namespace(action="run", input="-", allow_db_write=False)) == 2
+    assert json.loads(capsys.readouterr().out)["error"]["code"] == "invalid_request"
