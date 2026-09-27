@@ -72,8 +72,11 @@ def build_sequence_plan(
     m13_tails: bool = False,
     forward_tail: str = M13_FORWARD_TAIL,
     reverse_tail: str = M13_REVERSE_TAIL,
+    template_sequence: Optional[str] = None,
 ) -> Dict:
     """Convert tiling output into an experiment-facing sequencing plan."""
+    from .report import _specificity_to_dict
+
     records = []
     for index, tile in enumerate(tiles):
         pair = tile["pair"]
@@ -88,6 +91,8 @@ def build_sequence_plan(
             "product_size": pair.product_size,
             "forward": pair.forward,
             "reverse": pair.reverse,
+            "forward_pos": [pair.left_start, pair.left_start + len(pair.forward) - 1],
+            "reverse_pos": [pair.right_start - len(pair.reverse) + 1, pair.right_start],
             "order_forward": (
                 forward_tail + pair.forward if m13_tails else pair.forward),
             "order_reverse": (
@@ -96,14 +101,7 @@ def build_sequence_plan(
             "tm_r": round(pair.tm_r, 1),
             "overlap_to_prev": overlap_to_prev,
             "gap_from_prev": gap_from_prev,
-            "specificity": {
-                "rank": pair.specificity.get("rank"),
-                "score": pair.specificity.get("score"),
-                "specificity_status": pair.specificity.get("specificity_status"),
-                "search_completeness": pair.specificity.get(
-                    "search_completeness"),
-                "total_off_target": pair.specificity.get("total_off_target"),
-            },
+            "specificity": _specificity_to_dict(pair.specificity),
         }
         if index + 1 < len(tiles):
             next_start = min(tiles[index + 1]["covers"])
@@ -145,6 +143,11 @@ def build_sequence_plan(
         "amplicons": records,
     }
     if genomic_template is not None:
+        plan["template"] = {
+            "sequence": genomic_template.seq, "chrom": genomic_template.region.chrom,
+            "start": genomic_template.ext_start, "end": genomic_template.ext_end,
+            "anchor": genomic_template.anchor_coord, "strand": genomic_template.anchor_strand,
+        }
         plan["target"] = {
             "name": genomic_template.region.name,
             "chrom": genomic_template.region.chrom,
@@ -154,6 +157,8 @@ def build_sequence_plan(
             "source": genomic_template.region.source,
             "flank": genomic_template.flank,
         }
+    elif template_sequence is not None:
+        plan["template"] = {"sequence": template_sequence, "anchor": 1, "strand": "+"}
     return plan
 
 

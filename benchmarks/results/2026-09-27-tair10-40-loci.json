@@ -1,0 +1,1306 @@
+{
+  "n_loci": 40,
+  "n_designed": 40,
+  "count_match": 32,
+  "size_match": 31,
+  "coord_match": 31,
+  "tm_diff": 20.0,
+  "check_size_min": 50,
+  "check_size_max": 2000,
+  "specificity_profile": "local-strict",
+  "thermo": true,
+  "rows": [
+    {
+      "locus": "1_1500",
+      "designed": true,
+      "forward": "TGCATGCATCCCACACTAGT",
+      "reverse": "GCCGTTTTCCAAACCGAACA",
+      "oss": [
+        [
+          142,
+          "1:2719-2860"
+        ]
+      ],
+      "ps2": [
+        [
+          142,
+          "1:2719-2860"
+        ]
+      ],
+      "count_match": true,
+      "size_match": true,
+      "coord_match": true
+    },
+    {
+      "locus": "1_2767379",
+      "designed": true,
+      "forward": "CTGCCCGATATCCAGACACC",
+      "reverse": "ATGCTTGCCCTGCCATGTAT",
+      "oss": [
+        [
+          448,
+          "1:2767642-2768089"
+        ]
+      ],
+      "ps2": [
+        [
+          448,
+          "1:2767642-2768089"
+        ]
+      ],
+      "count_match": true,
+      "size_match": true,
+      "coord_match": true
+    },
+    {
+      "locus": "1_5533258",
+      "designed": true,
+      "forward": "TTGGTGGTGCAGGTGTTCTT",
+      "reverse": "GGAACTTCCGTCTCAAGGCA",
+      "oss": [
+        [
+          433,
+          "1:5526822-5527254"
+        ],
+        [
+          433,
+          "1:5533637-5534069"
+        ]
+      ],
+      "ps2": [
+        [
+          433,
+          "1:5526822-5527254"
+        ],
+        [
+          433,
+          "1:5533637-5534069"
+        ]
+      ],
+      "count_match": true,
+      "size_match": true,
+      "coord_match": true
+    },
+    {
+      "locus": "1_8299137",
+      "designed": true,
+      "forward": "AGTTGGTGGGGTCATTAGCG",
+      "reverse": "AGCCCTTCTTTGGACTAGCT",
+      "oss": [
+        [
+          303,
+          "1:8299274-8299576"
+        ]
+      ],
+      "ps2": [
+        [
+          303,
+          "1:8299274-8299576"
+        ]
+      ],
+      "count_match": true,
+      "size_match": true,
+      "coord_match": true
+    },
+    {
+      "locus": "1_11065016",
+      "designed": true,
+      "forward": "CCCCTCAGCTTTTGGTTTGC",
+      "reverse": "AAACGCATCGCAACTTGGAC",
+      "oss": [
+        [
+          234,
+          "1:11065645-11065878"
+        ]
+      ],
+      "ps2": [
+        [
+          234,
+          "1:11065645-11065878"
+        ]
+      ],
+      "count_match": true,
+      "size_match": true,
+      "coord_match": true
+    },
+    {
+      "locus": "1_13830895",
+      "designed": true,
+      "forward": "TGCTCCTGAGGTACCGGTAA",
+      "reverse": "TTGAAACAAGCGCCTCGTTG",
+      "oss": [
+        [
+          303,
+          "1:13832016-13832318"
+        ]
+      ],
+      "ps2": [
+        [
+          365,
+          "2:2751067-2751431"
+        ],
+        [
+          303,
+          "1:13832016-13832318"
+        ]
+      ],
+      "count_match": false,
+      "size_match": false,
+      "coord_match": false
+    },
+    {
+      "locus": "1_16596774",
+      "designed": true,
+      "forward": "AGGGTATTGTTGCAAAAGGGT",
+      "reverse": "TGGATGCCAACTGTTCGGTA",
+      "oss": [
+        [
+          121,
+          "1:16598141-16598261"
+        ],
+        [
+          1992,
+          "3:11317267-11319258"
+        ]
+      ],
+      "ps2": [
+        [
+          247,
+          "2:3014358-3014604"
+        ],
+        [
+          121,
+          "1:16598141-16598261"
+        ]
+      ],
+      "count_match": true,
+      "size_match": false,
+      "coord_match": false
+    },
+    {
+      "locus": "1_19362653",
+      "designed": true,
+      "forward": "CGAGATATGCCTTCACCCCA",
+      "reverse": "GAAGAAAGCGGCCGGAAAAA",
+      "oss": [
+        [
+          174,
+          "1:19363783-19363956"
+        ]
+      ],
+      "ps2": [
+        [
+          174,
+          "1:19363783-19363956"
+        ]
+      ],
+      "count_match": true,
+      "size_match": true,
+      "coord_match": true
+    },
+    {
+      "locus": "1_22128532",
+      "designed": true,
+      "forward": "TGTGTGTGTGTGTGTAGCAA",
+      "reverse": "TGGAGAACACCCACTTTCCG",
+      "oss": [
+        [
+          278,
+          "1:22128969-22129246"
+        ],
+        [
+          278,
+          "1:22128969-22129246"
+        ]
+      ],
+      "ps2": [
+        [
+          278,
+          "1:22128969-22129246"
+        ],
+        [
+          543,
+          "1:22546623-22547165"
+        ],
+        [
+          545,
+          "1:22546623-22547167"
+        ],
+        [
+          539,
+          "1:22546627-22547165"
+        ],
+        [
+          541,
+          "1:22546627-22547167"
+        ],
+        [
+          86,
+          "4:14290506-14290591"
+        ],
+        [
+          84,
+          "4:14290508-14290591"
+        ],
+        [
+          1436,
+          "3:11353515-11354950"
+        ],
+        [
+          1438,
+          "3:11353513-11354950"
+        ]
+      ],
+      "count_match": false,
+      "size_match": false,
+      "coord_match": false
+    },
+    {
+      "locus": "1_24894411",
+      "designed": true,
+      "forward": "TCCTCGAAGTGTACCGGAGA",
+      "reverse": "CCTTTGTGTCGGTGGCTTTG",
+      "oss": [
+        [
+          134,
+          "1:24894744-24894877"
+        ]
+      ],
+      "ps2": [
+        [
+          134,
+          "1:24894744-24894877"
+        ]
+      ],
+      "count_match": true,
+      "size_match": true,
+      "coord_match": true
+    },
+    {
+      "locus": "1_27660290",
+      "designed": true,
+      "forward": "ATGATGGCTTCTGGTGGTGG",
+      "reverse": "AGTAATCGGCGTGGTGGTTT",
+      "oss": [
+        [
+          400,
+          "1:27660555-27660954"
+        ]
+      ],
+      "ps2": [
+        [
+          400,
+          "1:27660555-27660954"
+        ]
+      ],
+      "count_match": true,
+      "size_match": true,
+      "coord_match": true
+    },
+    {
+      "locus": "1_30426169",
+      "designed": true,
+      "forward": "AGAAGGATGCATGCGGTCAA",
+      "reverse": "CATCCGCAAAACTCGAAGCA",
+      "oss": [
+        [
+          105,
+          "1:30426880-30426984"
+        ]
+      ],
+      "ps2": [
+        [
+          105,
+          "1:30426880-30426984"
+        ]
+      ],
+      "count_match": true,
+      "size_match": true,
+      "coord_match": true
+    },
+    {
+      "locus": "2_1500",
+      "designed": true,
+      "forward": "GTGGCGGTATAGTCGTCCTG",
+      "reverse": "CTATCGAACAGCCGGACTCC",
+      "oss": [
+        [
+          334,
+          "2:2399-2732"
+        ],
+        [
+          644,
+          "2:2399-3042"
+        ],
+        [
+          336,
+          "3:14196366-14196701"
+        ],
+        [
+          648,
+          "3:14196366-14197013"
+        ]
+      ],
+      "ps2": [
+        [
+          336,
+          "3:14196366-14196701"
+        ],
+        [
+          648,
+          "3:14196366-14197013"
+        ],
+        [
+          334,
+          "2:2399-2732"
+        ],
+        [
+          644,
+          "2:2399-3042"
+        ],
+        [
+          324,
+          "1:12376856-12377179"
+        ]
+      ],
+      "count_match": false,
+      "size_match": false,
+      "coord_match": false
+    },
+    {
+      "locus": "2_2463411",
+      "designed": true,
+      "forward": "CGTCAGGTATTGGTGTCGCT",
+      "reverse": "AGGCAGGTTTTGGGGTGAAA",
+      "oss": [
+        [
+          346,
+          "2:2464364-2464709"
+        ]
+      ],
+      "ps2": [
+        [
+          346,
+          "2:2464364-2464709"
+        ]
+      ],
+      "count_match": true,
+      "size_match": true,
+      "coord_match": true
+    },
+    {
+      "locus": "2_4925322",
+      "designed": true,
+      "forward": "ACGCTCTGTGGATGTGGAAG",
+      "reverse": "TGAGATTGCTGCCCGAGAAG",
+      "oss": [
+        [
+          154,
+          "1:13139069-13139222"
+        ],
+        [
+          154,
+          "1:13735531-13735684"
+        ],
+        [
+          154,
+          "1:16088090-16088243"
+        ],
+        [
+          154,
+          "1:16743228-16743381"
+        ],
+        [
+          154,
+          "1:18847230-18847383"
+        ],
+        [
+          154,
+          "2:2719793-2719946"
+        ],
+        [
+          154,
+          "2:4043436-4043589"
+        ],
+        [
+          154,
+          "2:4168557-4168710"
+        ],
+        [
+          154,
+          "2:4911142-4911295"
+        ],
+        [
+          154,
+          "2:4926026-4926179"
+        ],
+        [
+          154,
+          "3:11561547-11561700"
+        ],
+        [
+          154,
+          "3:12006881-12007034"
+        ],
+        [
+          154,
+          "3:12441729-12441882"
+        ],
+        [
+          154,
+          "3:12954031-12954184"
+        ],
+        [
+          154,
+          "3:13400665-13400818"
+        ],
+        [
+          154,
+          "3:13980424-13980577"
+        ],
+        [
+          115,
+          "3:14171558-14171672"
+        ],
+        [
+          154,
+          "4:1845962-1846115"
+        ],
+        [
+          154,
+          "5:11196043-11196196"
+        ],
+        [
+          141,
+          "5:12388714-12388854"
+        ],
+        [
+          154,
+          "5:18194183-18194336"
+        ]
+      ],
+      "ps2": [
+        [
+          154,
+          "3:11561547-11561700"
+        ],
+        [
+          154,
+          "3:12006881-12007034"
+        ],
+        [
+          154,
+          "3:12441729-12441882"
+        ],
+        [
+          154,
+          "3:13980424-13980577"
+        ],
+        [
+          115,
+          "3:14171558-14171672"
+        ],
+        [
+          154,
+          "2:2719793-2719946"
+        ],
+        [
+          154,
+          "2:4043436-4043589"
+        ],
+        [
+          154,
+          "2:4168557-4168710"
+        ],
+        [
+          154,
+          "2:4911142-4911295"
+        ],
+        [
+          154,
+          "2:4926026-4926179"
+        ],
+        [
+          155,
+          "1:12952948-12953102"
+        ],
+        [
+          154,
+          "1:13735531-13735684"
+        ],
+        [
+          154,
+          "1:16088090-16088243"
+        ],
+        [
+          154,
+          "1:18847230-18847383"
+        ],
+        [
+          154,
+          "5:11196043-11196196"
+        ],
+        [
+          141,
+          "5:12388714-12388854"
+        ],
+        [
+          154,
+          "4:4980981-4981134"
+        ]
+      ],
+      "count_match": false,
+      "size_match": false,
+      "coord_match": false
+    },
+    {
+      "locus": "2_7387233",
+      "designed": true,
+      "forward": "CGAGACAAGTTGGACCTGGT",
+      "reverse": "TTGCCAAAGGACCTCACTCC",
+      "oss": [
+        [
+          172,
+          "2:7387237-7387408"
+        ]
+      ],
+      "ps2": [
+        [
+          172,
+          "2:7387237-7387408"
+        ]
+      ],
+      "count_match": true,
+      "size_match": true,
+      "coord_match": true
+    },
+    {
+      "locus": "2_9849144",
+      "designed": true,
+      "forward": "ACGAGTTGTTTGGGTCTGCA",
+      "reverse": "GGAGGAGACCAAGCTGACAA",
+      "oss": [
+        [
+          100,
+          "2:9849246-9849345"
+        ]
+      ],
+      "ps2": [
+        [
+          100,
+          "2:9849246-9849345"
+        ]
+      ],
+      "count_match": true,
+      "size_match": true,
+      "coord_match": true
+    },
+    {
+      "locus": "2_12311055",
+      "designed": true,
+      "forward": "AGGCCGGCACTGTTCAATAA",
+      "reverse": "GGCCGTCGGAAGGATGTTAT",
+      "oss": [
+        [
+          500,
+          "2:12311578-12312077"
+        ]
+      ],
+      "ps2": [
+        [
+          500,
+          "2:12311578-12312077"
+        ]
+      ],
+      "count_match": true,
+      "size_match": true,
+      "coord_match": true
+    },
+    {
+      "locus": "2_14772966",
+      "designed": true,
+      "forward": "ACAGCTCGTCGGAATCCTTG",
+      "reverse": "CGGGCGGGATCCTTTAAGTT",
+      "oss": [
+        [
+          205,
+          "2:14773797-14774001"
+        ]
+      ],
+      "ps2": [
+        [
+          205,
+          "2:14773797-14774001"
+        ]
+      ],
+      "count_match": true,
+      "size_match": true,
+      "coord_match": true
+    },
+    {
+      "locus": "2_17234877",
+      "designed": true,
+      "forward": "ATGGGCTACTGTGGCTTGAC",
+      "reverse": "CAACGCGATCAATGCAGACC",
+      "oss": [
+        [
+          230,
+          "2:17235161-17235390"
+        ]
+      ],
+      "ps2": [
+        [
+          230,
+          "2:17235161-17235390"
+        ]
+      ],
+      "count_match": true,
+      "size_match": true,
+      "coord_match": true
+    },
+    {
+      "locus": "2_19696788",
+      "designed": true,
+      "forward": "GGGGATTCACACACGAACCT",
+      "reverse": "TTTTGTCCAACAGGCCACCT",
+      "oss": [
+        [
+          201,
+          "2:19696810-19697010"
+        ]
+      ],
+      "ps2": [
+        [
+          201,
+          "2:19696810-19697010"
+        ]
+      ],
+      "count_match": true,
+      "size_match": true,
+      "coord_match": true
+    },
+    {
+      "locus": "3_1500",
+      "designed": true,
+      "forward": "TTGGGATCTCGAGGTACCGT",
+      "reverse": "GAGTTGGTCCCTAAGGCACA",
+      "oss": [
+        [
+          206,
+          "3:1901-2106"
+        ]
+      ],
+      "ps2": [
+        [
+          206,
+          "3:1901-2106"
+        ]
+      ],
+      "count_match": true,
+      "size_match": true,
+      "coord_match": true
+    },
+    {
+      "locus": "3_2607814",
+      "designed": true,
+      "forward": "GGAGGTTCATCACTGTCGCA",
+      "reverse": "GCCATAGAACAGGTCGGAGG",
+      "oss": [
+        [
+          383,
+          "3:2608742-2609124"
+        ]
+      ],
+      "ps2": [
+        [
+          383,
+          "3:2608742-2609124"
+        ]
+      ],
+      "count_match": true,
+      "size_match": true,
+      "coord_match": true
+    },
+    {
+      "locus": "3_5214128",
+      "designed": true,
+      "forward": "TTATCCAGATCGCCTCGTGC",
+      "reverse": "GGTTCACGCCCACTTTTGAC",
+      "oss": [
+        [
+          420,
+          "3:5214710-5215129"
+        ]
+      ],
+      "ps2": [
+        [
+          420,
+          "3:5214710-5215129"
+        ]
+      ],
+      "count_match": true,
+      "size_match": true,
+      "coord_match": true
+    },
+    {
+      "locus": "3_7820442",
+      "designed": true,
+      "forward": "TCCTATTGTTGGATGCGGCA",
+      "reverse": "TTGGTGTTTTTGGTGGGCAA",
+      "oss": [
+        [
+          204,
+          "3:7820655-7820858"
+        ],
+        [
+          1066,
+          "5:6632497-6633562"
+        ]
+      ],
+      "ps2": [
+        [
+          204,
+          "3:7820655-7820858"
+        ]
+      ],
+      "count_match": false,
+      "size_match": false,
+      "coord_match": false
+    },
+    {
+      "locus": "3_10426756",
+      "designed": true,
+      "forward": "AGAATGCTTCCCCGCTGAAA",
+      "reverse": "ATCACTGTCAGAAGCCCACG",
+      "oss": [
+        [
+          500,
+          "3:10426897-10427396"
+        ]
+      ],
+      "ps2": [
+        [
+          500,
+          "3:10426897-10427396"
+        ]
+      ],
+      "count_match": true,
+      "size_match": true,
+      "coord_match": true
+    },
+    {
+      "locus": "3_13033070",
+      "designed": true,
+      "forward": "CAGATCTTCCTCGGGGCTTC",
+      "reverse": "ATGCAACTTACCCCGAAGCT",
+      "oss": [
+        [
+          1526,
+          "1:12728144-12729669"
+        ],
+        [
+          916,
+          "1:30122529-30123444"
+        ],
+        [
+          298,
+          "3:12784994-12785291"
+        ],
+        [
+          298,
+          "3:13033253-13033550"
+        ],
+        [
+          913,
+          "4:1449591-1450503"
+        ]
+      ],
+      "ps2": [
+        [
+          298,
+          "3:12784994-12785291"
+        ],
+        [
+          298,
+          "3:13033253-13033550"
+        ]
+      ],
+      "count_match": false,
+      "size_match": false,
+      "coord_match": false
+    },
+    {
+      "locus": "3_15639384",
+      "designed": true,
+      "forward": "GGATTGGGTTTGGTATCGGGT",
+      "reverse": "TGCAAGGTACGGTCCGAAAA",
+      "oss": [
+        [
+          349,
+          "3:15639452-15639800"
+        ]
+      ],
+      "ps2": [
+        [
+          349,
+          "3:15639452-15639800"
+        ]
+      ],
+      "count_match": true,
+      "size_match": true,
+      "coord_match": true
+    },
+    {
+      "locus": "3_18245698",
+      "designed": true,
+      "forward": "CTGCTAGGCGTACTCATCCG",
+      "reverse": "ACTGGGAAGATACCTCGACTCT",
+      "oss": [
+        [
+          103,
+          "3:18245733-18245835"
+        ]
+      ],
+      "ps2": [
+        [
+          103,
+          "3:18245733-18245835"
+        ]
+      ],
+      "count_match": true,
+      "size_match": true,
+      "coord_match": true
+    },
+    {
+      "locus": "3_20852012",
+      "designed": true,
+      "forward": "ACCAGATCAAAAGCACCAGACT",
+      "reverse": "GTGGGTTCGTCTGCTGGTAA",
+      "oss": [
+        [
+          134,
+          "3:20853375-20853508"
+        ],
+        [
+          134,
+          "4:2036802-2036935"
+        ],
+        [
+          126,
+          "5:6629464-6629589"
+        ]
+      ],
+      "ps2": [
+        [
+          134,
+          "4:2036802-2036935"
+        ],
+        [
+          134,
+          "3:20853375-20853508"
+        ],
+        [
+          126,
+          "5:6629464-6629589"
+        ]
+      ],
+      "count_match": true,
+      "size_match": true,
+      "coord_match": true
+    },
+    {
+      "locus": "3_23458326",
+      "designed": true,
+      "forward": "CGTTGAAGAAGCCGGCAAAA",
+      "reverse": "GAGCACGGGACTTGAAGACA",
+      "oss": [
+        [
+          101,
+          "3:23458498-23458598"
+        ]
+      ],
+      "ps2": [
+        [
+          101,
+          "3:23458498-23458598"
+        ]
+      ],
+      "count_match": true,
+      "size_match": true,
+      "coord_match": true
+    },
+    {
+      "locus": "4_1500",
+      "designed": true,
+      "forward": "TGGTGGAAATCGGAAGCACA",
+      "reverse": "AAGCCAGAGTCAACCAGTCG",
+      "oss": [
+        [
+          489,
+          "4:1724-2212"
+        ]
+      ],
+      "ps2": [
+        [
+          489,
+          "4:1724-2212"
+        ]
+      ],
+      "count_match": true,
+      "size_match": true,
+      "coord_match": true
+    },
+    {
+      "locus": "4_2656079",
+      "designed": true,
+      "forward": "GGGACCGTTGCATCAAACAC",
+      "reverse": "CGAGCGATCTATCCACACGT",
+      "oss": [
+        [
+          220,
+          "4:2656387-2656606"
+        ]
+      ],
+      "ps2": [
+        [
+          220,
+          "4:2656387-2656606"
+        ]
+      ],
+      "count_match": true,
+      "size_match": true,
+      "coord_match": true
+    },
+    {
+      "locus": "4_5310658",
+      "designed": true,
+      "forward": "GATGGCGGAGGAGATGATGG",
+      "reverse": "AGTCCACCACCGTCTCCATA",
+      "oss": [
+        [
+          68,
+          "1:7273780-7273847"
+        ],
+        [
+          68,
+          "1:7273780-7273847"
+        ],
+        [
+          118,
+          "2:15670452-15670569"
+        ],
+        [
+          123,
+          "3:6737669-6737791"
+        ],
+        [
+          375,
+          "3:6737669-6738043"
+        ],
+        [
+          78,
+          "3:6737714-6737791"
+        ],
+        [
+          330,
+          "3:6737714-6738043"
+        ],
+        [
+          197,
+          "4:5311136-5311332"
+        ],
+        [
+          269,
+          "4:5311136-5311404"
+        ],
+        [
+          341,
+          "4:5311136-5311476"
+        ],
+        [
+          413,
+          "4:5311136-5311548"
+        ],
+        [
+          485,
+          "4:5311136-5311620"
+        ],
+        [
+          557,
+          "4:5311136-5311692"
+        ],
+        [
+          629,
+          "4:5311136-5311764"
+        ],
+        [
+          722,
+          "4:5311136-5311857"
+        ],
+        [
+          794,
+          "4:5311136-5311929"
+        ],
+        [
+          815,
+          "4:5311136-5311950"
+        ],
+        [
+          911,
+          "4:5311136-5312046"
+        ],
+        [
+          983,
+          "4:5311136-5312118"
+        ],
+        [
+          1055,
+          "4:5311136-5312190"
+        ],
+        [
+          1127,
+          "4:5311136-5312262"
+        ]
+      ],
+      "ps2": [
+        [
+          197,
+          "4:5311136-5311332"
+        ],
+        [
+          269,
+          "4:5311136-5311404"
+        ],
+        [
+          341,
+          "4:5311136-5311476"
+        ],
+        [
+          413,
+          "4:5311136-5311548"
+        ],
+        [
+          485,
+          "4:5311136-5311620"
+        ],
+        [
+          557,
+          "4:5311136-5311692"
+        ],
+        [
+          629,
+          "4:5311136-5311764"
+        ],
+        [
+          722,
+          "4:5311136-5311857"
+        ],
+        [
+          794,
+          "4:5311136-5311929"
+        ],
+        [
+          911,
+          "4:5311136-5312046"
+        ],
+        [
+          983,
+          "4:5311136-5312118"
+        ],
+        [
+          1055,
+          "4:5311136-5312190"
+        ],
+        [
+          1127,
+          "4:5311136-5312262"
+        ],
+        [
+          797,
+          "4:11851934-11852730"
+        ],
+        [
+          830,
+          "4:11851934-11852763"
+        ],
+        [
+          863,
+          "4:11851934-11852796"
+        ],
+        [
+          224,
+          "4:11852507-11852730"
+        ],
+        [
+          257,
+          "4:11852507-11852763"
+        ],
+        [
+          290,
+          "4:11852507-11852796"
+        ],
+        [
+          65,
+          "1:20243247-20243311"
+        ],
+        [
+          59,
+          "1:23114457-23114515"
+        ],
+        [
+          536,
+          "3:1853580-1854115"
+        ],
+        [
+          56,
+          "3:3459017-3459072"
+        ],
+        [
+          308,
+          "3:7140632-7140939"
+        ],
+        [
+          179,
+          "2:15165741-15165919"
+        ],
+        [
+          392,
+          "2:15165741-15166132"
+        ]
+      ],
+      "count_match": false,
+      "size_match": false,
+      "coord_match": false
+    },
+    {
+      "locus": "4_7965237",
+      "designed": true,
+      "forward": "ACAGATGCAAGCGAGTGGAA",
+      "reverse": "GAGAAGAAGCAAGCCGAGGT",
+      "oss": [
+        [
+          369,
+          "4:7965809-7966177"
+        ]
+      ],
+      "ps2": [
+        [
+          369,
+          "4:7965809-7966177"
+        ]
+      ],
+      "count_match": true,
+      "size_match": true,
+      "coord_match": true
+    },
+    {
+      "locus": "4_10619816",
+      "designed": true,
+      "forward": "CCACAGTAATCGGCTCCCTC",
+      "reverse": "GGTTAGATTTTCCGTGCGCC",
+      "oss": [
+        [
+          221,
+          "4:10620600-10620820"
+        ]
+      ],
+      "ps2": [
+        [
+          221,
+          "4:10620600-10620820"
+        ]
+      ],
+      "count_match": true,
+      "size_match": true,
+      "coord_match": true
+    },
+    {
+      "locus": "4_13274395",
+      "designed": true,
+      "forward": "CCCTTCCGGTGTCATCCAAA",
+      "reverse": "GGTGTGGGAACTAGAAGGGC",
+      "oss": [
+        [
+          424,
+          "4:13275456-13275879"
+        ]
+      ],
+      "ps2": [
+        [
+          424,
+          "4:13275456-13275879"
+        ]
+      ],
+      "count_match": true,
+      "size_match": true,
+      "coord_match": true
+    },
+    {
+      "locus": "4_15928974",
+      "designed": true,
+      "forward": "CTGCAACCCCAAGCTTGTTC",
+      "reverse": "ATGCTGCGTTCTTGGCTACT",
+      "oss": [
+        [
+          416,
+          "4:15929687-15930102"
+        ]
+      ],
+      "ps2": [
+        [
+          416,
+          "4:15929687-15930102"
+        ]
+      ],
+      "count_match": true,
+      "size_match": true,
+      "coord_match": true
+    },
+    {
+      "locus": "4_18583553",
+      "designed": true,
+      "forward": "GGAAGGAGGGTTGGAGAAGC",
+      "reverse": "ATTCTTCCCATTGCAGCACG",
+      "oss": [
+        [
+          350,
+          "4:18583585-18583934"
+        ]
+      ],
+      "ps2": [
+        [
+          350,
+          "4:18583585-18583934"
+        ],
+        [
+          1980,
+          "2:9541998-9543977"
+        ]
+      ],
+      "count_match": false,
+      "size_match": false,
+      "coord_match": false
+    },
+    {
+      "locus": "5_1500",
+      "designed": true,
+      "forward": "ACCCAAAAGCTTCCCCACAA",
+      "reverse": "CACACTCTCTCTAGCTGCCG",
+      "oss": [
+        [
+          489,
+          "5:1707-2195"
+        ]
+      ],
+      "ps2": [
+        [
+          489,
+          "5:1707-2195"
+        ]
+      ],
+      "count_match": true,
+      "size_match": true,
+      "coord_match": true
+    }
+  ]
+}

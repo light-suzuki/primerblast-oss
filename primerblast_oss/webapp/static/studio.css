@@ -91,4 +91,35 @@ textarea { line-height: 1.7; }
 .tabs { overflow-y: hidden; }
 .err pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 .guide-hero h2 { text-wrap: balance; }
+.locus-card { background: #f8faf6; padding: 16px; border: 1px solid var(--line); margin: 12px 0; border-radius: 6px; }
+.locus-card { overflow-x: auto; }
+.locus-map { width: 100%; height: auto; display: block; }
+.locus-map text { fill: var(--ink); font: 14px "Yu Gothic", sans-serif; }
+.pair-map { margin: 18px 0; border-top: 2px solid var(--line); padding-top: 10px; }
+.pair-map > summary { cursor: pointer; font-weight: 700; color: var(--accent); }
+.binding-window { margin: 15px 0; }
+.binding-window code { display: block; overflow-wrap: anywhere; white-space: normal; font-size: 14px; line-height: 2; }
+.base-f { background: #cee9da; color: #173e2e; }
+.base-r { background: #d3e3fa; color: #173b68; }
+.base-changed { background: #ffd79a; color: #612c0c; font-weight: bold; border-bottom: 2px solid #b04b16; }
+.target-key { display: inline-block; width: 14px; height: 8px; margin-right: 8px; background: #c4a65c; }
+.project-store { margin: 24px 0 12px; padding: 15px 0; border-top: 1px solid var(--line); }
+.project-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.project-actions select { width: auto; max-width: 100%; }
+.project-actions input[type=file] { max-width: 230px; }
+.offtarget-sizes { margin: 15px 0; }
 .primer-list code { overflow-wrap: anywhere; white-space: normal; }
+@media (max-width: 480px) { .locus-map { min-width: 560px; } }
+.sequence-full, .restriction-detail { margin: 18px 0; }
+.sequence-full summary, .restriction-detail summary { cursor: pointer; font-weight: 700; }
+.sequence-nav { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; margin: 12px 0; }
+.sequence-nav input { width: 110px; }
+.sequence-table { overflow-x: auto; }
+.sequence-row { display: grid; grid-template-columns: 70px max-content 70px; gap: 8px; font: 13px/2.2 monospace; }
+.sequence-row code { white-space: pre; letter-spacing: .3px; }
+.base-product { background: #e4efe5; }
+.base-exon { border-bottom: 2px solid #846733; }
+.cleavage-sequence { white-space: pre; overflow-x: auto; font: 15px/1.8 monospace; padding: 10px; background: #f2f5ef; }
+.recognition-base { background: #ffe2a3; color: #382505; }
+.cut-boundary { color: #a83a16; font-weight: bold; }
+.gene-track { margin: 12px 0; }

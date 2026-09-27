@@ -581,6 +581,8 @@ def build_caps(template: Template, pair, snp_local_index: int,
         "snp_amplicon_index": relative_index,
         "ref_base": ref_base,
         "alt_base": alt_base.upper(),
+        "allele_a_sequence": amplicon_ref,
+        "allele_b_sequence": amplicon_alt,
         "dcaps": None,
     }
 
@@ -880,6 +882,11 @@ def run_assay(
             "flank": flank,
         },
         "template_len": len(template.seq),
+        "template": {
+            "sequence": template.seq, "chrom": region.chrom,
+            "start": template.ext_start, "end": template.ext_end,
+            "anchor": template.anchor_coord, "strand": template.anchor_strand,
+        },
         "databases": list(databases),
         "thermo_genomes": {
             database: getattr(associated_genomes.get(database), "fasta", None)

@@ -6,4 +6,5 @@ dist/
 .pytest_cache/
 *.json
 !benchmarks/*.json
+!benchmarks/results/*.json
 /tmp/

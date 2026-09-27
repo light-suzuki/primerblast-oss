@@ -165,23 +165,29 @@ def _find_gene_seqid(gff3_path: str, gene: str) -> Optional[str]:
     """Fast pre-scan: return the chromosome (col 1) of the first GFF3 line
     mentioning the gene, so the full parse can be bounded to one seqid.
 
-    All of a gene's features share a chromosome, so a substring match on any
-    of its lines (gene/mRNA/exon/CDS) yields the right seqid."""
+    Match complete gene attributes, including Ensembl's gene: ID prefix."""
     import gzip
+    from ..gff3 import _parse_attributes
     opener = gzip.open if gff3_path.endswith(".gz") else open
-    id_tag, name_tag = f"ID={gene}", f"Name={gene}"
+    keys = {gene, "gene:" + gene}
     try:
         with opener(gff3_path, "rt", encoding="utf-8", errors="ignore") as fh:
             for line in fh:
-                if line and line[0] != "#" and (id_tag in line or name_tag in line):
-                    return line.split("\t", 1)[0] or None
+                if not line or line[0] == "#":
+                    continue
+                fields = line.rstrip("\n").split("\t")
+                if len(fields) != 9 or fields[2].lower() != "gene":
+                    continue
+                attributes = _parse_attributes(fields[8])
+                if attributes.get("ID") in keys or attributes.get("Name") == gene:
+                    return fields[0] or None
     except OSError:
         return None
     return None
 
 
-def _gene_to_template(p: Dict) -> Tuple[str, str]:
-    """Resolve a gene name/ID (+GFF3 +genome) into a (template_id, sequence)."""
+def _gene_to_template(p: Dict):
+    """Resolve a gene name/ID (+GFF3 +genome), retaining its genomic context."""
     from ..genome import Genome
     from ..regions import resolve_gene, extract_template
 
@@ -199,7 +205,7 @@ def _gene_to_template(p: Dict) -> Tuple[str, str]:
     region = resolve_gene(gff3, gene, feature=_f(p, "gene_feature", "cds"),
                           flank=0, gff3_seqid=seqid)
     tmpl = extract_template(genome, region, flank=int(_f(p, "flank", 0)))
-    return (tmpl.id, tmpl.seq)
+    return tmpl
 
 
 def _run_design(p: Dict) -> Dict:
@@ -208,14 +214,24 @@ def _run_design(p: Dict) -> Dict:
     dbs = _databases(p)
     size_tol = int(_f(p, "size_tolerance", 10))
     if _f(p, "source", "sequence") == "gene":
-        templates = [_gene_to_template(p)]
+        genomic_template = _gene_to_template(p)
+        templates = [(genomic_template.id, genomic_template.seq)]
     else:
+        genomic_template = None
         templates = _templates(p)
     results = []
     for tid, seq in templates:
         res = run_pipeline(tid, seq, dbs, design_params=dp, spec_params=sp,
                            size_tolerance=size_tol, genomes_by_db=_associated_genomes(p))
         d = R.to_dict(res)
+        d["template_sequence"] = clean_sequence(seq)
+        if genomic_template is not None:
+            from ..annotations import template_annotations
+            template = genomic_template
+            d["template"] = {"sequence": template.seq, "chrom": template.region.chrom,
+                             "start": template.ext_start, "end": template.ext_end,
+                             "anchor": template.anchor_coord, "strand": template.anchor_strand}
+            d["template"]["annotations"] = template_annotations(_f(p, "gff3", None), d["template"])
         d["tsv"] = R.to_tsv(res)
         results.append(d)
     return {"mode": "design", "templates": results}
@@ -288,7 +304,8 @@ def _run_assay(p: Dict) -> Dict:
         if not _f(p, "gff3", None):
             raise ValueError("--gene requires a GFF3 annotation path.")
         region = resolve_gene(p["gff3"], p["gene"],
-                              feature=_f(p, "gene_feature", "cds"), flank=0)
+                              feature=_f(p, "gene_feature", "cds"), flank=0,
+                              gff3_seqid=_find_gene_seqid(p["gff3"], p["gene"]))
     elif _f(p, "interval", None):
         chrom, span = str(p["interval"]).split(":")
         s, e = span.split("-")
@@ -316,6 +333,8 @@ def _run_assay(p: Dict) -> Dict:
     prov = make_manifest({"design": dp.__dict__, "spec": sp.__dict__, "flank": flank},
                          dbs, template_info=result["target"])
     result["provenance"] = prov
+    from ..annotations import template_annotations
+    result["template"]["annotations"] = template_annotations(_f(p, "annotation_gff3", None) or _f(p, "gff3", None), result["template"])
     pairs = result.get("pairs", [])
     result["exports"] = {
         "csv": _safe(OUT.pairs_to_csv, pairs),
@@ -380,6 +399,10 @@ def _run_sequence(p: Dict) -> Dict:
         result = json.loads(output.read_text(encoding="utf-8"))
         from ..sequencing import order_table
         plans = result.get("plans", [result])
+        from ..annotations import template_annotations
+        for plan in plans:
+            if plan.get("template"):
+                plan["template"]["annotations"] = template_annotations(_f(p, "annotation_gff3", None) or _f(p, "gff3", None), plan["template"])
         result["exports"] = {"order": "\n".join(order_table(plan) for plan in plans)}
         return result
 

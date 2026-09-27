@@ -542,6 +542,61 @@ CAPS/dCAPS bands, virtual gels, and AS-PCR/tetra-ARMS oligos with raw evidence i
 expandable details. Unfinished searches remain unresolved. All results are
 computational candidates, rather than wet-validated assays.
 
+### Binding maps and saved projects / 結合位置とデータ保存
+
+Design, sequencing and breeding-assay results show forward/reverse binding
+positions on the input sequence and the amplified interval. Displayed coordinates
+are 1-based and inclusive; genomic maps retain chromosome and strand, including
+descending coordinates on minus-strand templates. Expand the sequence view to
+inspect the annealing oligos and highlighted differences. dCAPS maps use the
+**modified** primers and their own screened coordinates, separately from the
+parent pair. CAPS/dCAPS views include recognition sequences, top-strand cut
+boundaries, fragment lengths and illustrative gels. Off-target tables show
+product coordinates, bp and size differences from the target. A size difference
+alone does not establish that bands can be resolved experimentally.
+
+The sequence viewer displays 60-base rows, pages of 1200 bases and a direct
+start-index control; bases within the amplicon, F/R footprints, engineered
+differences and annotated exons are distinct. Supply a GFF3 to genomic assay or
+sequencing jobs to show overlapping genes and each transcript's exon/CDS shape,
+with the amplified part and overlapping exon numbers. Gene-based design retains
+the same genomic context. Missing annotation and a mismatched chromosome name
+are kept separate from a loaded annotation with no overlapping genes.
+
+Enzymes with complete cleavage sites can be expanded to see the **actual AA/BB
+product sequence**, shaded recognition bases, and cuts between bases on aligned
+5′→3′ and 3′→5′ strands. This includes cuts outside the recognition motif for
+Type IIS enzymes. dCAPS uses primer-incorporated products, not the unchanged
+reference. Candidate-only gel illustrations explicitly exclude off-target
+background and preserve unresolved specificity.
+
+「どこを増幅する？」でF/Rの結合位置・増幅範囲を確認し、配列表示を開くと
+設計オリゴと参照配列の違いが見えます。CAPS/dCAPSは酵素・認識配列・切断位置・
+断片長とゲル模式図を表示します。オフターゲットは座標・bp・標的とのサイズ差を
+一覧表示します。未完了の探索とWet未検証の区別は維持します。
+
+Save inputs and results together with **Save in this browser** (five recent
+projects), or export/import a versioned project JSON. Restoring displays stored
+results without running a calculation. Browser saves belong to this browser
+profile and origin: clearing browser data or changing the server port can make
+them unavailable. JSON is the portable backup; referenced genome/DB files remain
+external and must be available to recalculate. Saving is explicit, not automatic.
+
+入力条件と結果は「このブラウザーに保存」で直近5件を保持できます。
+長期保管・他端末への移動にはプロジェクトJSONを出力してください。
+再読込みでは計算しません。ゲノム・DB本体はJSONに含まれず、再計算には元の
+ファイルが必要です。ブラウザーのデータ削除やポート変更でブラウザー保存が
+見えなくなる場合があります。
+
+配列は60塩基ずつ表示し、1200塩基単位の移動や開始位置の指定ができます。
+GFF3を指定すると遺伝子・転写産物ごとのエクソン/CDSの形と、どのエクソンを
+増幅するかが重なって見えます。制限酵素は切断部位があるものを開き、実際の
+AA/BB配列・認識塩基・上下鎖の切断境界を確認できます。
+
+The visual sequence and project-retention workflow was informed by
+[Gene-research](https://github.com/light-suzuki/Gene-research); the current OSS
+analysis engine remains authoritative. No additional frontend dependencies are needed.
+
 ## Tests
 
 Unit tests are pure Python and need **no external tools or data**:
@@ -551,6 +606,7 @@ pip install -e ".[dev]"
 pytest                                # or run the files directly:
 python tests/test_specificity.py      # specificity / amplicon pairing
 python tests/test_integration.py      # variants, conservation, risk, CAPS
+node tests/web_locus.test.js          # optional: coordinate/strand and display regressions
 ```
 
 ## Benchmark

@@ -100,8 +100,9 @@ def ps2_amplicons(site_id: str, fwd: str, rev: str, db_fasta: str, primertool: s
                "--checking-size-min", str(size_min),
                "--checking-size-max", str(size_max),
                "--amplicon-num-max", "1000"]
-        subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL,
-                       stderr=subprocess.DEVNULL)
+        process = subprocess.run(cmd, capture_output=True, text=True)
+        if process.returncode:
+            raise RuntimeError("PrimerServer2 failed: " + process.stderr[-8000:])
         d = json.load(open(out))
     site = d["primers"][site_id]
     dbkey = next((k for k in site if isinstance(site[k], dict)
@@ -149,6 +150,7 @@ def main(argv=None) -> int:
 
     from primerblast_oss.specificity import spec_params_for_profile
     profile_sp = spec_params_for_profile(a.specificity_profile)
+    profile_sp.num_threads = a.cpu
 
     genome = Genome(a.genome)
     thermo_params, gate = None, True

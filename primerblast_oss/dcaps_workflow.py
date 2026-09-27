@@ -331,6 +331,8 @@ def evaluate_dcaps_candidates(
             "gc_f": candidate_pair.gc_f,
             "gc_r": candidate_pair.gc_r,
             "digest": digest_dict,
+            "allele_a_sequence": reference_product,
+            "allele_b_sequence": alternate_product,
             "specificity": assay_summary,
             "gel_scorable_all_db": digest_dict.get("gel_scorable_all_db"),
             "background_analysis": background,
