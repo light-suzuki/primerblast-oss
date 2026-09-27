@@ -63,6 +63,12 @@ def test_explicit_reference_availability_and_bad_config(tmp_path):
     profile = reference_catalog([], config)["references"][0]
     assert not profile["available"]
     assert profile["missing"] == ["FASTA", "FASTA index (.fai)"]
+    registered = {"prefix": "Ref.", "separator": "g", "digits": 5, "chromosomes": ["1", "7"]}
+    config.write_text(json.dumps([{"genome": str(tmp_path / "missing.fa"), "gene_id_format": registered}]))
+    assert reference_catalog([], config)["references"][0]["gene_id_format"]["source"] == "registered"
+    registered["digits"] = True
+    config.write_text(json.dumps([{"genome": str(tmp_path / "missing.fa"), "gene_id_format": registered}]))
+    assert reference_catalog([], config)["warnings"]
     config.write_text("{}")
     assert reference_catalog([], config)["warnings"]
 
