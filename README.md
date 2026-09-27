@@ -15,6 +15,10 @@ unpublished genomes and several cultivars at once — and adds in-silico PCR,
 whole-region tiling, SNP-under-primer detection, amplicon conservation analysis,
 CAPS/dCAPS and allele-specific PCR (AS-PCR / tetra-ARMS) marker design, and an experimenter-facing risk score.
 
+The browser's **Enzymes / 制限酵素** tab includes an offline 1,088-name catalog,
+related enzyme and verified product names, and both-strand cleavage diagrams.
+See [catalog coverage, provenance and prediction limits](docs/restriction-catalog.md).
+
 > The core is pure Python (standard library only) and calls out to `primer3_core`
 > and BLAST+. The unit tests require **no external tools or data**.
 

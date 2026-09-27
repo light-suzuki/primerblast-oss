@@ -607,6 +607,9 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/api/references":
                 from .references import reference_catalog
                 self._send_json(reference_catalog(discover_databases()))
+            elif path == "/api/enzymes":
+                from ..restriction_catalog import catalog
+                self._send_json(catalog())
             elif path.startswith("/api/job/"):
                 job_id = unquote(path[len("/api/job/"):])
                 job = JOBS.get(job_id)

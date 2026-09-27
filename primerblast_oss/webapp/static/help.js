@@ -22,7 +22,8 @@ const experimentHelp = {
       ['ゲル・CAPS', '遺伝子、領域、またはSNPと代替塩基。必要に応じてVCF。', '制限酵素の認識配列・切断位置、断片長、仮想ゲル、利用可能なマーカー候補。', 'assay'],
       ['QTLマーカー', 'ゲノム座標とマーカー数または間隔。', '領域内に配置するPCR候補。QTL原因遺伝子の推定機能ではありません。', 'markers'],
       ['ゲノムの準備', 'ローカルのゲノムFASTA。', '特異性検索に使うBLAST DB。遺伝子IDの検索には別途注釈が必要です。', 'makedb'],
-      ['タイルPCR（プロ向け）', 'DNA配列と断片サイズ・重複長。', '長い配列を複数の重複PCRに分割する候補。通常のシーケンス設計はシーケンスタブから始められます。', 'tile']
+      ['タイルPCR（プロ向け）', 'DNA配列と断片サイズ・重複長。', '長い配列を複数の重複PCRに分割する候補。通常のシーケンス設計はシーケンスタブから始められます。', 'tile'],
+      ['制限酵素', '酵素名・確認済み製品名・認識配列。', '上下鎖の切断図、突出／平滑末端、同じ切断・異なる切断の関連酵素。CAPSはPCR産物の制限酵素消化による判定（PCR-RFLP系）、dCAPSは意図的なプライマー変更で認識部位を作る方法です。', 'enzymes']
     ]
   },
   en: {
@@ -47,7 +48,8 @@ const experimentHelp = {
       ['Gel / CAPS', 'Gene, interval, or SNP with alternate base; optional VCF.', 'Enzyme recognition sequences, cleavage positions, fragment sizes, virtual gels and available marker candidates.', 'assay'],
       ['QTL markers', 'Genomic interval and marker count or spacing.', 'PCR candidates distributed across the interval; this does not infer causal QTL genes.', 'markers'],
       ['Prepare genome', 'Local genome FASTA.', 'BLAST database for specificity searches. Gene-ID lookup separately requires annotation.', 'makedb'],
-      ['Tile PCR (advanced)', 'DNA sequence, product size and overlap.', 'Candidates dividing a long sequence into overlapping PCR products. For routine sequencing, start with the Sequencing tab.', 'tile']
+      ['Tile PCR (advanced)', 'DNA sequence, product size and overlap.', 'Candidates dividing a long sequence into overlapping PCR products. For routine sequencing, start with the Sequencing tab.', 'tile'],
+      ['Enzymes', 'Enzyme name, verified product name or recognition sequence.', 'Both-strand cleavage diagrams, overhangs/blunt ends and related enzymes. CAPS genotypes PCR products by restriction digestion (a PCR-RFLP approach); dCAPS creates a recognition site with an intentional primer mismatch.', 'enzymes']
     ]
   }
 };

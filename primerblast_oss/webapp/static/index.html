@@ -345,9 +345,19 @@ pre.ascii, pre.explain { background: var(--code-bg); color: var(--code-ink); bor
     <button class="tab" data-tab="markers"><span data-i18n="tab.markers"></span></button>
     <button class="tab" data-tab="makedb"><span data-i18n="tab.makedb"></span></button>
     <button class="tab" data-tab="help"><span data-i18n="help.tab"></span></button>
+    <button class="tab" data-tab="enzymes"><span data-i18n="enz.tab"></span></button>
   </nav>
 
   <main class="workspace" id="workspace">
+    <section class="panel enzyme-library" data-panel="enzymes">
+      <div class="mode-intro"><h2 data-i18n="enz.title"></h2><p data-i18n="enz.intro"></p></div>
+      <label><span data-i18n="enz.search"></span><input id="enzyme-search" type="search" placeholder="EcoRI / EcoRI-HF / GAATTC" /></label>
+      <p data-i18n="enz.legend"></p>
+      <p id="enzyme-status" role="status"></p>
+      <div id="enzyme-records" class="help-grid"></div>
+      <div class="enzyme-pages"><button type="button" id="enzyme-prev" data-i18n="enz.prev"></button><button type="button" id="enzyme-next" data-i18n="enz.next"></button></div>
+      <p data-i18n="enz.conditions"></p>
+    </section>
     <section class="panel experiment-help" data-panel="help">
       <div class="mode-intro"><h2 data-i18n="help.title"></h2><p data-i18n="help.intro"></p></div>
       <h3 data-i18n="help.recipes"></h3>
@@ -1750,5 +1760,6 @@ document.addEventListener("DOMContentLoaded", boot);
 <script src="flow.js"></script>
 <script src="references.js"></script>
 <script src="help.js"></script>
+<script src="enzymes.js"></script>
 </body>
 </html>

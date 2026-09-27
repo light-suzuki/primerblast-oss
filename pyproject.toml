@@ -41,8 +41,10 @@ thermo = ["primer3-py>=2.0"]
 
 [tool.setuptools]
 packages = ["primerblast_oss", "primerblast_oss.webapp"]
+license-files = ["LICENSE", "THIRD_PARTY_BIOPYTHON_LICENSE.rst"]
 
 [tool.setuptools.package-data]
+"primerblast_oss" = ["restriction_catalog.json"]
 "primerblast_oss.webapp" = ["static/*"]
 
 [tool.pytest.ini_options]
