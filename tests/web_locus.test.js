@@ -40,6 +40,9 @@ const cleavage = run('cleavageWindow("GGGAATTCCC", {enzyme:"EcoRI",recognition:"
 assert.equal((cleavage.match(/cut-boundary/g)||[]).length, 2);
 assert.ok(cleavage.includes('GAATTC (GAATTC, +)'));
 assert.ok(cleavage.includes('↑ 3 / ↓ 7'));
+const uncut = run('cleavageWindow("GGGACTTCCC", {enzyme:"EcoRI",recognition:"GAATTC",site_pos:2,site_strand:"+",top_cut:3,bottom_cut:7,complete:true},false)');
+assert.ok(!uncut.includes('cut-boundary'));
+assert.ok(uncut.includes('seq.compare'));
 assert.ok(run('geneView({annotations:{status:"seqid_not_found"}},[0,10])').includes('seq.badSeqid'));
 const page = run('sequencePage({context:{sequence:"A".repeat(801),anchor:1000,strand:"-"},forward:[10,29],reverse:[110,129]},600)');
 assert.ok(page.includes('601–801 / 801 bp'));

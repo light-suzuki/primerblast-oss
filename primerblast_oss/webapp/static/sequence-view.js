@@ -9,7 +9,8 @@ Object.assign(I18N.ja, {
   'seq.badSeqid':'GFF3に一致する染色体名がありません。遺伝子がないという判定ではありません。',
   'seq.exons':'重なるエクソン', 'seq.overlap':'増幅領域との重なり',
   'seq.cutTitle':'認識配列と上下の鎖の切断位置', 'seq.enzymes':'切れる制限酵素（配列と切断部位）',
-  'seq.cutLegend':'塗りつぶしは認識配列、│は塩基間の切断境界です。上下の鎖を同じ方向に揃えて表示します。座標はPCR産物内の1始まりです。',
+  'seq.cutLegend':'塗りつぶしは認識配列の位置（切れない側は比較位置）、│は塩基間の切断境界です。上下の鎖を同じ方向に揃えて表示します。座標はPCR産物内の1始まりです。',
+  'seq.compare':'切断なし・比較用の同じ位置',
   'seq.noCut':'このアレルには記録された完全な切断部位がありません。',
 });
 Object.assign(I18N.en, {
@@ -22,7 +23,8 @@ Object.assign(I18N.en, {
   'seq.badSeqid':'No matching chromosome name in GFF3. This does not mean that genes are absent.',
   'seq.exons':'Overlapping exons', 'seq.overlap':'Overlap with amplicon',
   'seq.cutTitle':'Recognition sequence and cuts on both strands', 'seq.enzymes':'Enzymes that cut (sequence and cleavage sites)',
-  'seq.cutLegend':'Shading marks the recognition sequence; │ marks a boundary between bases. Both strands are aligned in the same direction. Coordinates are 1-based within the PCR product.',
+  'seq.cutLegend':'Shading marks recognition-site positions (comparison positions in the uncut allele); │ marks a boundary between bases. Both strands are aligned in the same direction. Coordinates are 1-based within the PCR product.',
+  'seq.compare':'Uncut; matching position for comparison',
   'seq.noCut':'No complete cleavage site was recorded for this allele.',
 });
 let sequenceViews = [];
@@ -51,7 +53,7 @@ function geneView(context, product) {
       for (const [index,exon] of [...exons].sort((a,b)=>gene.strand==='-' ? b.start-a.start : a.start-b.start).entries()) {
         if (overlapBases(localSpan([exon.start,exon.end],context,true),product)) overlapping.push(index+1);
       }
-      for (const segment of [...transcript.segments].sort((a,b)=>a.type==='cds' ? 1 : -1)) {
+      for (const segment of [...transcript.segments].sort((a,b)=>Number(a.type==='cds')-Number(b.type==='cds'))) {
         const local = localSpan([segment.start,segment.end],context,true);
         if (local[1] < local[0]) continue;
         const cds = segment.type==='cds';
@@ -89,13 +91,13 @@ function sequenceLevelView(context,forward,reverse,pair) {
   const start=Math.max(0,Math.min(...forward,...reverse)-60);
   return `<details class="sequence-full" data-sequence-view="${id}" open><summary>${esc(t('seq.title'))}</summary><div class="sequence-nav"><label>${esc(t('seq.start'))}<input class="sequence-start" type="number" min="1" max="${context.sequence.length}" value="${start+1}"></label><button type="button" class="ghost sequence-move" data-step="0">${esc(t('seq.show'))}</button><button type="button" class="ghost sequence-move" data-step="-1200">${esc(t('seq.prev'))}</button><button type="button" class="ghost sequence-move" data-step="1200">${esc(t('seq.next'))}</button></div><div class="sequence-body">${sequencePage(sequenceViews[id],start)}</div></details>`;
 }
-function cleavageWindow(sequence,event) {
+function cleavageWindow(sequence,event,showCuts=true) {
   const start=Math.max(0,Math.min(event.site_pos-8,event.top_cut-5,event.bottom_cut-5));
   const end=Math.min(sequence.length,Math.max(event.site_pos+event.recognition.length+8,event.top_cut+5,event.bottom_cut+5));
   const lower=complement(sequence).split('').reverse().join('');
   let top='',bottom='';
   for (let i=start;i<=end;i++) {
-    if (i===event.top_cut || i===event.bottom_cut) {
+    if (showCuts && (i===event.top_cut || i===event.bottom_cut)) {
       top += i===event.top_cut ? '<b class="cut-boundary">│</b>' : ' ';
       bottom += i===event.bottom_cut ? '<b class="cut-boundary">│</b>' : ' ';
     }
@@ -104,7 +106,7 @@ function cleavageWindow(sequence,event) {
     top += `<span${motif?' class="recognition-base"':''}>${esc(sequence[i])}</span>`;
     bottom += `<span${motif?' class="recognition-base"':''}>${esc(lower[i])}</span>`;
   }
-  return `<p>${start+1}–${end} bp · ${esc(event.enzyme)} · ${esc(sequence.slice(event.site_pos,event.site_pos+event.recognition.length))} (${esc(event.recognition)}, ${esc(event.site_strand)}) · ↑ ${event.top_cut} / ↓ ${event.bottom_cut}</p><pre class="cleavage-sequence">5′ ${top} 3′\n3′ ${bottom} 5′</pre>`;
+  return `<p>${start+1}–${end} bp · ${esc(event.enzyme)} · ${esc(sequence.slice(event.site_pos,event.site_pos+event.recognition.length))} (${esc(event.recognition)}, ${esc(event.site_strand)}) · ${showCuts?'↑ '+event.top_cut+' / ↓ '+event.bottom_cut:esc(t('seq.compare'))}</p><pre class="cleavage-sequence">5′ ${top} 3′\n3′ ${bottom} 5′</pre>`;
 }
 function restrictionSequences(pair,context,derived) {
   const caps=pair.caps;
@@ -127,6 +129,7 @@ function restrictionSitesView(result,sequences) {
     const cuts=(result[`allele_${allele}_cuts`]||[]).filter(cut=>cut.complete);
     html+=`<h5>${name}</h5>`;
     html+=!sequence ? `<p>${esc(t('map.noSequence'))}</p>` : cuts.length ? cuts.map(cut=>cleavageWindow(sequence,cut)).join('') : `<p>${esc(t('seq.noCut'))}</p>`;
+    if (sequence && !cuts.length) html+=(result[`allele_${allele==='a'?'b':'a'}_cuts`]||[]).filter(cut=>cut.complete).map(cut=>cleavageWindow(sequence,cut,false)).join('');
   }
   return html;
 }
