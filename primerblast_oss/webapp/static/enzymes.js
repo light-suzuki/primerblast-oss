@@ -9,7 +9,7 @@ const enzymeWords = {
     unknown:'切断位置が不明', unknownRelated:'同じ認識配列・切断位置不明', supported:'単一切断モデルで配列予測可能', unsupported:'通常PCRの自動候補から除外（切断不明・複数切断・特殊基質）',
     commercial:'入手可能の記録あり（収録時点）', unavailable:'供給元の記録なし（収録時点）',
     conditions:'同じ切断でも反応条件は同一とは限りません。メチル化、複数認識部位の必要性、温度、バッファー、末端付近の切断効率は使用する製品の資料で確認してください。製品名の収録も全メーカー・全製品の網羅を保証しません。',
-    source:'収録元', count:'件', matched:'検索結果', error:'酵素一覧を読み込めませんでした。ローカルサーバーへの接続を確認してください。',
+    source:'収録元', count:'件', matched:'検索結果', notEquivalent:'関連酵素・製品のメチル化感受性や反応条件まで同一とは限りません。使用する製品の資料で確認してください。', error:'酵素一覧を読み込めませんでした。ローカルサーバーへの接続を確認してください。',
     blunt:'平滑末端', over5:'5′突出末端', over3:'3′突出末端', offset:'上鎖 / 下鎖の切断境界'
   },
   en: {
@@ -21,7 +21,7 @@ const enzymeWords = {
     unknown:'Cleavage positions unknown', unknownRelated:'Same recognition, unknown cleavage', supported:'Sequence prediction with a single-cut model', unsupported:'Excluded from ordinary PCR automatic candidates (unknown/multiple cuts or special substrates)',
     commercial:'Supplier recorded in snapshot', unavailable:'No supplier recorded in snapshot',
     conditions:'Identical cleavage does not imply identical reaction conditions. Check product documentation for methylation, multiple-site requirements, temperature, buffer and end-proximity effects. Product names do not cover every vendor or product.',
-    source:'Source', count:'records', matched:'Matches', error:'Could not load enzymes. Check the local server connection.',
+    source:'Source', count:'records', matched:'Matches', notEquivalent:'Related enzymes and products may differ in methylation sensitivity and reaction conditions. Check the chosen product documentation.', error:'Could not load enzymes. Check the local server connection.',
     blunt:'Blunt end', over5:'5′ overhang', over3:'3′ overhang', offset:'Top / bottom cleavage boundaries'
   }
 };
@@ -37,7 +37,7 @@ function enzymeRelationshipsHTML(info) {
 }
 function enzymeResultDetails(result) {
   const info = result.pattern ? {...result,cuts:[[result.top_cut_offset,result.bottom_cut_offset]]} : enzymeCatalog && enzymeCatalog.enzymes.find(row => row.name === result.enzyme && row.recognition === result.recognition && row.cuts.length === 1 && row.cuts[0][0] === result.top_cut_offset && row.cuts[0][1] === result.bottom_cut_offset);
-  return info ? enzymePatternHTML(info) + enzymeRelationshipsHTML(info) : '';
+  return info ? enzymePatternHTML(info) + enzymeRelationshipsHTML(info) + `<p class="hint">${esc(t('enz.notEquivalent'))}</p>` : '';
 }
 function renderEnzymeCatalog() {
   if (!enzymeCatalog) return;
