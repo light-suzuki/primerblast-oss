@@ -7,6 +7,7 @@ template -- the anchor that makes every primer's strand/coordinates explicit.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Dict, Tuple
 
@@ -18,12 +19,28 @@ def revcomp(seq: str) -> str:
     return seq.translate(_COMP)[::-1]
 
 
-@dataclass
+@dataclass(frozen=True)
 class _FaiEntry:
     length: int
     offset: int
     linebases: int
     linewidth: int
+
+
+@lru_cache(maxsize=8)
+def _load_index(path, size, mtime_ns, ctime_ns):
+    index = {}
+    with open(path) as fh:
+        for line in fh:
+            parts = line.rstrip("\n").split("\t")
+            if len(parts) < 5:
+                continue
+            name, length, offset, lb, lw = parts[:5]
+            entry = _FaiEntry(int(length), int(offset), int(lb), int(lw))
+            if entry.length < 0 or entry.offset < 0 or entry.linebases <= 0 or entry.linewidth < entry.linebases:
+                raise ValueError("Invalid FASTA index layout")
+            index[name] = entry
+    return index
 
 
 class Genome:
@@ -35,14 +52,9 @@ class Genome:
         if not Path(self.fai_path).exists():
             raise RuntimeError(
                 f"FASTA index not found: {self.fai_path} (run `samtools faidx {fasta}`)")
-        self.index: Dict[str, _FaiEntry] = {}
-        with open(self.fai_path) as fh:
-            for line in fh:
-                parts = line.rstrip("\n").split("\t")
-                if len(parts) < 5:
-                    continue
-                name, length, offset, lb, lw = parts[:5]
-                self.index[name] = _FaiEntry(int(length), int(offset), int(lb), int(lw))
+        stat = Path(self.fai_path).stat()
+        self.index: Dict[str, _FaiEntry] = dict(_load_index(
+            str(Path(self.fai_path).resolve()), stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns))
 
     def __contains__(self, name: str) -> bool:
         return name in self.index
@@ -66,11 +78,14 @@ class Genome:
         want = end - start + 1
         start0 = start - 1
         byte_start = e.offset + (start0 // e.linebases) * e.linewidth + (start0 % e.linebases)
-        n_lines = want // e.linebases + 2
+        end0 = end - 1
+        byte_end = e.offset + (end0 // e.linebases) * e.linewidth + (end0 % e.linebases)
         with open(self.fasta, "rb") as fh:
             fh.seek(byte_start)
-            raw = fh.read(want + n_lines * (e.linewidth - e.linebases) + 4)
+            raw = fh.read(byte_end - byte_start + 1)
         seq = raw.replace(b"\n", b"").replace(b"\r", b"")[:want].decode().upper()
+        if len(seq) != want or ">" in seq:
+            raise ValueError("FASTA index does not match the requested sequence range")
         return revcomp(seq) if strand == "-" else seq
 
     def local_to_genomic(self, name: str, region_start: int, strand: str,

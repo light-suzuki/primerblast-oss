@@ -166,25 +166,12 @@ def _find_gene_seqid(gff3_path: str, gene: str) -> Optional[str]:
     """Bound the parse only when normalized gene matches share one seqid.
 
     Cross-chromosome aliases must reach the full parser's ambiguity check."""
-    import gzip
-    from ..gff3 import _parse_attributes, gene_attribute_keys, normalize_gene_key
-    opener = gzip.open if gff3_path.endswith(".gz") else open
-    key = normalize_gene_key(gene)
-    seqids = set()
+    from ..annotation_index import gene_annotation
     try:
-        with opener(gff3_path, "rt", encoding="utf-8", errors="ignore") as fh:
-            for line in fh:
-                if not line or line[0] == "#":
-                    continue
-                fields = line.rstrip("\n").split("\t")
-                if len(fields) != 9 or fields[2].lower() != "gene":
-                    continue
-                attributes = _parse_attributes(fields[8])
-                if key in gene_attribute_keys(attributes):
-                    seqids.add(fields[0])
-    except OSError:
+        selected = gene_annotation(gff3_path, gene).gene(gene)
+    except (OSError, ValueError):
         return None
-    return next(iter(seqids)) if len(seqids) == 1 else None
+    return selected.seqid if selected else None
 
 
 def _gene_to_template(p: Dict):
