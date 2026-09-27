@@ -1,5 +1,20 @@
 /* Keep the shared search controls beside the input that they apply to. */
 Object.assign(I18N.ja, {
+  'tab.design': 'PCR設計', 'tab.check': 'PCR確認', 'tab.sequence': 'シーケンス',
+  'tab.assay': 'ゲル・CAPS', 'tab.markers': 'QTLマーカー', 'tab.makedb': 'ゲノムの準備',
+  'g.hero.t': '実験の目的から始める',
+  'g.hero.d': 'PCRで増幅する、遺伝子や領域をシーケンスする、ゲルで遺伝子型を見分ける。上のタブから目的を選び、対象データを指定してください。',
+  'intro.assay.t': 'ゲルで遺伝子型を見分ける・CAPSを設計する',
+  'intro.assay.d': '遺伝子・領域・SNPからPCR候補を作り、制限酵素の切断位置と予測バンドを確認します。ゲルは計算上のイメージで、実験結果ではありません。',
+  'flow.read': '1. 何をシーケンスしたい？',
+  'flow.readGene': '遺伝子を読む', 'flow.readRegion': 'ゲノム上の領域を読む', 'flow.readSequence': '手元の配列を読む',
+  'flow.readGeneHint': '遺伝子ID・注釈GFF3・ゲノムFASTAを指定',
+  'flow.readRegionHint': '染色体と開始・終了位置、ゲノムFASTAを指定',
+  'flow.readSequenceHint': 'DNA配列を貼り付け、またはFASTAを読み込む',
+  'flow.feature': '遺伝子のどの範囲を読む？',
+  'flow.feature.gene': '遺伝子全体の範囲', 'flow.feature.cds': 'CDSの開始〜終了の範囲',
+  'flow.feature.mrna': '転写産物の開始〜終了の範囲', 'flow.feature.exon': 'エクソンの開始〜終了の範囲',
+  'studio.sequenceIntro': '読む対象を選び、重複するPCR断片を設計します。カバー範囲と発注用プライマーを確認できます。Sangerの実測読取り長は別途検証が必要です。',
   'flow.input': '1. 増幅したい配列・領域を入力',
   'flow.checkInput': '1. 調べたいプライマー配列を入力',
   'flow.dbInput': 'ゲノムFASTAと保存先を入力',
@@ -16,6 +31,21 @@ Object.assign(I18N.ja, {
   'flow.placeholder': '薄い例の文字は入力済みの値ではありません。'
 });
 Object.assign(I18N.en, {
+  'tab.design': 'PCR design', 'tab.check': 'PCR check', 'tab.sequence': 'Sequencing',
+  'tab.assay': 'Gel & CAPS', 'tab.markers': 'QTL markers', 'tab.makedb': 'Genome setup',
+  'g.hero.t': 'Start with your experiment',
+  'g.hero.d': 'Amplify by PCR, sequence a gene or region, or distinguish genotypes on a gel. Choose an experiment tab, then specify your target data.',
+  'intro.assay.t': 'Distinguish genotypes on a gel / design CAPS',
+  'intro.assay.d': 'Design PCR candidates from a gene, region or SNP and inspect restriction cuts and predicted bands. The gel is a computational illustration, not an experimental result.',
+  'flow.read': '1. What do you want to sequence?',
+  'flow.readGene': 'Sequence a gene', 'flow.readRegion': 'Sequence a genomic region', 'flow.readSequence': 'Sequence your own DNA',
+  'flow.readGeneHint': 'Specify a gene ID, GFF3 annotation and genome FASTA',
+  'flow.readRegionHint': 'Specify chromosome coordinates and genome FASTA',
+  'flow.readSequenceHint': 'Paste DNA or load a FASTA file',
+  'flow.feature': 'Which part of the gene do you want to read?',
+  'flow.feature.gene': 'Whole gene span', 'flow.feature.cds': 'CDS start-to-end span',
+  'flow.feature.mrna': 'Transcript start-to-end span', 'flow.feature.exon': 'Exon start-to-end span',
+  'studio.sequenceIntro': 'Choose what to read and design overlapping PCR fragments. Review coverage and ordering primers. Measured Sanger read length needs separate validation.',
   'flow.input': '1. Enter the sequence or region to amplify',
   'flow.checkInput': '1. Enter primers to check',
   'flow.dbInput': 'Enter a genome FASTA and output path',
@@ -67,6 +97,40 @@ document.addEventListener('DOMContentLoaded', () => {
     if (options.children.length > 1) actions.before(options);
     const run = $('.run', form); if (run && form.dataset.mode !== 'makedb') run.dataset.i18n = 'flow.run';
   });
+
+  const source = $('#sequence-src');
+  const choices = document.createElement('fieldset'); choices.className = 'experiment-choices';
+  const legend = document.createElement('legend'); legend.dataset.i18n = 'flow.read'; choices.append(legend);
+  const radios = [];
+  [['gene', 'Gene'], ['interval', 'Region'], ['sequence', 'Sequence']].forEach(([value, key]) => {
+    const label = document.createElement('label'); label.className = 'experiment-choice';
+    const radio = document.createElement('input'); radio.type = 'radio'; radio.value = value;
+    radio.name = '_sequencePurpose'; radio.dataset.uiControl = 'true';
+    const title = document.createElement('span'); title.dataset.i18n = `flow.read${key}`;
+    const hint = document.createElement('em'); hint.dataset.i18n = `flow.read${key}Hint`;
+    label.append(radio, title, hint); choices.append(label); radios.push(radio);
+    radio.addEventListener('change', () => { source.value = value; source.dispatchEvent(new Event('change')); });
+  });
+  const syncSource = () => radios.forEach(radio => {
+    radio.checked = radio.value === source.value;
+    radio.closest('label').classList.toggle('chosen', radio.checked);
+  });
+  const sequenceForm = source.form;
+  source.closest('label').hidden = true;
+  $('.mode-intro', sequenceForm).after(choices);
+  $('.flow-heading', sequenceForm).hidden = true;
+  source.addEventListener('change', syncSource);
+  sequenceForm.addEventListener('reset', () => setTimeout(syncSource, 0));
+  // Preserve the source select for existing saved projects and demo handlers.
+  Array.from(source.options).forEach(option => { option.defaultSelected = option.value === 'gene'; });
+  source.value = 'gene'; source.dispatchEvent(new Event('change')); syncSource();
+  const feature = $('select[name="gene_feature"]', sequenceForm);
+  $('span', feature.closest('label')).dataset.i18n = 'flow.feature';
+  Array.from(feature.options).forEach(option => {
+    const value = option.value; option.value = value; option.dataset.i18n = `flow.feature.${value}`;
+    option.defaultSelected = value === 'gene';
+  });
+  feature.value = 'gene';
 
   $$('label').forEach(label => {
     const control = $('input:not([type="hidden"]),textarea,select', label);
