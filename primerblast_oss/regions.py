@@ -87,8 +87,8 @@ def resolve_gene(gff3_path: str, gene_id: str, feature: str = "cds",
                  flank: int = 0, gff3_seqid: Optional[str] = None) -> GenomicRegion:
     """Resolve a gene id to a region using a GFF3. `feature` selects the span:
     'gene', 'mrna', 'exon' (union), or 'cds' (union)."""
-    from .gff3 import parse_gff3   # provided by the gff3 module
-    gff = parse_gff3(gff3_path) if gff3_seqid is None else parse_gff3(gff3_path, seqid=gff3_seqid)
+    from .annotation_index import gene_annotation
+    gff = gene_annotation(gff3_path, gene_id, seqid=gff3_seqid)
     r = gff.gene_region(gene_id, feature=feature)
     if r is None:
         raise KeyError(f"gene '{gene_id}' (feature={feature}) not found in {gff3_path}")

@@ -1,5 +1,5 @@
 """GFF3 evidence for genomic template views; no inferred gene structures."""
-from .gff3 import parse_gff3
+from .annotation_index import region_annotation
 
 
 def template_annotations(path, context):
@@ -8,10 +8,10 @@ def template_annotations(path, context):
     chrom = context.get("chrom")
     if not chrom:
         return {"status": "no_genomic_coordinates", "genes": []}
-    annotation = parse_gff3(path, seqid=chrom)
-    if not annotation.features:
-        return {"status": "seqid_not_found", "source": path, "genes": []}
     low, high = sorted((context["start"], context["end"]))
+    annotation, exists = region_annotation(path, chrom, low, high)
+    if not exists:
+        return {"status": "seqid_not_found", "source": path, "genes": []}
     genes = []
     for gene in annotation.features_in(chrom, low, high, types=["gene"]):
         transcripts = []
