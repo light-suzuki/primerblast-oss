@@ -1,3 +1,9 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>primerblast-oss · Primer workspace</title>
 <style>
 :root {
   --bg: #f3f6f4;
@@ -275,6 +281,10 @@ pre.ascii, pre.explain { background: var(--code-bg); color: var(--code-ink); bor
   h1 { font-size: 18px; }
 }
 </style>
+<link rel="stylesheet" href="studio.css">
+</head>
+<body>
+<a class="skip-link" href="#workspace" data-i18n="studio.skip"></a>
 <div class="app">
   <header class="topbar">
     <div class="brand">
@@ -300,6 +310,11 @@ pre.ascii, pre.explain { background: var(--code-bg); color: var(--code-ink); bor
       <button id="lang-btn" class="lang-btn" data-i18n="lang.toggle">日本語</button>
     </div>
   </header>
+  <div class="workflow-strip" aria-label="Workflow">
+    <span><b>01</b><span data-i18n="studio.step1"></span></span>
+    <span><b>02</b><span data-i18n="studio.step2"></span></span>
+    <span><b>03</b><span data-i18n="studio.step3"></span></span>
+  </div>
 
   <section class="db-panel">
     <div class="db-head">
@@ -311,9 +326,13 @@ pre.ascii, pre.explain { background: var(--code-bg); color: var(--code-ink); bor
     </div>
     <div id="db-list" class="db-list"></div>
     <div class="db-custom">
-      <input id="db-custom-input" type="text" data-i18n-ph="db.custom" />
+      <input id="db-custom-input" type="text" data-i18n-ph="db.custom" data-i18n-aria="db.custom" />
       <button id="db-add" class="mini" data-i18n="db.add"></button>
     </div>
+    <details class="db-associations"><summary data-i18n="studio.fastaMap"></summary>
+      <p class="hint" data-i18n="studio.fastaMapHint"></p>
+      <label><span data-i18n="studio.fastaMap"></span><textarea id="db-genomes" rows="2" placeholder="/path/to/db=/path/to/genome.fa"></textarea></label>
+    </details>
   </section>
 
   <nav class="tabs" id="tabs">
@@ -321,12 +340,13 @@ pre.ascii, pre.explain { background: var(--code-bg); color: var(--code-ink); bor
     <button class="tab" data-tab="design"><span data-i18n="tab.design"></span></button>
     <button class="tab" data-tab="check"><span data-i18n="tab.check"></span></button>
     <button class="tab" data-tab="tile"><span data-i18n="tab.tile"></span></button>
+    <button class="tab" data-tab="sequence"><span data-i18n="tab.sequence"></span></button>
     <button class="tab" data-tab="assay"><span data-i18n="tab.assay"></span></button>
     <button class="tab" data-tab="markers"><span data-i18n="tab.markers"></span></button>
     <button class="tab" data-tab="makedb"><span data-i18n="tab.makedb"></span></button>
   </nav>
 
-  <div class="workspace">
+  <main class="workspace" id="workspace">
     <!-- GUIDE / はじめに -->
     <section class="panel guide active" data-panel="guide">
       <div class="guide-hero">
@@ -352,6 +372,11 @@ pre.ascii, pre.explain { background: var(--code-bg); color: var(--code-ink); bor
           <div class="mc-top"><span class="mc-cmd">check</span><span class="mc-name" data-i18n="tab.check"></span></div>
           <span class="mc-when" data-i18n="g.m.check.when"></span>
           <p data-i18n="g.m.check.d"></p><div class="mc-go" data-i18n="g.open"></div>
+        </button>
+        <button class="mode-card" data-goto="sequence">
+          <div class="mc-top"><span class="mc-cmd">sequence</span><span class="mc-name" data-i18n="tab.sequence"></span></div>
+          <span class="mc-when" data-i18n="studio.sequenceWhen"></span>
+          <p data-i18n="studio.sequenceIntro"></p><div class="mc-go" data-i18n="g.open"></div>
         </button>
         <button class="mode-card" data-goto="tile">
           <div class="mc-top"><span class="mc-cmd">tile</span><span class="mc-name" data-i18n="tab.tile"></span></div>
@@ -498,6 +523,31 @@ pre.ascii, pre.explain { background: var(--code-bg); color: var(--code-ink); bor
         <button type="reset" class="ghost" data-i18n="btn.reset"></button></div>
     </form>
 
+    <form class="panel" data-panel="sequence" data-mode="sequence">
+      <div class="mode-intro"><h2 data-i18n="tab.sequence"></h2><p data-i18n="studio.sequenceIntro"></p></div>
+      <fieldset><legend data-i18n="grp.template"></legend>
+        <label><span data-i18n="f.src"></span><select name="source" id="sequence-src">
+          <option value="sequence" data-i18n="f.src.seq"></option>
+          <option value="gene" data-i18n="f.src.gene"></option>
+          <option value="interval" data-i18n="f.kind.interval"></option>
+        </select></label>
+        <label data-seq-src="sequence" class="full"><span data-i18n="f.template"></span><b class="req" data-i18n="req.mark"></b><textarea name="template" rows="5" data-i18n-ph="f.template.ph"></textarea></label>
+        <label data-seq-src="sequence"><span data-i18n="f.template_id"></span><input name="template_id" value="template"></label>
+        <label data-seq-src="gene"><span data-i18n="f.gene"></span><b class="req" data-i18n="req.mark"></b><input name="gene"></label>
+        <label data-seq-src="gene"><span data-i18n="f.gene_feature"></span><select name="gene_feature"><option>cds</option><option>gene</option><option>mrna</option><option>exon</option></select></label>
+        <label data-seq-src="gene" class="full"><span data-i18n="f.gff3"></span><b class="req" data-i18n="req.mark"></b><input name="gff3" placeholder="/path/to/annotation.gff3"></label>
+        <label data-seq-src="interval"><span data-i18n="f.interval"></span><b class="req" data-i18n="req.mark"></b><input name="interval" placeholder="chr1:1000-3000"></label>
+        <label data-seq-src="genomic" class="full"><span data-i18n="f.genome"></span><b class="req" data-i18n="req.mark"></b><input name="genome" placeholder="/path/to/genome.fa"></label>
+        <label data-seq-src="genomic"><span data-i18n="studio.strand"></span><select name="strand"><option value="+">+</option><option value="-">−</option></select></label>
+        <label data-seq-src="genomic"><span data-i18n="f.flank"></span><input name="flank" type="number" min="0" value="100"></label>
+        <label><span data-i18n="studio.ampliconSize"></span><input name="amplicon_size" value="500-800"><em class="hint" data-i18n="studio.ampliconHint"></em></label>
+        <label><span data-i18n="f.overlap"></span><input name="overlap" type="number" min="0" value="100"></label>
+        <label class="check"><input name="m13_tails" type="checkbox"><span data-i18n="studio.m13"></span></label>
+      </fieldset>
+      <div data-knobs></div><div data-spec></div>
+      <div class="actions"><button type="button" class="example-btn" data-example="sequence" data-i18n="btn.example"></button><button type="submit" class="run" data-i18n="btn.run"></button><button type="reset" class="ghost" data-i18n="btn.reset"></button></div>
+    </form>
+
     <!-- ASSAY -->
     <form class="panel" data-panel="assay" data-mode="assay">
       <div class="mode-intro"><h2 data-i18n="intro.assay.t"></h2><p data-i18n="intro.assay.d"></p></div>
@@ -560,10 +610,10 @@ pre.ascii, pre.explain { background: var(--code-bg); color: var(--code-ink); bor
         <button type="reset" class="ghost" data-i18n="btn.reset"></button></div>
     </form>
 
-    <section id="results" class="results">
+    <section id="results" class="results" aria-live="polite" aria-busy="false">
       <p class="results-empty" data-i18n="res.empty"></p>
     </section>
-  </div>
+  </main>
 </div>
 <script>
 // Bilingual (English / Japanese) string table for the primerblast-oss GUI.
@@ -595,7 +645,7 @@ const I18N = {
     "req.mark": "*",
 
     // ---- guide page ----
-    "g.hero.t": "Design PCR primers that only amplify what you want",
+    "g.hero.t": "Design primers for your experiment",
     "g.hero.d": "primerblast-oss designs primers with Primer3 and checks their specificity against your own BLAST databases — completely offline, on your own (even unpublished) genomes. New here? This page walks you through it in three steps.",
     "g.steps.t": "How it works — 3 steps",
     "g.step1.t": "Pick your database(s)",
@@ -850,7 +900,7 @@ const I18N = {
     "req.mark": "*",
 
     // ---- guide page ----
-    "g.hero.t": "狙った配列だけを増やすPCRプライマーを設計する",
+    "g.hero.t": "目的に合わせてプライマーを設計",
     "g.hero.d": "primerblast-oss は Primer3 でプライマーを設計し、その特異性を手元のBLASTデータベースに対して検証します。すべてオフラインで、未公開ゲノムにも使えます。初めての方へ ── このページで3ステップの流れを説明します。",
     "g.steps.t": "使い方 — 3ステップ",
     "g.step1.t": "データベースを選ぶ",
@@ -1083,7 +1133,7 @@ const I18N = {
   },
 };
 
-let LANG = localStorage.getItem("pb_lang") || "ja";
+let LANG = localStorage.getItem("pb_lang") === "en" ? "en" : "ja";
 
 function t(key) {
   const table = I18N[LANG] || I18N.en;
@@ -1109,6 +1159,9 @@ function applyI18n() {
   });
   document.querySelectorAll("[data-i18n-title]").forEach((el) => {
     el.setAttribute("title", t(el.getAttribute("data-i18n-title")));
+  });
+  document.querySelectorAll("[data-i18n-aria]").forEach((el) => {
+    el.setAttribute("aria-label", t(el.getAttribute("data-i18n-aria")));
   });
   if (typeof onLangChange === "function") onLangChange();
 }
@@ -1217,7 +1270,9 @@ async function loadDatabases() {
   all.forEach((d) => {
     if (seen.has(d.path)) return;
     seen.add(d.path);
-    const chip = document.createElement("span");
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.setAttribute("aria-pressed", selectedDbs.includes(d.path) ? "true" : "false");
     chip.className = "db-chip" + (selectedDbs.includes(d.path) ? " on" : "");
     chip.innerHTML = `<span class="tick">${selectedDbs.includes(d.path) ? "✓" : "＋"}</span><span class="db-name">${esc(d.name)}</span>`;
     chip.title = d.path;
@@ -1225,6 +1280,7 @@ async function loadDatabases() {
       if (selectedDbs.includes(d.path)) selectedDbs = selectedDbs.filter((x) => x !== d.path);
       else selectedDbs.push(d.path);
       chip.classList.toggle("on");
+      chip.setAttribute("aria-pressed", chip.classList.contains("on") ? "true" : "false");
       chip.querySelector(".tick").textContent = chip.classList.contains("on") ? "✓" : "＋";
       updateDbCount();
     });
@@ -1260,7 +1316,7 @@ async function loadHealth() {
     }
   } catch (e) {
     badge.className = "status status-bad";
-    badge.textContent = "backend offline";
+    badge.textContent = t("studio.offline");
   }
 }
 
@@ -1268,8 +1324,13 @@ async function loadHealth() {
 // tabs
 // --------------------------------------------------------------------------
 function showTab(name) {
-  $$(".tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
+  $$(".tab").forEach((b) => {
+    b.classList.toggle("active", b.dataset.tab === name);
+    b.setAttribute("aria-selected", b.dataset.tab === name ? "true" : "false");
+    b.tabIndex = b.dataset.tab === name ? 0 : -1;
+  });
   $$(".panel").forEach((p) => p.classList.toggle("active", p.dataset.panel === name));
+  $(".db-panel").hidden = name === "guide" || name === "makedb";
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 function initTabs() {
@@ -1314,7 +1375,8 @@ function initDesignSrc() {
 function formParams(form) {
   const p = {};
   $$("input,textarea,select", form).forEach((el) => {
-    if (!el.name) return;
+    const sourceGroup = el.closest("[data-src],[data-kind],[data-seq-src]");
+    if (!el.name || el.disabled || (sourceGroup && sourceGroup.style.display === "none")) return;
     if (el.type === "checkbox") p[el.name] = el.checked;
     else p[el.name] = el.value;
   });
@@ -1324,6 +1386,7 @@ function formParams(form) {
 function buildParams(mode, form) {
   const p = formParams(form);
   if (mode !== "makedb") p.db = selectedDbs.slice();
+  p.db_genomes = $("#db-genomes").value;
   if (mode === "check") {
     p.primers = (p.primers || "").split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
   }
@@ -1387,9 +1450,10 @@ function pollJob(jobId) {
 // rendering
 // --------------------------------------------------------------------------
 function renderResult(data) {
+  _dlStore = [];
   const renderers = {
     design: renderDesign, check: renderCheck, tile: renderTile,
-    assay: renderAssay, markers: renderMarkers, makedb: renderMakedb,
+    assay: renderAssay, markers: renderMarkers, makedb: renderMakedb, sequence: renderSequence,
   };
   const fn = renderers[data.mode];
   $("#results").innerHTML = fn ? fn(data) : `<pre class="explain">${esc(JSON.stringify(data, null, 2))}</pre>`;
@@ -1400,7 +1464,8 @@ function dbNames(dbs) { return (dbs || []).map((d) => String(d).split("/").pop()
 
 function verdictBadge(spec) {
   const tip = ` title="${esc(t("tip.verdict"))}"`;
-  if (spec.specific_all_db) return `<span class="badge v-specific"${tip}>${t("verdict.specific")}</span>`;
+  if (searchUnresolved(spec)) return `<span class="badge v-pending">${t("studio.pending")}</span>`;
+  if (spec.specific_all_db === true) return `<span class="badge v-specific"${tip}>${t("verdict.specific")}</span>`;
   if (spec.gel_distinguishable) return `<span class="badge v-gel"${tip}>${t("verdict.gel")}</span>`;
   return `<span class="badge v-ambiguous"${tip}>${t("verdict.ambiguous")}</span>`;
 }
@@ -1411,6 +1476,7 @@ function riskBadge(level) {
 }
 
 function plainVerdict(spec) {
+  if (searchUnresolved(spec)) return { cls: "pv-warn", text: t("studio.pendingHint") };
   if (spec.specific_all_db) return { cls: "pv-ok", text: t("pv.specific") };
   if (spec.gel_distinguishable) return { cls: "pv-warn", text: t("pv.gel") };
   return { cls: "pv-bad", text: t("pv.ambiguous") };
@@ -1665,3 +1731,6 @@ function boot() {
 
 document.addEventListener("DOMContentLoaded", boot);
 </script>
+<script src="studio.js"></script>
+</body>
+</html>

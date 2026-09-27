@@ -10,7 +10,7 @@ GET  /                     -> static UI (index.html)
 GET  /<asset>              -> static asset (app.js, style.css, i18n.js, ...)
 GET  /api/health           -> tool availability + versions
 GET  /api/databases        -> discovered BLAST nucleotide databases
-POST /api/run/<mode>       -> {job_id}          (mode = design|check|tile|assay|markers|makedb)
+POST /api/run/<mode>       -> {job_id}          (mode = design|check|tile|sequence|assay|markers|makedb)
 GET  /api/job/<job_id>     -> {status, result?, error?}
 """
 from __future__ import annotations
@@ -21,6 +21,7 @@ import shutil
 import subprocess
 import threading
 import traceback
+import tempfile
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -96,7 +97,36 @@ def _spec_params(p: Dict) -> SpecParams:
         max_product=int(_f(p, "max_product", 4000)),
         gel_min_gap_bp=int(_f(p, "gel_min_gap", 50)),
         word_size=int(_f(p, "word_size", 7)),
+        num_threads=int(_f(p, "num_threads", 2)),
+        max_target_seqs=int(_f(p, "max_target_seqs", 5000)),
     )
+
+
+def _associated_genomes(p: Dict, design_genome=None) -> Dict:
+    from ..genome import Genome
+
+    databases = _databases(p)
+    mappings = p.get("db_genomes") or {}
+    if isinstance(mappings, str):
+        parsed = {}
+        for line in mappings.splitlines():
+            if line.strip():
+                database, separator, fasta = line.partition("=")
+                if not separator or not fasta.strip():
+                    raise ValueError("Use DB=FASTA, one association per line.")
+                parsed[database.strip()] = fasta.strip()
+        mappings = parsed
+    if not isinstance(mappings, dict) or any(db not in databases for db in mappings):
+        raise ValueError("FASTA associations must name selected databases.")
+    genomes = {database: Genome(str(fasta)) for database, fasta in mappings.items()}
+    if design_genome is None and _f(p, "genome", None):
+        design_genome = Genome(str(p["genome"]))
+    if design_genome is not None:
+        existing = genomes.get(databases[0])
+        if existing is not None and Path(existing.fasta).resolve() != Path(design_genome.fasta).resolve():
+            raise ValueError("The first database FASTA must match the design genome.")
+        genomes[databases[0]] = design_genome
+    return genomes
 
 
 def _databases(p: Dict) -> List[str]:
@@ -184,7 +214,7 @@ def _run_design(p: Dict) -> Dict:
     results = []
     for tid, seq in templates:
         res = run_pipeline(tid, seq, dbs, design_params=dp, spec_params=sp,
-                           size_tolerance=size_tol)
+                           size_tolerance=size_tol, genomes_by_db=_associated_genomes(p))
         d = R.to_dict(res)
         d["tsv"] = R.to_tsv(res)
         results.append(d)
@@ -210,7 +240,8 @@ def _run_check(p: Dict) -> Dict:
         primers[name.strip()] = seq.upper().strip()
     if not primers:
         raise ValueError("Provide at least a forward/reverse primer or a primer list.")
-    results = [in_silico_pcr(primers, db, sp=sp) for db in dbs]
+    genomes = _associated_genomes(p)
+    results = [in_silico_pcr(primers, db, sp=sp, genome=genomes.get(db)) for db in dbs]
     return {"mode": "check", **R.insilico_to_dict(results, primers)}
 
 
@@ -232,6 +263,7 @@ def _run_tile(p: Dict) -> Dict:
             overlap=int(_f(p, "overlap", 40)),
             design_params=dp, spec_params=sp, size_tolerance=size_tol,
             candidates_per_tile=int(_f(p, "candidates_per_tile", 8)),
+            genomes_by_db=_associated_genomes(p),
         )
         reg = region or (0, len(clean_sequence(seq)) - 1)
         out.append(R.tiling_to_dict(tiles, tid, reg, dbs))
@@ -261,7 +293,7 @@ def _run_assay(p: Dict) -> Dict:
         chrom, span = str(p["interval"]).split(":")
         s, e = span.split("-")
         region = resolve_interval(chrom, int(s), int(e),
-                                  name=_f(p, "name", p["interval"]))
+                                  name=_f(p, "name", p["interval"]), strand=_f(p, "strand", "+"))
     elif _f(p, "snp", None):
         chrom, pos = str(p["snp"]).split(":")
         region = resolve_snp(chrom, int(pos), flank=flank or 250,
@@ -275,7 +307,12 @@ def _run_assay(p: Dict) -> Dict:
     sp = _spec_params(p)
     variants = parse_vcf(p["vcf"]) if _f(p, "vcf", None) else []
     result = run_assay(region, genome, dbs, flank=flank, design_params=dp,
-                       spec_params=sp, variants=variants, caps_snp=caps_snp)
+                       spec_params=sp, variants=variants, caps_snp=caps_snp,
+                       genomes_by_db=_associated_genomes(p, genome),
+                       gel_ladder=_f(p, "gel_ladder", "auto"),
+                       custom_ladder_bands=[int(v) for v in str(_f(p, "ladder_bands", "")).split(",") if v.strip()],
+                       gel_percent=float(p["gel_percent"]) if _f(p, "gel_percent", "auto") != "auto" else None,
+                       aspcr_pairs_to_screen=int(_f(p, "aspcr_pairs_to_screen", 2)))
     prov = make_manifest({"design": dp.__dict__, "spec": sp.__dict__, "flank": flank},
                          dbs, template_info=result["target"])
     result["provenance"] = prov
@@ -287,7 +324,64 @@ def _run_assay(p: Dict) -> Dict:
         "ascii": "\n\n".join(_safe(OUT.ascii_offtarget_map, pr) or "" for pr in pairs),
     }
     result["mode"] = "assay"
+    from ..gel import best_analysis_from_assay, virtual_gel_svg
+    analysis = best_analysis_from_assay(result)
+    if analysis:
+        result["exports"]["svg"] = virtual_gel_svg(analysis)
     return result
+
+
+def _run_sequence(p: Dict) -> Dict:
+    """Reuse the CLI orchestration so GUI and CLI share coverage semantics."""
+    from ..cli import build_parser, _cmd_sequence
+
+    with tempfile.TemporaryDirectory(prefix="primerblast-sequence-") as folder:
+        root = Path(folder)
+        output = root / "result.json"
+        args = ["sequence", "--format", "json", "--out", str(output)]
+        source = _f(p, "source", "sequence")
+        if source in ("gene", "interval"):
+            args += ["--" + source, str(_f(p, source, "")), "--genome", str(_f(p, "genome", ""))]
+        else:
+            template = str(_f(p, "template", ""))
+            if template.lstrip().startswith(">"):
+                fasta = root / "template.fa"
+                fasta.write_text(template, encoding="utf-8")
+                args += ["--template-fasta", str(fasta)]
+            else:
+                args += ["--template", template]
+        for database in _databases(p):
+            args += ["--db", database]
+        mapping = p.get("db_genomes") or {}
+        if isinstance(mapping, str):
+            entries = [line.strip() for line in mapping.splitlines() if line.strip()]
+        else:
+            entries = [str(db) + "=" + str(fasta) for db, fasta in mapping.items()]
+        # Validate mappings with the same contract as the other GUI modes.
+        _associated_genomes(p)
+        for entry in entries:
+            args += ["--db-genome", entry]
+        keys = ("template_id", "gff3", "gene_feature", "strand", "flank", "overlap",
+                "amplicon_size", "candidates_per_tile", "size_tolerance", "opt_size",
+                "min_size", "max_size", "opt_tm", "min_tm", "max_tm", "min_gc", "max_gc",
+                "max_total_mismatch", "max_3prime_mismatch", "three_prime_window",
+                "min_product", "max_product", "gel_min_gap", "word_size", "num_threads", "max_target_seqs")
+        for key in keys:
+            if _f(p, key, None) is not None:
+                args += ["--" + key.replace("_", "-"), str(p[key])]
+        for flag in ("m13_tails", "no_3prime_terminal"):
+            if p.get(flag):
+                args.append("--" + flag.replace("_", "-"))
+        try:
+            parsed = build_parser().parse_args(args)
+        except SystemExit as exc:
+            raise ValueError("Invalid sequencing parameters; check size ranges and numeric values") from exc
+        _cmd_sequence(parsed)
+        result = json.loads(output.read_text(encoding="utf-8"))
+        from ..sequencing import order_table
+        plans = result.get("plans", [result])
+        result["exports"] = {"order": "\n".join(order_table(plan) for plan in plans)}
+        return result
 
 
 def _run_markers(p: Dict) -> Dict:
@@ -311,6 +405,7 @@ def _run_markers(p: Dict) -> Dict:
         spacing=int(_f(p, "spacing", 0)),
         marker_flank=int(_f(p, "marker_flank", 300)),
         design_params=dp, spec_params=sp,
+        genomes_by_db=_associated_genomes(p, genome),
     )
     return {"mode": "markers", "interval": p.get("interval"), "markers": markers}
 
@@ -336,6 +431,7 @@ HANDLERS: Dict[str, Callable[[Dict], Dict]] = {
     "design": _run_design,
     "check": _run_check,
     "tile": _run_tile,
+    "sequence": _run_sequence,
     "assay": _run_assay,
     "markers": _run_markers,
     "makedb": _run_makedb,
