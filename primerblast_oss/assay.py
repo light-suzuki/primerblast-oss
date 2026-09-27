@@ -44,6 +44,8 @@ def _amp_dict(amplicon) -> Dict:
         "rev_mismatch": amplicon.rev_mismatch,
         "fwd_tp5": amplicon.fwd_tp5,
         "rev_tp5": amplicon.rev_tp5,
+        "fwd_end3": amplicon.fwd_end3,
+        "rev_end3": amplicon.rev_end3,
     }
 
 

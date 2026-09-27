@@ -97,7 +97,7 @@ def test_json_safe_roundtrips_through_json():
                       "fwd_mismatch": 0, "rev_mismatch": 0, "on_target": True,
                       "fwd_tp5": 0, "rev_tp5": 0, "fwd_tm": None,
                       "rev_tm": None, "fwd_end3_dg": None, "rev_end3_dg": None,
-                      "nearest_gap": 42}
+                      "fwd_end3": None, "rev_end3": None, "nearest_gap": 42}
 
 
 def test_design_and_screen_propagates_missing_tool(monkeypatch):
