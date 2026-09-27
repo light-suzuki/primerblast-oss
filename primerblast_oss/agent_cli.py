@@ -8,6 +8,10 @@ from .workflows import HANDLERS, execute
 
 SCHEMA_VERSION = "primerblast-agent/1"
 
+
+def _reject_constant(value):
+    raise ValueError("Non-finite JSON number: " + value)
+
 COMMON_INPUT = {
     "db": {"type": "array", "items": {"type": "string"}},
     "template": {"type": "string", "description": "DNA or pasted FASTA"},
@@ -55,7 +59,7 @@ def command(args):
     request = {}
     try:
         raw = sys.stdin.read() if args.input == "-" else Path(args.input).read_text(encoding="utf-8-sig")
-        request = json.loads(raw)
+        request = json.loads(raw.lstrip("\ufeff"), parse_constant=_reject_constant)
         if not isinstance(request, dict):
             raise ValueError("Request must be a JSON object")
         if set(request) - {"operation", "params", "request_id"}:
@@ -69,13 +73,20 @@ def command(args):
             result = execute(request["operation"], request["params"], allow_db_write=args.allow_db_write)
         output = {"schema_version": SCHEMA_VERSION, "ok": True,
                   "operation": request["operation"], "result": result}
+        if "request_id" in request:
+            output["request_id"] = request["request_id"]
+        try:
+            encoded = json.dumps(output, ensure_ascii=False, allow_nan=False)
+        except (TypeError, ValueError) as exc:
+            raise RuntimeError("Operation returned a result that cannot be encoded as JSON") from exc
         code = 0
     except Exception as exc:
         output = {"schema_version": SCHEMA_VERSION, "ok": False,
                   "error": {"code": "invalid_request" if isinstance(exc, (ValueError, KeyError, json.JSONDecodeError)) else "execution_failed",
                             "message": str(exc)}}
         code = 2 if output["error"]["code"] == "invalid_request" else 1
-    if isinstance(request, dict) and "request_id" in request:
-        output["request_id"] = request["request_id"]
-    print(json.dumps(output, ensure_ascii=False, allow_nan=False))
+        if isinstance(request, dict) and isinstance(request.get("request_id"), str):
+            output["request_id"] = request["request_id"]
+        encoded = json.dumps(output, ensure_ascii=False, allow_nan=False)
+    print(encoded)
     return code
