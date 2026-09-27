@@ -27,13 +27,14 @@ def test_ambiguous_alias_is_not_hidden_by_chromosome_prescan(tmp_path):
     path = tmp_path / "genes.gff3"
     path.write_text(
         "chr1\tx\tgene\t10\t80\t.\t+\t.\tID=g1;Name=Same\n"
-        "chr2\tx\tgene\t10\t80\t.\t+\t.\tID=g2;Name=SAME\n",
+        "chr2\tx\tgene\t10\t80\t.\t+\t.\tID=g2;Name=SAME;Alias=g1\n",
         encoding="utf-8",
     )
     assert _find_gene_seqid(str(path), "same") is None
     with pytest.raises(ValueError, match="Ambiguous.*g1, g2"):
         resolve_gene(str(path), "same", feature="gene")
     assert parse_gff3(str(path)).gene("g1").seqid == "chr1"
+    assert parse_gff3(str(path)).gene("　Ｇ１　").seqid == "chr1"
 
 
 def test_reference_catalog_only_pairs_unambiguous_siblings(tmp_path):

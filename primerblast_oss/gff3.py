@@ -128,8 +128,12 @@ class Gff3:
         """Look up a gene by its ID or Name."""
         # Exact stable IDs take precedence over aliases. Never guess between
         # two genes with a shared symbol or normalized spelling.
-        exact = self._by_gene_id.get(gene_id, [])
-        matches = exact or self._normalized_genes.get(normalize_gene_key(gene_id), [])
+        literal = unicodedata.normalize("NFKC", gene_id).strip()
+        exact = self._by_gene_id.get(literal, [])
+        key = normalize_gene_key(gene_id)
+        matches = self._normalized_genes.get(key, [])
+        stable_ids = [feat for feat in matches if feat.id and normalize_gene_key(feat.id) == key]
+        matches = exact or stable_ids or matches
         if len(matches) > 1:
             ids = ", ".join(feat.id or feat.name or "?" for feat in matches[:8])
             raise ValueError(f"Ambiguous gene ID '{gene_id}': {ids}. Use an exact stable gene ID.")
