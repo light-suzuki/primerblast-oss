@@ -310,6 +310,73 @@ This is an external integration regression only, not evidence of plant-genome
 or NCBI-wide equivalence. The JSON records the source FASTA SHA-256, inputs,
 job ID, and expected comparison result so a future browser run can detect drift.
 
+## 11. TAIR10 rerun and real-genome batch check (2026-09-27)
+
+These are fresh measurements with the current full-length verification engine,
+not a reuse of the earlier concordance or synthetic speedup figures. The genome
+is Ensembl Plants release 63 `Arabidopsis_thaliana.TAIR10.dna.toplevel.fa`;
+the uncompressed SHA-256, versions, compatibility adapter and evidence limits
+are in [the provenance record](results/2026-09-27-tair10-provenance.json).
+The BLAST DB includes chromosomes 1–5, Mt and Pt. Each tool used two threads.
+
+### Forty-locus PrimerServer2 rerun
+
+[Raw result](results/2026-09-27-tair10-40-loci.json): 40/40 windows yielded a
+primer pair. Product-count concordance was **32/40 (80%)**; exact size and
+coordinate concordance were both **31/40 (77.5%)**. The historical deterministic
+sampler selected 12/9/10/8/1 windows on chromosomes 1/2/3/4/5, respectively;
+this is not a balanced or randomly sampled performance estimate.
+
+Nine loci differed: `1_13830895`, `1_16596774`, `1_22128532`, `2_1500`,
+`2_4925322`, `3_7820442`, `3_13033070`, `4_5310658`, `4_18583553`.
+For example, at `1_16596774` both tools retained the 121-bp product at
+`1:16598141-16598261`; OSS additionally reported 1992 bp at
+`3:11317267-11319258`, while PS2 reported 247 bp at `2:3014358-3014604`.
+At `3_7820442`, only OSS reported 1066 bp at `5:6632497-6633562`.
+
+These observations are not proof that either prediction is biologically correct.
+The tools use different binding/thermodynamic models, and their primer3-py
+versions differ. No causal attribution of the nine disagreements is claimed.
+The new result must not be relabeled as the earlier 33/40 concordance result or
+as completed acceptance for Issue #32; external comparisons and disagreement
+review remain open.
+
+### Ten real-genome primers: batch versus legacy
+
+Twenty-base primers were sampled deterministically across the five nuclear
+chromosomes. Both modes used the same pool, DB and full-length verification.
+[Raw result](results/2026-09-27-tair10-batch.json): **16,251 priming sites and
+all per-primer metadata matched exactly**, including the canonical evidence hash.
+This is site/metadata equality; it is not a separate pair-level amplicon experiment.
+
+| Mode | Screening seconds | Sampled process-tree RSS, MiB |
+|---|---:|---:|
+| Per-primer legacy | 302.17 | 669.63 |
+| Batched | 315.91 | 2476.12 |
+
+Observed legacy/batch time ratio: **0.957×**. This run does **not** demonstrate
+real-genome speedup or a memory improvement. Sampling sums the worker and live
+descendants' `/proc` VmRSS every 10 ms, includes BLAST and excludes the
+supervisor. Shared pages may be counted twice; this is a sampled RSS estimate,
+not an exact physical-memory peak. The 40-locus and GUI workloads overlapped
+these measurements, so timings should not be treated as isolated performance
+estimates. Full-length site evaluation can dominate BLAST startup savings.
+
+The 100/500-primer real-genome runs were deferred under the requested computation
+budget after the ten-primer result; the partially started 100-primer worker was
+terminated. The earlier synthetic 10/100/500 measurements remain a separate
+experiment. Issue #34 stays open for larger-scale acceptance and memory work.
+
+Reproduce the bounded check on Linux/WSL (BLAST DB already built):
+
+```bash
+python benchmarks/real_genome_batch.py --genome /path/tair10.fa \
+  --db /path/tair10.fa --threads 2 --counts 10 --out batch.json
+# Expensive panel: explicitly request --counts 10,100,500
+```
+
+No result in this section constitutes Wet validation.
+
 ## Reproduce
 
 ```bash

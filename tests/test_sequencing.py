@@ -73,6 +73,30 @@ def test_local_region_for_plus_and_minus_templates():
     assert local_region_for_template(minus) == (20, 119)
 
 
+def test_sequence_plan_preserves_binding_geometry_and_search_evidence():
+    region = GenomicRegion("chr1", 100, 199, "-", "minus")
+    template = Template(
+        id="minus", seq="A" * 140, region=region,
+        ext_start=80, ext_end=219, anchor_coord=219, anchor_strand="-", flank=20,
+    )
+    pair = _pair(0, 10, 129, product=120)
+    pair.specificity["per_db"] = [{"db": "ref", "off_target": [],
+                                    "search_completeness": "subject_limit_reached"}]
+    plan = build_sequence_plan(
+        [{"index": 1, "covers": (10, 129), "pair": pair}],
+        "minus", (20, 119), ["ref"], genomic_template=template,
+    )
+    assert plan["template"]["anchor"] == 219
+    assert plan["template"]["strand"] == "-"
+    assert plan["template"]["sequence"] == template.seq
+    amplicon = plan["amplicons"][0]
+    assert amplicon["forward_pos"] == [10, 29]
+    assert amplicon["reverse_pos"] == [110, 129]
+    assert amplicon["genomic"]["start"] == 90
+    assert amplicon["genomic"]["end"] == 209
+    assert amplicon["specificity"]["per_db"][0]["search_completeness"] == "subject_limit_reached"
+
+
 def test_sequence_plan_keeps_annealing_primers_and_adds_m13_only_to_order():
     tiles = [
         {

@@ -106,7 +106,7 @@ class Gff3:
 
     def gene(self, gene_id: str) -> Optional[Feature]:
         """Look up a gene by its ID or Name."""
-        return self._by_gene_key.get(gene_id)
+        return self._by_gene_key.get(gene_id) or self._by_gene_key.get("gene:" + gene_id)
 
     def features_in(
         self,

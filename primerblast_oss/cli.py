@@ -708,6 +708,7 @@ def _cmd_sequence(arguments) -> int:
                 m13_tails=arguments.m13_tails,
                 forward_tail=arguments.m13_forward_tail,
                 reverse_tail=arguments.m13_reverse_tail,
+                template_sequence=cleaned,
             ))
 
     if arguments.format == "json":

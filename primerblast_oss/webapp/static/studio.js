@@ -196,7 +196,9 @@ runMode = async function(mode, form) {
     $('#results').innerHTML = `<div class="err">${esc(t('db.pick'))}</div>`; $('#db-custom-input').focus(); return;
   }
   studioError = null; lastResult = null;
+  if (typeof captureProjectInput === 'function') captureProjectInput(mode, form);
   studioJob = {start: Date.now(), mode};
+  if (typeof syncProjectButtons === 'function') syncProjectButtons();
   $$('.run').forEach(btn => { btn.disabled = true; });
   $('#results').setAttribute('aria-busy', 'true'); studioRunning();
   const timer = setInterval(studioRunning, 1000);

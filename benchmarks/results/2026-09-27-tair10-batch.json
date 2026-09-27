@@ -1,0 +1,28 @@
+{
+  "database": "/home/kouhei/.cache/primerblast-bench-20260927/data/tair10.fa",
+  "genome": "/home/kouhei/.cache/primerblast-bench-20260927/data/tair10.fa",
+  "threads": 2,
+  "memory_method": "Sum of /proc VmRSS for worker and descendants, sampled every 10 ms; includes BLAST, excludes supervisor. Shared resident pages may be counted more than once; this is sampled RSS, not an exact physical-memory peak.",
+  "full_length_realign": true,
+  "results": [
+    {
+      "n_primers": 10,
+      "legacy": {
+        "seconds": 302.17490470099983,
+        "n_sites": 16251,
+        "evidence_sha256": "506e055347347572999815ab2df1c611a94d9532cd73c726f0e7f30e755b738b",
+        "primers_sha256": "0680d1b50146e6a1617ab3c30b0cf6c861b9b2b71a176d03ecabdc4bee9c0bae",
+        "sampled_process_tree_peak_mib": 669.6328125
+      },
+      "batch": {
+        "seconds": 315.9061561520002,
+        "n_sites": 16251,
+        "evidence_sha256": "506e055347347572999815ab2df1c611a94d9532cd73c726f0e7f30e755b738b",
+        "primers_sha256": "0680d1b50146e6a1617ab3c30b0cf6c861b9b2b71a176d03ecabdc4bee9c0bae",
+        "sampled_process_tree_peak_mib": 2476.1171875
+      },
+      "equal_sites_and_metadata": true,
+      "speedup": 0.9565337642727244
+    }
+  ]
+}

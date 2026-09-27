@@ -31,6 +31,12 @@ jobs:
           pip install -e ".[dev,thermo]"
       - name: Run tests
         run: pytest -q
+      - name: Browser display regressions
+        run: |
+          node --check primerblast_oss/webapp/static/studio.js
+          node --check primerblast_oss/webapp/static/locus.js
+          node --check primerblast_oss/webapp/static/sequence-view.js
+          node tests/web_locus.test.js
       - name: Module self-tests
         run: |
           python primerblast_oss/caps.py
