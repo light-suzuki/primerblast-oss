@@ -214,6 +214,10 @@ def _coerce_enzyme(name: str,
         return value
     recognition = str(value).upper()
     known = ENZYME_METADATA.get(name)
+    if known is None:
+        info = enzyme_info(name)
+        if info:
+            known = ENZYME_METADATA.get(info["name"])
     if known is not None and known.recognition == recognition:
         return known
     # Unknown custom enzymes remain searchable, but are excluded from automatic

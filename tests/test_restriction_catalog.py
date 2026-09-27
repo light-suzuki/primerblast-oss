@@ -24,6 +24,7 @@ def test_product_names_full_width_and_case_are_resolved():
     assert enzyme_info("bsai-hfv2")["name"] == "BsaI"
     assert enzyme_info("EcoRI-made-up") is None
     assert cut_events("GGGAATTCCC", "EcoRI-HF") == cut_events("GGGAATTCCC", ENZYME_METADATA["EcoRI"])
+    assert enzyme_records({"ＥｃｏＲＩ－ＨＦ": "GAATTC"}, recommended_only=True)[0].name == "EcoRI"
 
 
 def test_catalog_geometry_handles_upstream_and_multiple_cuts():
