@@ -344,9 +344,22 @@ pre.ascii, pre.explain { background: var(--code-bg); color: var(--code-ink); bor
     <button class="tab" data-tab="assay"><span data-i18n="tab.assay"></span></button>
     <button class="tab" data-tab="markers"><span data-i18n="tab.markers"></span></button>
     <button class="tab" data-tab="makedb"><span data-i18n="tab.makedb"></span></button>
+    <button class="tab" data-tab="help"><span data-i18n="help.tab"></span></button>
   </nav>
 
   <main class="workspace" id="workspace">
+    <section class="panel experiment-help" data-panel="help">
+      <div class="mode-intro"><h2 data-i18n="help.title"></h2><p data-i18n="help.intro"></p></div>
+      <h3 data-i18n="help.recipes"></h3>
+      <div id="experiment-recipes" class="help-grid"></div>
+      <h3 data-i18n="help.functions"></h3>
+      <div id="function-help" class="help-grid"></div>
+      <div class="help-notes">
+        <section><h3 data-i18n="help.read.title"></h3><p data-i18n="help.read.body"></p></section>
+        <section><h3 data-i18n="help.data.title"></h3><p data-i18n="help.data.body"></p></section>
+        <section><h3 data-i18n="help.wet.title"></h3><p data-i18n="help.wet.body"></p></section>
+      </div>
+    </section>
     <!-- GUIDE / はじめに -->
     <section class="panel guide active" data-panel="guide">
       <div class="guide-hero">
@@ -1736,5 +1749,6 @@ document.addEventListener("DOMContentLoaded", boot);
 <script src="sequence-view.js"></script>
 <script src="flow.js"></script>
 <script src="references.js"></script>
+<script src="help.js"></script>
 </body>
 </html>
