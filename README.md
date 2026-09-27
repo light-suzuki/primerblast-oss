@@ -515,7 +515,7 @@ tiles = design_tiling("gene", template_seq, ["/data/db/genome"],
 ## Web GUI (optional)
 
 The CLI is the primary interface. As a convenience, a **local browser front end**
-wraps every subcommand — no cloud, no third-party Python dependencies (it is built
+wraps the main design workflows — no cloud, no third-party Python dependencies (it is built
 on the standard-library `http.server`). It is an extra, not the main tool. Run it
 on the machine where `primer3_core`, `blastn`, and your BLAST databases live (e.g.
 inside WSL):
@@ -525,12 +525,22 @@ python -m primerblast_oss.webapp             # serves http://127.0.0.1:8799, ope
 python -m primerblast_oss.webapp --port 9000 --no-browser
 ```
 
-It exposes tabs for design / in-silico PCR / tiling / assay / QTL markers / build
+It exposes tabs for design / in-silico PCR / tiling / sequencing / assay / QTL markers / build
 DB, auto-discovers BLAST databases under `~/.codex/blast_databases`,
 `~/blast_databases` and `./databases`, runs each job in a background thread, and
 offers one-click TSV/CSV/BED/JSON downloads. English / 日本語 toggle in the header.
 It binds to loopback (`127.0.0.1`) only; on WSL2 Windows browsers reach it via the
 default localhost forwarding. Everything it does is also available from the CLI.
+
+The purpose-first start page, beginner/advanced controls, inline input guidance,
+and responsive layout work in both languages. Load a small FASTA/text file into
+the sequence editor, or enter server-side genome/GFF3 paths. Optional `DB=FASTA`
+associations enable full-length verification per database; other assemblies are
+never silently assigned the design-reference FASTA. Sequencing results include
+PCR coverage gaps and optional M13 ordering sequences. Assay results expose
+CAPS/dCAPS bands, virtual gels, and AS-PCR/tetra-ARMS oligos with raw evidence in
+expandable details. Unfinished searches remain unresolved. All results are
+computational candidates, rather than wet-validated assays.
 
 ## Tests
 
