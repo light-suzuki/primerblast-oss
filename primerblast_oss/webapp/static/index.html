@@ -1376,7 +1376,7 @@ function formParams(form) {
   const p = {};
   $$("input,textarea,select", form).forEach((el) => {
     const sourceGroup = el.closest("[data-src],[data-kind],[data-seq-src]");
-    if (!el.name || el.disabled || (sourceGroup && sourceGroup.style.display === "none")) return;
+    if (!el.name || el.disabled || el.dataset.uiControl || (sourceGroup && sourceGroup.style.display === "none")) return;
     if (el.type === "checkbox") p[el.name] = el.checked;
     else p[el.name] = el.value;
   });

@@ -150,7 +150,6 @@ select { border: 2px solid #164ca2; color: #17212f; background: #edf3ff; padding
 .run:hover { background: #123d82; }
 .ghost, .example-btn { background: #fff; color: #164ca2; border: 2px solid #164ca2; font-size: 14px; }
 .actions .run { order: -1; }
-:root[data-ui="beginner"] .tabs .tab:not(.active):not(.tab-guide) { display: none; }
 .mc-cmd { display: none; }
 .mode-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .mode-card { min-height: 150px; }
@@ -164,3 +163,16 @@ select { border: 2px solid #164ca2; color: #17212f; background: #edf3ff; padding
 .sequence-row { font-size: 15px; }
 :focus-visible { outline: 3px solid #a64200; outline-offset: 3px; }
 @media (max-width: 600px) { .mode-grid { grid-template-columns: 1fr; } .flow-heading, .db-panel h3 { font-size: 18px; } }
+
+.app { max-width: 1560px; }
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.tab { font-size: 15px; padding: 14px 18px; }
+.tab.active { color: #fff; background: #164ca2; border-color: #164ca2; }
+.mode-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.experiment-choices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; padding: 16px; }
+.experiment-choice { display: grid; grid-template-columns: 22px 1fr; gap: 8px; padding: 16px; border: 2px solid #7b899c; border-radius: 6px; cursor: pointer; }
+.experiment-choice input { min-height: 0; width: 18px; height: 18px; margin: 2px 0; accent-color: #164ca2; }
+.experiment-choice em { grid-column: 2; font-style: normal; color: #455266; font-size: 13px; }
+.experiment-choice.chosen { background: #edf3ff; border-color: #164ca2; }
+@media (max-width: 780px) { .mode-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .experiment-choices { grid-template-columns: 1fr; } }
+@media (max-width: 600px) { .mode-grid { grid-template-columns: 1fr; } }
