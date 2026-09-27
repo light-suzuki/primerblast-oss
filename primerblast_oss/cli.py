@@ -980,6 +980,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--version", action="version", version="%(prog)s " + __version__)
     subcommands = parser.add_subparsers(dest="cmd", required=True)
 
+    agent = subcommands.add_parser("agent", help="local JSON interface shared with the GUI")
+    agent.add_argument("action", choices=["schema", "run"])
+    agent.add_argument("--input", default="-", help="JSON request file, or - for stdin")
+    agent.add_argument("--allow-db-write", action="store_true", help="explicitly allow database creation")
+    from .agent_cli import command
+    agent.set_defaults(func=command)
+
     design = subcommands.add_parser(
         "design", help="design primer pairs and check specificity")
     _add_template_args(design)
