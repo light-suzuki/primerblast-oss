@@ -8,6 +8,11 @@
 
 **English** | [日本語](README.ja.md)
 
+This repository is the PCR engine. [Sequence Workbench](https://github.com/light-suzuki/Gene-research)
+embeds it as part of broader breeding and gene-research workflows. See
+[the embedding boundary](docs/EMBEDDING.md). The standalone GUI defaults to PCR
+tools; legacy research views remain available through the legacy-tools switch.
+
 A local, open-source, Primer-BLAST-style **command-line tool** for plant breeding
 and genetics. It designs PCR primers with **Primer3** and verifies their
 **specificity** entirely offline against local BLAST+ databases — including
