@@ -82,6 +82,7 @@ def test_end_to_end_dcaps_rechecks_modified_pair_against_each_database():
     import primerblast_oss.dcaps_workflow as workflow
     import primerblast_oss.assay as assay
     import primerblast_oss.dimers as dimers
+    import primerblast_oss.amplicon_digest as amplicon_digest
 
     class Template:
         seq = "A" * 120
@@ -134,6 +135,7 @@ def test_end_to_end_dcaps_rechecks_modified_pair_against_each_database():
     original_specificity = workflow.pair_specificity
     original_analyze = assay.analyze_pair
     original_available = dimers.available
+    original_digest = amplicon_digest.digest_offtarget_products
     try:
         workflow.dcaps_candidates = lambda *args, **kwargs: [frame]
         workflow.materialize_dcaps_primers = lambda *args, **kwargs: [materialized]
@@ -158,14 +160,53 @@ def test_end_to_end_dcaps_rechecks_modified_pair_against_each_database():
 
         workflow.pair_specificity = fake_specificity
         assay.analyze_pair = lambda *args, **kwargs: {
-            "specific": True,
-            "specificity_status": "specific",
-            "specific_all_db": True,
-            "specificity_status_all_db": "specific",
-            "risk": "low",
+            "specific": False,
+            "specificity_status": "non_specific",
+            "specific_all_db": False,
+            "specificity_status_all_db": "non_specific",
+            "intended_status": "unique",
+            "risk": "high",
             "search_complete_all_db": True,
+            "variant_in_primer_3prime": False,
+            "dimers": None,
+            "per_db_products": [
+                {
+                    "db": "dbA",
+                    "n_off_target": 1,
+                    "products": [
+                        {"size": 70, "on_target": True},
+                        {"size": 200, "on_target": False},
+                    ],
+                },
+                {
+                    "db": "dbB",
+                    "n_off_target": 1,
+                    "products": [
+                        {"size": 70, "on_target": True},
+                        {"size": 220, "on_target": False},
+                    ],
+                },
+            ],
         }
         dimers.available = lambda: False
+
+        def fake_digest(per_db_products, _genomes, _primers, enzyme):
+            assert enzyme == "EcoRI"
+            output = []
+            for view in per_db_products:
+                copied = dict(view)
+                background = [200] if view["db"] == "dbA" else [220]
+                copied["offtarget_digest"] = {
+                    "enzyme": "EcoRI",
+                    "complete": True,
+                    "background_fragments": background,
+                    "products": [],
+                    "unresolved_products": [],
+                }
+                output.append(copied)
+            return output
+
+        amplicon_digest.digest_offtarget_products = fake_digest
         result = workflow.evaluate_dcaps_candidates(
             Template(),
             original,
@@ -181,12 +222,16 @@ def test_end_to_end_dcaps_rechecks_modified_pair_against_each_database():
         workflow.pair_specificity = original_specificity
         assay.analyze_pair = original_analyze
         dimers.available = original_available
+        amplicon_digest.digest_offtarget_products = original_digest
 
     assert len(seen) == 2
     assert {entry[0] for entry in seen} == {"dbA", "dbB"}
     assert all(entry[1] == materialized["primer_sequence"] for entry in seen)
     assert result["n_orderable"] == 1
-    assert result["best"]["recommendation_status"] == "orderable"
+    assert result["best"]["specificity"]["specific_all_db"] is False
+    assert result["best"]["gel_scorable_all_db"] is True
+    assert result["best"]["recommendation_status"] == (
+        "orderable_with_gel_separated_offtargets")
 
 
 def test_order_sheet_uses_validated_engineered_primer():

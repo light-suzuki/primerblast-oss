@@ -158,6 +158,8 @@ class Amplicon:
     rev_tm: Optional[float] = None
     fwd_end3_dg: Optional[float] = None
     rev_end3_dg: Optional[float] = None
+    fwd_end3: Optional[int] = None
+    rev_end3: Optional[int] = None
 
     @property
     def orientation(self) -> str:
@@ -762,6 +764,8 @@ def enumerate_amplicons(sites: Sequence[PrimingSite], sp: SpecParams) -> List[Am
                     rev_tm=reverse_site.tm,
                     fwd_end3_dg=forward_site.end3_dg,
                     rev_end3_dg=reverse_site.end3_dg,
+                    fwd_end3=forward_site.end3,
+                    rev_end3=reverse_site.end3,
                 ))
     amplicons.sort(key=lambda amplicon: (amplicon.subject, amplicon.start))
     return amplicons

@@ -44,6 +44,8 @@ def _amp_dict(amplicon) -> Dict:
         "rev_mismatch": amplicon.rev_mismatch,
         "fwd_tp5": amplicon.fwd_tp5,
         "rev_tp5": amplicon.rev_tp5,
+        "fwd_end3": amplicon.fwd_end3,
+        "rev_end3": amplicon.rev_end3,
     }
 
 
@@ -219,11 +221,81 @@ def _variant_record_dict(variant) -> Dict:
     }
 
 
+def _attach_marker_gel_context(
+    caps_info: Optional[Dict],
+    per_db_products: Sequence[Dict],
+    *,
+    intended_status: str,
+    search_completeness: str,
+    specific_all_db,
+    genomes_by_db: Optional[Mapping[str, object]] = None,
+    primers: Optional[Mapping[str, str]] = None,
+) -> Optional[Dict]:
+    if not caps_info:
+        return caps_info
+    gel_analysis = caps_info.get("gel_analysis")
+    if not gel_analysis:
+        best = caps_info.get("best_result") or {}
+        if caps_info.get("best_marker_type") == "dCAPS":
+            gel_analysis = ((best.get("digest") or {}).get("gel_analysis"))
+        else:
+            gel_analysis = best.get("gel_analysis")
+    if not gel_analysis:
+        return caps_info
+
+    enzyme = caps_info.get("best_enzyme")
+    if enzyme and primers is not None:
+        from .amplicon_digest import digest_offtarget_products
+        annotated = digest_offtarget_products(
+            per_db_products, genomes_by_db, primers, enzyme)
+        if isinstance(per_db_products, list):
+            per_db_products[:] = annotated
+        else:
+            per_db_products = annotated
+
+    from .gel import assess_background_across_databases
+    background = assess_background_across_databases(
+        gel_analysis, per_db_products)
+    intrinsic = bool(
+        (gel_analysis.get("genotype_discrimination") or {}).get(
+            "distinguishable"))
+    background_complete = background.get("all_databases_complete") is True
+    background_ok = background.get("all_databases_distinguishable") is True
+
+    if intended_status != "unique":
+        verdict = "invalid_intended"
+    elif search_completeness != SEARCH_COMPLETE:
+        verdict = "indeterminate_search"
+    elif not intrinsic:
+        verdict = "ambiguous_genotype_pattern"
+    elif not background_complete:
+        verdict = "indeterminate_offtarget_digest"
+    elif not background_ok:
+        verdict = "ambiguous_with_offtarget_background"
+    elif specific_all_db is True:
+        verdict = "specific_clean"
+    else:
+        verdict = "gel_scorable_with_separated_offtargets"
+
+    caps_info["gel_analysis"] = gel_analysis
+    caps_info["background_analysis"] = background
+    caps_info["gel_scorable_all_db"] = (
+        intended_status == "unique"
+        and search_completeness == SEARCH_COMPLETE
+        and intrinsic
+        and background_complete
+        and background_ok
+    )
+    caps_info["marker_verdict"] = verdict
+    return caps_info
+
+
 def analyze_pair(pair, per_db: Sequence[Dict], design_db: str,
                  template: Optional[Template], variants: Sequence,
                  caps_info: Optional[Dict], gel_min_gap: int = 50,
                  dimer_params=None,
-                 expected_primer_mismatches: Optional[Mapping[str, int]] = None) -> Dict:
+                 expected_primer_mismatches: Optional[Mapping[str, int]] = None,
+                 genomes_by_db: Optional[Mapping[str, object]] = None) -> Dict:
     len_f, len_r = len(pair.forward), len(pair.reverse)
     design_res = next(
         (result for result in per_db if result["db"] == design_db), per_db[0])
@@ -322,6 +394,16 @@ def analyze_pair(pair, per_db: Sequence[Dict], design_db: str,
     dimer = (
         dimer_module.analyze_pair(pair.forward, pair.reverse, dimer_params)
         if dimer_module.available() else None
+    )
+
+    caps_info = _attach_marker_gel_context(
+        caps_info,
+        per_db_products,
+        intended_status=intended_status,
+        search_completeness=overall_completeness,
+        specific_all_db=specific_all_db,
+        genomes_by_db=genomes_by_db,
+        primers={"F": pair.forward, "R": pair.reverse},
     )
 
     risk = assess_risk(
@@ -427,6 +509,8 @@ def analyze_pair(pair, per_db: Sequence[Dict], design_db: str,
         "conservation": conservation,
         "caps_enzyme": (caps_info or {}).get("best_enzyme"),
         "marker_type": (caps_info or {}).get("best_marker_type"),
+        "marker_verdict": (caps_info or {}).get("marker_verdict"),
+        "gel_scorable_all_db": (caps_info or {}).get("gel_scorable_all_db"),
         "caps": caps_info,
         "gel_distinguishable": design_res.get("gel_distinguishable", True),
         "dimers": ({
@@ -448,7 +532,10 @@ def analyze_pair(pair, per_db: Sequence[Dict], design_db: str,
 
 
 def build_caps(template: Template, pair, snp_local_index: int,
-               alt_base: str, gel_min_gap: int = 25) -> Optional[Dict]:
+               alt_base: str, gel_min_gap: int = 25,
+               gel_ladder: str = "auto",
+               custom_ladder_bands: Optional[Sequence[int]] = None,
+               gel_percent: Optional[float] = None) -> Optional[Dict]:
     """Build exact natural-CAPS digest results for the designed amplicon."""
     from .caps import caps_scan, enzymes_gained_lost, result_to_dict
 
@@ -466,7 +553,13 @@ def build_caps(template: Template, pair, snp_local_index: int,
         + amplicon_ref[relative_index + 1:]
     )
     results = caps_scan(
-        amplicon_ref, amplicon_alt, gel_min_gap=gel_min_gap)
+        amplicon_ref,
+        amplicon_alt,
+        gel_min_gap=gel_min_gap,
+        ladder=gel_ladder,
+        custom_ladder_bands=custom_ladder_bands,
+        gel_percent=gel_percent,
+    )
     gained_lost = enzymes_gained_lost(amplicon_ref, amplicon_alt)
     best = next(
         (result for result in results if result.distinguishable), None)
@@ -477,6 +570,7 @@ def build_caps(template: Template, pair, snp_local_index: int,
         "allele_ref_fragments": best.allele_a_fragments if best else None,
         "allele_alt_fragments": best.allele_b_fragments if best else None,
         "min_gel_gap": best.min_gel_gap if best else None,
+        "gel_analysis": best.gel_analysis if best else None,
         "best_result": result_to_dict(best) if best else None,
         "natural_candidates": [result_to_dict(result) for result in results],
         "gained": gained_lost.get("gained", []),
@@ -506,6 +600,9 @@ def _attach_dcaps(
     dimer_params,
     variants: Sequence,
     max_candidates: int,
+    gel_ladder: str = "auto",
+    custom_ladder_bands: Optional[Sequence[int]] = None,
+    gel_percent: Optional[float] = None,
 ) -> Dict:
     from .dcaps_workflow import evaluate_dcaps_candidates
 
@@ -523,6 +620,9 @@ def _attach_dcaps(
         dimer_params=dimer_params,
         variants=variants,
         max_candidates_to_screen=max_candidates,
+        gel_ladder=gel_ladder,
+        custom_ladder_bands=custom_ladder_bands,
+        gel_percent=gel_percent,
     )
     caps_info["dcaps"] = dcaps
     best = dcaps.get("best")
@@ -535,6 +635,7 @@ def _attach_dcaps(
         caps_info["allele_alt_fragments"] = best["digest"][
             "allele_b_fragments"]
         caps_info["min_gel_gap"] = best["digest"]["min_gel_gap"]
+        caps_info["gel_analysis"] = best["digest"].get("gel_analysis")
         caps_info["best_result"] = best
     return caps_info
 
@@ -554,6 +655,9 @@ def run_assay(
     thermo_params=None,
     thermo_gate: bool = True,
     dimer_params=None,
+    gel_ladder: str = "auto",
+    custom_ladder_bands: Optional[Sequence[int]] = None,
+    gel_percent: Optional[float] = None,
     dcaps_pairs_to_screen: int = 3,
     dcaps_candidates_per_pair: int = 6,
 ) -> Dict:
@@ -594,7 +698,15 @@ def run_assay(
                 template, caps_snp["genomic_pos"])
             if snp_local is not None:
                 caps_info = build_caps(
-                    template, pair, snp_local, caps_snp["alt"])
+                    template,
+                    pair,
+                    snp_local,
+                    caps_snp["alt"],
+                    gel_min_gap=gel_min_gap,
+                    gel_ladder=gel_ladder,
+                    custom_ladder_bands=custom_ladder_bands,
+                    gel_percent=gel_percent,
+                )
                 if (caps_info is not None
                         and not caps_info.get("best_distinguishable")):
                     if pair_index < dcaps_pairs_to_screen:
@@ -613,6 +725,9 @@ def run_assay(
                             dimer_params,
                             variants,
                             dcaps_candidates_per_pair,
+                            gel_ladder=gel_ladder,
+                            custom_ladder_bands=custom_ladder_bands,
+                            gel_percent=gel_percent,
                         )
                     else:
                         caps_info["dcaps"] = {
@@ -632,14 +747,33 @@ def run_assay(
             caps_info,
             gel_min_gap=gel_min_gap,
             dimer_params=dimer_params,
+            genomes_by_db=associated_genomes,
         ))
 
     risk_order = {"low": 0, "medium": 1, "high": 2}
-    pair_dicts.sort(key=lambda pair_dict: (
-        risk_order.get(pair_dict["risk"], 3),
-        pair_dict.get("marker_type") is None if caps_snp is not None else False,
-        -pair_dict.get("risk_score", 0),
-    ))
+    marker_order = {
+        "specific_clean": 0,
+        "gel_scorable_with_separated_offtargets": 1,
+        "indeterminate_search": 3,
+        "indeterminate_offtarget_digest": 3,
+        "ambiguous_genotype_pattern": 4,
+        "ambiguous_with_offtarget_background": 4,
+        "invalid_intended": 5,
+        None: 6,
+    }
+    if caps_snp is not None:
+        pair_dicts.sort(key=lambda pair_dict: (
+            marker_order.get(pair_dict.get("marker_verdict"), 6),
+            -float(((pair_dict.get("caps") or {}).get("gel_analysis") or {}).get(
+                "score", 0)),
+            risk_order.get(pair_dict["risk"], 3),
+            -pair_dict.get("risk_score", 0),
+        ))
+    else:
+        pair_dicts.sort(key=lambda pair_dict: (
+            risk_order.get(pair_dict["risk"], 3),
+            -pair_dict.get("risk_score", 0),
+        ))
     return {
         "target": {
             "name": region.name,
@@ -664,6 +798,10 @@ def run_assay(
                 dcaps_pairs_to_screen, len(result.pairs)) if caps_snp else 0,
             "dcaps_candidates_per_pair": (
                 dcaps_candidates_per_pair if caps_snp else 0),
+            "gel_ladder": gel_ladder,
+            "custom_ladder_bands": (
+                list(custom_ladder_bands) if custom_ladder_bands else None),
+            "gel_percent": gel_percent,
         },
         "n_pairs": len(pair_dicts),
         "pairs": pair_dicts,

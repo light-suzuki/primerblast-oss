@@ -115,6 +115,8 @@ _CSV_COLUMNS = [
     "marker_type", "enzyme", "engineered_role", "engineered_mismatches",
     "specificity_status", "specificity_status_all_db",
     "search_completeness", "variant_in_primer",
+    "marker_verdict", "gel_scorable_all_db", "gel_score", "gel_rating",
+    "gel_ladder", "gel_percent",
 ]
 
 
@@ -149,6 +151,12 @@ def pairs_to_csv(pairs: List[dict]) -> str:
             pair.get("specificity_status"),
             pair.get("specificity_status_all_db"),
             pair.get("search_completeness"), _bool_str(variant_flag),
+            pair.get("marker_verdict"),
+            _bool_str(pair.get("gel_scorable_all_db")),
+            _num(((pair.get("caps") or {}).get("gel_analysis") or {}).get("score")),
+            ((pair.get("caps") or {}).get("gel_analysis") or {}).get("rating"),
+            ((pair.get("caps") or {}).get("gel_analysis") or {}).get("ladder"),
+            _num(((pair.get("caps") or {}).get("gel_analysis") or {}).get("gel_percent")),
         ])
     return buffer.getvalue()
 

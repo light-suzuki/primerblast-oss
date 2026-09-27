@@ -803,6 +803,23 @@ def _cmd_assay(arguments) -> int:
         arguments, design_genome=design_genome)
     dimer_params = _dimer_params_from_args(arguments)
 
+    custom_ladder_bands = None
+    if arguments.ladder_bands:
+        try:
+            custom_ladder_bands = [
+                int(value.strip()) for value in arguments.ladder_bands.split(",")
+                if value.strip()
+            ]
+        except ValueError as error:
+            raise ValueError(
+                "--ladder-bands must be comma-separated integer bp sizes") from error
+    if arguments.ladder == "custom" and not custom_ladder_bands:
+        raise ValueError("--ladder custom requires --ladder-bands")
+    gel_percent = (
+        None if arguments.gel_percent == "auto"
+        else float(arguments.gel_percent)
+    )
+
     result = run_assay(
         region,
         design_genome,
@@ -818,6 +835,9 @@ def _cmd_assay(arguments) -> int:
         thermo_params=thermo_params,
         thermo_gate=thermo_gate,
         dimer_params=dimer_params,
+        gel_ladder=arguments.ladder,
+        custom_ladder_bands=custom_ladder_bands,
+        gel_percent=gel_percent,
     )
     manifest = make_manifest(
         {
@@ -825,10 +845,24 @@ def _cmd_assay(arguments) -> int:
             "spec": specificity.__dict__,
             "flank": arguments.flank,
             "thermo_genomes": _genome_paths(genomes_by_db),
+            "gel_ladder": arguments.ladder,
+            "custom_ladder_bands": custom_ladder_bands,
+            "gel_percent": gel_percent,
         },
         arguments.db,
         template_info=result["target"],
     )
+    if arguments.virtual_gel:
+        from .gel import best_analysis_from_assay, virtual_gel_svg
+        gel_analysis = best_analysis_from_assay(result)
+        if gel_analysis is None:
+            print(
+                "warning: no gel-scorable CAPS/dCAPS candidate; virtual gel not written",
+                file=sys.stderr,
+            )
+        else:
+            Path(arguments.virtual_gel).write_text(
+                virtual_gel_svg(gel_analysis), encoding="utf-8")
     _emit(_render_assay(result, arguments.format, manifest), arguments.out)
     return 0
 
@@ -1055,6 +1089,18 @@ def build_parser() -> argparse.ArgumentParser:
     assay.add_argument("--flank", type=int, default=200)
     assay.add_argument("--product-size", default="100-800")
     assay.add_argument("--num-return", type=int, default=10)
+    assay.add_argument(
+        "--ladder", choices=["auto", "100bp", "1kb", "custom"], default="auto",
+        help="DNA ladder used for CAPS/dCAPS gel scoring")
+    assay.add_argument(
+        "--ladder-bands",
+        help="comma-separated custom ladder bands in bp (used with --ladder custom)")
+    assay.add_argument(
+        "--gel-percent", default="auto",
+        help="agarose percentage for CAPS/dCAPS scoring, or auto")
+    assay.add_argument(
+        "--virtual-gel",
+        help="write the top CAPS/dCAPS M/AA/AB/BB prediction as SVG")
     _add_design_knobs(assay)
     _add_spec_args(assay)
     _add_dimer_args(assay)
