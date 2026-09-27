@@ -117,6 +117,8 @@ _CSV_COLUMNS = [
     "search_completeness", "variant_in_primer",
     "marker_verdict", "gel_scorable_all_db", "gel_score", "gel_rating",
     "gel_ladder", "gel_percent",
+    "preferred_genotyping_mode", "aspcr_ref_score", "aspcr_alt_score",
+    "tetra_arms_score", "tetra_arms_gel_scorable",
 ]
 
 
@@ -157,6 +159,14 @@ def pairs_to_csv(pairs: List[dict]) -> str:
             ((pair.get("caps") or {}).get("gel_analysis") or {}).get("rating"),
             ((pair.get("caps") or {}).get("gel_analysis") or {}).get("ladder"),
             _num(((pair.get("caps") or {}).get("gel_analysis") or {}).get("gel_percent")),
+            pair.get("preferred_genotyping_mode"),
+            _num((((pair.get("aspcr") or {}).get("best_classical_ref") or {}).get(
+                "discrimination_score"))),
+            _num((((pair.get("aspcr") or {}).get("best_classical_alt") or {}).get(
+                "discrimination_score"))),
+            _num((((pair.get("aspcr") or {}).get("best_tetra") or {}).get("score"))),
+            _bool_str((((pair.get("aspcr") or {}).get("best_tetra") or {}).get(
+                "gel_scorable"))),
         ])
     return buffer.getvalue()
 
@@ -167,7 +177,78 @@ def order_table(pairs: List[dict]) -> str:
         "Marker", "Enzyme", "Engineered",
     )
     rows: List[Sequence[str]] = []
+
+    def add_row(name, sequence, tm, marker, enzyme="", engineered=""):
+        sequence = str(sequence or "")
+        rows.append((
+            str(name),
+            sequence,
+            str(len(sequence)) if sequence else "",
+            _num(tm),
+            _synthesis_scale(len(sequence)),
+            str(marker or ""),
+            str(enzyme or ""),
+            str(engineered or ""),
+        ))
+
     for pair in pairs:
+        preferred = pair.get("preferred_genotyping_mode")
+        aspcr = pair.get("aspcr") or {}
+        pair_name = str(_get(pair, "name", "pair"))
+        if preferred == "tetra-ARMS" and aspcr.get("best_tetra"):
+            tetra = aspcr["best_tetra"]
+            add_row(
+                pair_name + "_outer_F", tetra.get("outer_forward"),
+                pair.get("tm_f"), "tetra-ARMS")
+            add_row(
+                pair_name + "_outer_R", tetra.get("outer_reverse"),
+                pair.get("tm_r"), "tetra-ARMS")
+            for allele, inner in (
+                ("ref", tetra.get("ref_inner") or {}),
+                ("alt", tetra.get("alt_inner") or {}),
+            ):
+                mismatch = inner.get("deliberate_mismatch") or {}
+                engineered = (
+                    "3' SNP + deliberate -%s %s>%s" % (
+                        mismatch.get("position_from_3prime"),
+                        mismatch.get("from"), mismatch.get("to"))
+                    if mismatch else "3' SNP"
+                )
+                add_row(
+                    "%s_%s_inner_%s" % (
+                        pair_name, allele, inner.get("role", "AS")),
+                    inner.get("primer"), inner.get("tm"),
+                    "tetra-ARMS", engineered=engineered)
+            continue
+        if preferred == "AS-PCR":
+            for allele, key in (
+                ("ref", "best_classical_ref"),
+                ("alt", "best_classical_alt"),
+            ):
+                candidate = aspcr.get(key) or {}
+                if not candidate:
+                    continue
+                mismatch = candidate.get("deliberate_mismatch") or {}
+                engineered = (
+                    "3' SNP + deliberate -%s %s>%s" % (
+                        mismatch.get("position_from_3prime"),
+                        mismatch.get("from"), mismatch.get("to"))
+                    if mismatch else "3' SNP"
+                )
+                add_row(
+                    "%s_%s_AS_%s" % (
+                        pair_name, allele, candidate.get("role", "AS")),
+                    candidate.get("primer"), candidate.get("tm"),
+                    "AS-PCR", engineered=engineered)
+                common_role = candidate.get("common_role")
+                common_tm = (
+                    pair.get("tm_f") if common_role == "F" else pair.get("tm_r"))
+                add_row(
+                    "%s_%s_common_%s" % (
+                        pair_name, allele, common_role or "C"),
+                    candidate.get("common_primer"), common_tm, "AS-PCR")
+            continue
+
         orderable = _orderable_pair(pair)
         engineered_role = orderable.get("engineered_role") or ""
         mismatch_count = orderable.get("engineered_mismatches") or 0
@@ -210,7 +291,8 @@ def order_table(pairs: List[dict]) -> str:
     lines.extend([
         "",
         "dCAPS rows contain the validated engineered primer sequence. "
-        "Do not substitute the unmodified parent primer.",
+        "AS-PCR/tetra-ARMS rows contain the allele-specific 3' SNP primer and "
+        "any deliberate near-3' mismatch. Do not substitute parent primers.",
         "Scales are suggestions; adjust to the supplier and application.",
     ])
     return "\n".join(lines) + "\n"

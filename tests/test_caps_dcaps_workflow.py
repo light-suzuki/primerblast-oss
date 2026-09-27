@@ -264,3 +264,84 @@ def test_order_sheet_uses_validated_engineered_primer():
     assert "ENGINEEREDF" in output
     assert "ORIGINALF" not in output
     assert "1 mismatch(es)" in output
+
+
+def test_order_sheet_uses_tetra_arms_four_primer_set():
+    pair = {
+        "name": "SNP1",
+        "forward": "OUTERF",
+        "reverse": "OUTERR",
+        "tm_f": 60.0,
+        "tm_r": 60.0,
+        "preferred_genotyping_mode": "tetra-ARMS",
+        "aspcr": {
+            "best_tetra": {
+                "outer_forward": "OUTERF",
+                "outer_reverse": "OUTERR",
+                "ref_inner": {
+                    "role": "F",
+                    "primer": "REFINNER",
+                    "tm": 59.0,
+                    "deliberate_mismatch": {
+                        "position_from_3prime": 2,
+                        "from": "A",
+                        "to": "C",
+                    },
+                },
+                "alt_inner": {
+                    "role": "R",
+                    "primer": "ALTINNER",
+                    "tm": 58.5,
+                    "deliberate_mismatch": {
+                        "position_from_3prime": 3,
+                        "from": "G",
+                        "to": "T",
+                    },
+                },
+            }
+        },
+    }
+    output = order_table([pair])
+    for sequence in ("OUTERF", "OUTERR", "REFINNER", "ALTINNER"):
+        assert sequence in output
+    assert "tetra-ARMS" in output
+    assert "deliberate -2" in output
+    assert "deliberate -3" in output
+
+
+def test_order_sheet_uses_classical_ref_and_alt_as_primers():
+    pair = {
+        "name": "SNP2",
+        "forward": "PARENTF",
+        "reverse": "PARENTR",
+        "tm_f": 60.0,
+        "tm_r": 60.0,
+        "preferred_genotyping_mode": "AS-PCR",
+        "aspcr": {
+            "best_classical_ref": {
+                "role": "F",
+                "primer": "REFAS",
+                "tm": 58.0,
+                "common_role": "R",
+                "common_primer": "COMMONR",
+                "deliberate_mismatch": None,
+            },
+            "best_classical_alt": {
+                "role": "F",
+                "primer": "ALTAS",
+                "tm": 58.5,
+                "common_role": "R",
+                "common_primer": "COMMONR",
+                "deliberate_mismatch": {
+                    "position_from_3prime": 2,
+                    "from": "A",
+                    "to": "G",
+                },
+            },
+        },
+    }
+    output = order_table([pair])
+    assert "REFAS" in output and "ALTAS" in output
+    assert "COMMONR" in output
+    assert "PARENTF" not in output
+    assert "AS-PCR" in output

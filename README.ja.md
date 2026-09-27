@@ -8,7 +8,7 @@
 
 [English](README.md) | **日本語**
 
-植物育種・遺伝学向けの、ローカルかつオープンソースな **Primer-BLAST 相当のコマンドラインツール**。**Primer3** でPCRプライマーを設計し、ローカルのBLAST+データベースに対して**特異性**を完全オフラインで検証します — 未公開ゲノムや複数品種の同時スクリーニングを含みます。さらに in-silico PCR、領域全体のタイリング、プライマー下SNP検出、アンプリコン保存性、CAPS/dCAPSマーカー設計、実験者向けリスク評価も備えます。
+植物育種・遺伝学向けの、ローカルかつオープンソースな **Primer-BLAST 相当のコマンドラインツール**。**Primer3** でPCRプライマーを設計し、ローカルのBLAST+データベースに対して**特異性**を完全オフラインで検証します — 未公開ゲノムや複数品種の同時スクリーニングを含みます。さらに in-silico PCR、領域全体のタイリング、プライマー下SNP検出、アンプリコン保存性、CAPS/dCAPS、アレル特異的PCR（AS-PCR / tetra-ARMS）マーカー設計、実験者向けリスク評価も備えます。
 
 > コアは純Python(標準ライブラリのみ)で、`primer3_core` と BLAST+ を外部プロセスとして呼び出します。ユニットテストは**外部ツールもデータも不要**です。
 
@@ -229,6 +229,43 @@ CAPS/dCAPSでは、**配列レベルの特異性**と**ゲル上の判別可能�
 選択したラダー範囲や推奨アガロース濃度の範囲外なら警告と減点を付けますが、
 遺伝子型のバンドパターンが十分識別できる候補は残します。実験者側で
 ラダーやゲル濃度を変えて使える設計です。
+
+### 同じSNPからAS-PCR / ARMSも設計
+
+`assay --snp ... --alt ...` を使うと、CAPS/dCAPSと並行して
+**アレル特異的PCR**候補も作ります。ref/alt特異primerはSNPを**3'末端**に
+置き、さらに3'末端から**-2 / -3位置の意図的mismatch**候補を列挙します。
+意図アレルと非意図アレルで末端3/5塩基のmismatch数がどれだけ変わるかを
+明示して順位付けします。
+
+同じ親primer pairから**tetra-primer ARMS-PCR**も作れます。外側2本の
+control ampliconと、ref/alt用の内側allele-specific primerによる2種類の
+バンドを設計し、AA / AB / BBの予測バンドパターンがゲル上で分離できるか
+まで評価します。
+
+```bash
+python -m primerblast_oss assay \
+  --snp chr1:6385 --alt A \
+  --genome genome.fa --db $DB/cameor_v2 \
+  --aspcr-candidates-per-allele 4 \
+  --aspcr-tetra-candidates 6 \
+  --aspcr-pairs-to-screen 2 \
+  --format json
+```
+
+上位のref-AS、alt-AS、tetra-ARMSセットは各BLAST DBに対してin-silico PCRを
+やり直します。**allele discrimination**と**ゲノム全体のoff-target**は
+別々の指標として出します。
+
+AS-PCR/tetra-ARMSの自動推奨には、標的座位を確認した完全な探索、予期しない
+産物がないこと、懸念のないプライマー構造評価が必要です。サイズ一致だけでは
+意図した産物と判定しません。標的座標を対応付けていない別アセンブリは
+`unverified_size_only`として残し、未探索・未確認の設計は推奨モードにしません。
+
+なお、3'末端mismatchだけで非意図アレルの伸長が完全に止まる保証はありません。
+ARMSでは-2/-3付近の追加mismatchで選択性を高める設計が一般的ですが、
+polymerase・annealing条件・mismatchの組合せに依存します。このスコアは
+候補順位付け用であり、成功確率ではないためWetでの確認を前提にします。
 
 ### `markers` — QTL区間にわたる等間隔マーカー
 

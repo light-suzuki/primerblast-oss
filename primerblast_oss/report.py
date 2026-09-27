@@ -402,7 +402,7 @@ def assay_to_text(result: Dict) -> str:
                             output.append(
                                 "    [%s] off-target background %s -> %s" % (
                                     str(database.get("db", "")).split("/")[-1],
-                                    database.get("background_sizes", []),
+                                    database.get("background_fragments", []),
                                     "gel-scorable" if database.get(
                                         "distinguishable") else "ambiguous"))
                     if gel.get("outside_gel_range_fragments"):
@@ -412,6 +412,63 @@ def assay_to_text(result: Dict) -> str:
                                 gel.get("outside_gel_range_fragments")))
             else:
                 output.append("    CAPS/dCAPS: no distinguishing enzyme found")
+        aspcr = pair.get("aspcr") or {}
+        if aspcr.get("status") == "candidates_found":
+            output.append(
+                "    preferred genotyping: %s" % (
+                    pair.get("preferred_genotyping_mode") or "none"))
+            for allele_key, label in (
+                ("best_classical_ref", "AS-PCR ref"),
+                ("best_classical_alt", "AS-PCR alt"),
+            ):
+                candidate = aspcr.get(allele_key)
+                if candidate:
+                    mismatch = candidate.get("deliberate_mismatch")
+                    mismatch_text = (
+                        "none" if not mismatch else "-%s %s>%s" % (
+                            mismatch.get("position_from_3prime"),
+                            mismatch.get("from"), mismatch.get("to")))
+                    output.append(
+                        "    %s: %s-AS 5'-%s-3' + common-%s  %sbp; "
+                        "deliberate %s; discrimination %s" % (
+                            label,
+                            candidate.get("role"),
+                            candidate.get("primer"),
+                            candidate.get("common_role"),
+                            candidate.get("product_size"),
+                            mismatch_text,
+                            candidate.get("discrimination_score"),
+                        ))
+            tetra = aspcr.get("best_tetra")
+            if tetra:
+                output.append(
+                    "    tetra-ARMS: control %sbp, ref %sbp, alt %sbp; "
+                    "gel %s (score %s), %s ladder, %s%% agarose" % (
+                        tetra.get("control_product_size"),
+                        tetra.get("ref_product_size"),
+                        tetra.get("alt_product_size"),
+                        "scorable" if tetra.get("gel_scorable")
+                        else "ambiguous",
+                        tetra.get("gel_score"),
+                        tetra.get("ladder"),
+                        tetra.get("gel_percent"),
+                    ))
+                output.append(
+                    "    tetra bands AA/AB/BB: %s / %s / %s" % (
+                        tetra.get("genotype_bands", {}).get("AA_ref"),
+                        tetra.get("genotype_bands", {}).get("AB"),
+                        tetra.get("genotype_bands", {}).get("BB_alt"),
+                    ))
+            for name, screen in ((aspcr.get("specificity_screen") or {}).get("sets") or {}).items():
+                structures = screen.get("primer_structures") or {}
+                output.append(
+                    "    %s screen: acceptable=%s, complete=%s, unexpected=%s; "
+                    "structures=%s (%s concerns)" % (
+                        name, screen.get("genome_screen_acceptable"),
+                        screen.get("search_complete_all_db"),
+                        screen.get("max_unexpected_products"),
+                        structures.get("status", "not_evaluated"),
+                        structures.get("n_concerning")))
         for database in pair.get("per_db_products", []):
             output.append("    [%s] %s" % (
                 database["db"].split("/")[-1],
