@@ -656,13 +656,21 @@ def _preferred_genotyping_mode(summary: Dict) -> Optional[str]:
             "specific_clean", "gel_scorable_with_separated_offtargets"):
         return caps.get("best_marker_type")
     aspcr = summary.get("aspcr") or {}
+    screens = (aspcr.get("specificity_screen") or {}).get("sets") or {}
+    def usable_screen(name):
+        screen = screens.get(name) or {}
+        structures = screen.get("primer_structures") or {}
+        return (screen.get("genome_screen_acceptable") is True
+                and structures.get("status") == "evaluated"
+                and structures.get("n_concerning") == 0)
+
     tetra = aspcr.get("best_tetra")
-    if tetra and tetra.get("gel_scorable"):
+    if (tetra and tetra.get("gel_scorable")
+            and usable_screen("tetra_arms")):
         return "tetra-ARMS"
-    if aspcr.get("best_classical_ref") and aspcr.get("best_classical_alt"):
+    if (aspcr.get("best_classical_ref") and aspcr.get("best_classical_alt")
+            and all(usable_screen("classical_" + allele) for allele in ("ref", "alt"))):
         return "AS-PCR"
-    if caps.get("best_marker_type"):
-        return caps.get("best_marker_type")
     return None
 
 
@@ -750,6 +758,9 @@ def run_assay(
                     thermo_params=thermo_params,
                     thermo_gate=thermo_gate,
                     size_tolerance=10,
+                    template=template,
+                    design_db=design_db,
+                    dimer_params=dimer_params,
                 )
             else:
                 aspcr_info["specificity_screen"] = {

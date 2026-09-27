@@ -459,6 +459,16 @@ def assay_to_text(result: Dict) -> str:
                         tetra.get("genotype_bands", {}).get("AB"),
                         tetra.get("genotype_bands", {}).get("BB_alt"),
                     ))
+            for name, screen in ((aspcr.get("specificity_screen") or {}).get("sets") or {}).items():
+                structures = screen.get("primer_structures") or {}
+                output.append(
+                    "    %s screen: acceptable=%s, complete=%s, unexpected=%s; "
+                    "structures=%s (%s concerns)" % (
+                        name, screen.get("genome_screen_acceptable"),
+                        screen.get("search_complete_all_db"),
+                        screen.get("max_unexpected_products"),
+                        structures.get("status", "not_evaluated"),
+                        structures.get("n_concerning")))
         for database in pair.get("per_db_products", []):
             output.append("    [%s] %s" % (
                 database["db"].split("/")[-1],

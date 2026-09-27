@@ -220,5 +220,75 @@ def test_screen_aspcr_screens_best_sets_and_reports_unexpected_products():
     assert len(calls) == 6  # ref, alt, tetra across two databases
     sets = screened["specificity_screen"]["sets"]
     assert sets["classical_ref"]["search_complete_all_db"] is True
-    assert sets["classical_ref"]["max_unexpected_products"] == 1
-    assert sets["tetra_arms"]["max_unexpected_products"] >= 1
+    assert sets["classical_ref"]["max_unexpected_products"] is None
+    assert sets["classical_ref"]["genome_screen_acceptable"] is False
+    assert len(sets["classical_ref"]["per_db"][0]["unverified_products"]) == 2
+    assert sets["tetra_arms"]["max_unexpected_products"] is None
+
+
+def test_same_sized_off_locus_and_cross_products_are_not_intended(monkeypatch):
+    import primerblast_oss.specificity as specificity
+    from primerblast_oss.aspcr import _screen_primer_pool
+
+    products = [
+        Amplicon("chr1", 100, 299, 200, "outer_F", "outer_R", 0, 0),
+        Amplicon("chr2", 100, 299, 200, "outer_F", "outer_R", 0, 0),
+        Amplicon("chr1", 100, 299, 200, "ref_inner_F", "outer_R", 0, 0),
+    ]
+    monkeypatch.setattr(specificity, "in_silico_pcr", lambda *_a, **_k: {
+        "products": products, "search_complete": True, "search_completeness": "complete",
+        "thermo_site_stats": {},
+    })
+    expected = [{"subject": "chr1", "start": 100, "end": 299, "orientation": "outer_F/outer_R"}]
+    result = _screen_primer_pool(
+        {"outer_F": "ACGT" * 5, "outer_R": "TGCA" * 5}, ["db"],
+        expected_sizes=[200], expected_products=expected, design_db="db",
+        required_orientation="outer_F/outer_R",
+    )
+    view = result["per_db"][0]
+    assert len(view["expected_size_matches"]) == 3
+    assert len(view["intended_products"]) == 1
+    assert result["max_unexpected_products"] == 2
+    assert result["genome_screen_acceptable"] is False
+
+    products[:] = products[:1]
+    clean = _screen_primer_pool(
+        {}, ["db"], expected_products=expected, design_db="db",
+        required_orientation="outer_F/outer_R",
+    )
+    assert clean["genome_screen_acceptable"] is True
+    products.clear()
+    missing = _screen_primer_pool(
+        {}, ["db"], expected_products=expected, design_db="db",
+        required_orientation="outer_F/outer_R",
+    )
+    assert missing["genome_screen_acceptable"] is False
+
+
+def test_genomic_expected_product_reverses_orientation_on_minus_template():
+    from primerblast_oss.aspcr import _expected_product
+    template = Template(
+        id="minus", seq="A" * 200,
+        region=GenomicRegion("chr1", 101, 300, "-", "minus"),
+        ext_start=101, ext_end=300, anchor_coord=300, anchor_strand="-",
+    )
+    assert _expected_product(template, 20, 119, "outer_F", "ref_inner_R") == {
+        "subject": "chr1", "start": 181, "end": 280,
+        "orientation": "ref_inner_R/outer_F",
+    }
+
+
+def test_unreviewed_failed_or_structure_unknown_screens_are_not_preferred():
+    from primerblast_oss.assay import _preferred_genotyping_mode
+    summary = {"aspcr": {"best_tetra": {"gel_scorable": True}}}
+    assert _preferred_genotyping_mode(summary) is None
+    screen = {"genome_screen_acceptable": True}
+    summary["aspcr"]["specificity_screen"] = {"sets": {"tetra_arms": screen}}
+    assert _preferred_genotyping_mode(summary) is None
+    screen["primer_structures"] = {"status": "evaluated", "n_concerning": 0}
+    assert _preferred_genotyping_mode(summary) == "tetra-ARMS"
+    screen["genome_screen_acceptable"] = False
+    assert _preferred_genotyping_mode(summary) is None
+    screen["genome_screen_acceptable"] = True
+    screen["primer_structures"]["n_concerning"] = 1
+    assert _preferred_genotyping_mode(summary) is None

@@ -142,6 +142,11 @@ def generate_as_primers(
         raise ValueError("SNP index outside sequence")
     if sequence[snp_index] not in _BASES:
         raise ValueError("reference sequence at SNP is not A/C/G/T")
+    if (len(ref_base) != 1 or ref_base not in _BASES
+            or len(alt_base) != 1 or alt_base not in _BASES):
+        raise ValueError("ref and alt must be single A/C/G/T bases")
+    if sequence[snp_index] != ref_base:
+        raise ValueError("ref allele does not match the reference sequence")
 
     candidates: List[Dict] = []
     for role in roles:
@@ -392,6 +397,8 @@ def tetra_arms_from_pair(
                     "outer_forward": parent_pair.forward,
                     "outer_reverse": parent_pair.reverse,
                     "control_product_size": control_size,
+                    "outer_left_start": parent_pair.left_start,
+                    "outer_right_start": parent_pair.right_start,
                     "ref_inner": ref_candidate,
                     "alt_inner": alt_candidate,
                     "ref_product_size": ref_size,
@@ -448,11 +455,30 @@ def _screen_primer_pool(
     thermo_gate: bool = True,
     expected_sizes: Sequence[int] = (),
     size_tolerance: int = 10,
+    expected_products: Sequence[Dict] = (),
+    design_db: Optional[str] = None,
+    required_orientation: Optional[str] = None,
+    dimer_params=None,
 ) -> Dict:
     from .pipeline import resolve_genome_for_database, thermo_metadata
     from .specificity import SpecParams, in_silico_pcr
 
     sp = spec_params or SpecParams()
+    from . import dimers
+    from dataclasses import asdict
+    structures = []
+    if dimers.available():
+        for name, sequence in primers.items():
+            structures.extend([dimers.hairpin(name, sequence, dimer_params),
+                               dimers.self_dimer(name, sequence, dimer_params)])
+        cross = dimers.analyze_multiplex(list(primers.items()), dimer_params) or {}
+        structures.extend(cross.get("concerning", []))
+    structures = [asdict(structure) for structure in structures if structure is not None]
+    structure_summary = {
+        "status": "evaluated" if dimers.available() else "not_evaluated",
+        "n_concerning": sum(bool(structure["concerning"]) for structure in structures),
+        "structures": structures,
+    }
     per_db = []
     for database in databases:
         genome, association = resolve_genome_for_database(
@@ -475,16 +501,31 @@ def _screen_primer_pool(
             if any(abs(product["size"] - size) <= size_tolerance
                    for size in expected_sizes)
         ]
-        unexpected = [
-            product for product in products if product not in expected_matches
+        anchored = bool(expected_products) and database == design_db
+        intended = [
+            product for product in products
+            if anchored and any(
+                all(product[key] == expected[key]
+                    for key in ("subject", "start", "end", "orientation"))
+                for expected in expected_products)
         ]
+        unexpected = ([product for product in products if product not in intended]
+                      if anchored else [])
+        required_observed = required_orientation is None or any(
+            product["orientation"] == required_orientation for product in intended)
         per_db.append({
             "db": database,
             "n_products": len(products),
             "products": products,
             "expected_size_matches": expected_matches,
-            "n_unexpected_products": len(unexpected),
+            "intended_products": intended,
+            "classification": "genomic_anchor" if anchored else "unverified_size_only",
+            "required_product_observed": required_observed,
+            "unique_intended_products": len(intended) == len({
+                (p["subject"], p["start"], p["end"], p["orientation"]) for p in intended}),
+            "n_unexpected_products": len(unexpected) if anchored else None,
             "unexpected_products": unexpected,
+            "unverified_products": products if not anchored else [],
             "search_completeness": result.get("search_completeness"),
             "search_complete": result.get("search_complete"),
             "completeness_recommendation": result.get(
@@ -493,14 +534,31 @@ def _screen_primer_pool(
         })
     return {
         "status": "screened",
+        "primer_structures": structure_summary,
         "search_complete_all_db": (
             bool(per_db)
             and all(view.get("search_complete") is True for view in per_db)
         ),
         "max_unexpected_products": max(
-            (view["n_unexpected_products"] for view in per_db), default=0),
+            (view["n_unexpected_products"] for view in per_db
+             if view["n_unexpected_products"] is not None), default=None),
+        "genome_screen_acceptable": bool(per_db) and all(
+            view["classification"] == "genomic_anchor"
+            and view["search_complete"] is True
+            and view["n_unexpected_products"] == 0
+            and view["required_product_observed"]
+            and view["unique_intended_products"]
+            for view in per_db),
         "per_db": per_db,
     }
+
+
+def _expected_product(template, start, end, left_name, right_name) -> Dict:
+    g1, g2 = template.to_genomic(start), template.to_genomic(end)
+    if g1 > g2:
+        left_name, right_name = right_name, left_name
+    return {"subject": template.region.chrom, "start": min(g1, g2),
+            "end": max(g1, g2), "orientation": left_name + "/" + right_name}
 
 
 def screen_aspcr(
@@ -513,6 +571,9 @@ def screen_aspcr(
     thermo_params=None,
     thermo_gate: bool = True,
     size_tolerance: int = 10,
+    template=None,
+    design_db: Optional[str] = None,
+    dimer_params=None,
 ) -> Dict:
     """BLAST-screen the best classical and tetra-ARMS primer sets."""
     output = dict(aspcr)
@@ -524,6 +585,17 @@ def screen_aspcr(
         candidate = output.get(key)
         if not candidate:
             continue
+        expected = []
+        if template is not None:
+            if candidate["role"] == "F":
+                start = candidate["primer_5p"]
+                end = start + candidate["product_size"] - 1
+                left_name, right_name = allele + "_AS", "common_R"
+            else:
+                end = candidate["primer_5p"]
+                start = end - candidate["product_size"] + 1
+                left_name, right_name = "common_F", allele + "_AS"
+            expected = [_expected_product(template, start, end, left_name, right_name)]
         screens["classical_" + allele] = _screen_primer_pool(
             {
                 "%s_AS" % allele: candidate["primer"],
@@ -537,10 +609,25 @@ def screen_aspcr(
             thermo_gate=thermo_gate,
             expected_sizes=[candidate["product_size"]],
             size_tolerance=size_tolerance,
+            expected_products=expected,
+            design_db=design_db,
+            required_orientation=expected[0]["orientation"] if expected and allele == "ref" else None,
+            dimer_params=dimer_params,
         )
 
     tetra = output.get("best_tetra")
     if tetra:
+        expected = []
+        if template is not None:
+            left, right = tetra["outer_left_start"], tetra["outer_right_start"]
+            expected.append(_expected_product(template, left, right, "outer_F", "outer_R"))
+            for allele in ("ref", "alt"):
+                inner = tetra[allele + "_inner"]
+                name = allele + "_inner_" + inner["role"]
+                if inner["role"] == "F":
+                    expected.append(_expected_product(template, inner["primer_5p"], right, name, "outer_R"))
+                else:
+                    expected.append(_expected_product(template, left, inner["primer_5p"], "outer_F", name))
         screens["tetra_arms"] = _screen_primer_pool(
             {
                 "outer_F": tetra["outer_forward"],
@@ -562,6 +649,10 @@ def screen_aspcr(
                 tetra["alt_product_size"],
             ],
             size_tolerance=size_tolerance,
+            expected_products=expected,
+            design_db=design_db,
+            required_orientation=expected[0]["orientation"] if expected else None,
+            dimer_params=dimer_params,
         )
 
     output["specificity_screen"] = {

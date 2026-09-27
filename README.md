@@ -364,7 +364,13 @@ python -m primerblast_oss assay \
 
 For the best ref-AS, alt-AS, and tetra-ARMS sets, the tool re-runs genome-wide
 in-silico PCR against the selected databases. The allele-discrimination score
-and genome off-target screen are reported separately.
+  and genome off-target screen are reported separately.
+
+Automatic AS-PCR/tetra-ARMS preference requires an anchored, complete genome
+screen without unexpected products and an evaluated primer-structure check
+without concerns. Size alone does not establish an intended product. Other
+assemblies without mapped target anchors remain `unverified_size_only`, and
+unscreened or unresolved designs remain candidates rather than preferred modes.
 
 **Important:** a 3'-terminal mismatch does not guarantee complete allele
 rejection. ARMS designs commonly add a deliberate near-3' mismatch to increase

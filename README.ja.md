@@ -257,6 +257,11 @@ python -m primerblast_oss assay \
 やり直します。**allele discrimination**と**ゲノム全体のoff-target**は
 別々の指標として出します。
 
+AS-PCR/tetra-ARMSの自動推奨には、標的座位を確認した完全な探索、予期しない
+産物がないこと、懸念のないプライマー構造評価が必要です。サイズ一致だけでは
+意図した産物と判定しません。標的座標を対応付けていない別アセンブリは
+`unverified_size_only`として残し、未探索・未確認の設計は推奨モードにしません。
+
 なお、3'末端mismatchだけで非意図アレルの伸長が完全に止まる保証はありません。
 ARMSでは-2/-3付近の追加mismatchで選択性を高める設計が一般的ですが、
 polymerase・annealing条件・mismatchの組合せに依存します。このスコアは
