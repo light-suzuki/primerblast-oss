@@ -2,7 +2,7 @@
 Object.assign(I18N.ja, {
   'seq.title':'配列で増幅領域を確認', 'seq.start':'表示開始（配列内・1始まり）',
   'seq.show':'表示', 'seq.prev':'前へ', 'seq.next':'次へ',
-  'seq.legend':'緑：F、青：R、淡い緑：増幅領域、橙：設計オリゴとの相違。下線は注釈上のエクソンです。',
+  'seq.legend':'緑＋上線：F、青＋上線：R、灰色：増幅領域、橙＋太い下線：設計オリゴとの相違。細い下線は注釈上のエクソンです。',
   'seq.genes':'遺伝子のどこを増幅する？', 'seq.annotation':'表示用GFF3注釈（任意）',
   'seq.noAnnotation':'遺伝子注釈は未読込みです。ゲノム座標とGFF3を指定すると遺伝子・エクソン・CDSを表示できます。',
   'seq.noGenes':'読込み済みの注釈では、この表示領域に重なる遺伝子はありません。',
@@ -16,7 +16,7 @@ Object.assign(I18N.ja, {
 Object.assign(I18N.en, {
   'seq.title':'Inspect the amplified sequence', 'seq.start':'Display start (1-based input index)',
   'seq.show':'Show', 'seq.prev':'Previous', 'seq.next':'Next',
-  'seq.legend':'Green: F, blue: R, pale green: amplicon, orange: differences from the oligo. Underlines mark annotated exons.',
+  'seq.legend':'Green + top border: F; blue + top border: R; gray: amplicon; orange + thick underline: differences from the oligo. Thin underlines mark annotated exons.',
   'seq.genes':'Where in the gene does amplification occur?', 'seq.annotation':'GFF3 annotation for display (optional)',
   'seq.noAnnotation':'Gene annotations are not loaded. Supply genomic coordinates and GFF3 to show genes, exons and CDS.',
   'seq.noGenes':'The loaded annotation has no genes overlapping this displayed interval.',

@@ -36,6 +36,7 @@ jobs:
           node --check primerblast_oss/webapp/static/studio.js
           node --check primerblast_oss/webapp/static/locus.js
           node --check primerblast_oss/webapp/static/sequence-view.js
+          node --check primerblast_oss/webapp/static/flow.js
           node tests/web_locus.test.js
       - name: Module self-tests
         run: |
