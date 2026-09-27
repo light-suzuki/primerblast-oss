@@ -39,6 +39,7 @@ jobs:
           node --check primerblast_oss/webapp/static/flow.js
           node --check primerblast_oss/webapp/static/references.js
           node tests/web_locus.test.js
+          node tests/web_reference.test.js
       - name: Module self-tests
         run: |
           python primerblast_oss/caps.py

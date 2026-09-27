@@ -558,6 +558,14 @@ and `gene:` prefixes, and searches GFF3 ID, Name, Alias, gene_id and locus_tag.
 Ambiguous aliases report candidate IDs instead of selecting a gene. Version
 and transcript suffixes are preserved because removing them can change the target.
 
+The numeric gene-ID helper uses a bounded sample of the selected reference's
+annotation: fixed text and leading zeros are supplied for formats such as
+Arabidopsis `AT[chromosome]G[number]` and pea gene IDs. Mixed formats retain
+manual entry. Profiles can explicitly set `gene_id_format`, for example
+`{"prefix":"Psat.cameor.v2.","separator":"g","digits":5,"chromosomes":["1","2","3","4","5","6","7"]}`.
+The same local `GET /api/references` information is available for a future
+agent layer. Do not commit private inputs, local catalogs or raw private reports.
+
 ### Binding maps and saved projects / 結合位置とデータ保存
 
 Design, sequencing and breeding-assay results show forward/reverse binding

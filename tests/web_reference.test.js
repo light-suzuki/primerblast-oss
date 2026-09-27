@@ -1,0 +1,16 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const path = require('node:path');
+const context = { I18N: {ja: {}, en: {}}, document: {addEventListener() {}} };
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(path.join(__dirname, '../primerblast_oss/webapp/static/references.js'), 'utf8'), context);
+const arabidopsis = {prefix: 'AT', separator: 'G', digits: 5, chromosomes: ['1','2','3','4','5']};
+const pea = {prefix: 'Psat.cameor.v2.', separator: 'g', digits: 5, chromosomes: ['1','2','3','4','5','6','7']};
+assert.equal(context.composeReferenceGeneId(arabidopsis, '１', '１０１０'), 'AT1G01010');
+assert.equal(context.composeReferenceGeneId(pea, '7', '50'), 'Psat.cameor.v2.7g00050');
+assert.equal(context.composeReferenceGeneId(arabidopsis, '6', '50'), '');
+assert.equal(context.composeReferenceGeneId(pea, '1', '123456'), '');
+assert.equal(context.composeReferenceGeneId(pea, '1', '50.1'), '');
+assert.equal(context.composeReferenceGeneId(pea, '1', 'g50'), '');
+console.log('Reference-specific gene ID composition passed.');

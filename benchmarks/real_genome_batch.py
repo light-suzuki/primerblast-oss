@@ -91,6 +91,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--genome', required=True)
     parser.add_argument('--db', required=True)
+    parser.add_argument('--reference-label', default='local-reference',
+                        help='Public reference label for reports; local file paths are not exported')
     parser.add_argument('--threads', type=int, default=2)
     parser.add_argument('--counts', default='10',
                         help='Comma-separated counts; use 10,100,500 explicitly for the expensive full panel')
@@ -100,7 +102,7 @@ def main():
     args = parser.parse_args()
     if args.worker:
         print(json.dumps(worker(args))); return
-    report = {'database': args.db, 'genome': args.genome, 'threads': args.threads,
+    report = {'database': args.reference_label, 'genome': args.reference_label, 'threads': args.threads,
               'memory_method': 'Sum of /proc VmRSS for worker and descendants, sampled every 10 ms; includes BLAST, excludes supervisor. Shared resident pages may be counted more than once; this is sampled RSS, not an exact physical-memory peak.',
               'full_length_realign': True, 'results': []}
     for count in [int(value) for value in args.counts.split(',')]:

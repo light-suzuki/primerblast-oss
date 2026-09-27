@@ -4,7 +4,7 @@ import pytest
 
 from primerblast_oss.gff3 import parse_gff3
 from primerblast_oss.regions import resolve_gene
-from primerblast_oss.webapp.references import reference_catalog
+from primerblast_oss.webapp.references import reference_catalog, infer_gene_id_format
 from primerblast_oss.webapp.server import _find_gene_seqid
 
 
@@ -65,3 +65,16 @@ def test_explicit_reference_availability_and_bad_config(tmp_path):
     assert profile["missing"] == ["FASTA", "FASTA index (.fai)"]
     config.write_text("{}")
     assert reference_catalog([], config)["warnings"]
+
+
+def test_gene_format_follows_annotation_and_index(tmp_path):
+    genome = tmp_path / "public-example.fa"
+    (tmp_path / "public-example.fa.fai").write_text("chr1\t100\t0\t60\t61\n7LG7\t100\t0\t60\t61\n")
+    annotation = tmp_path / "example.gff3"
+    annotation.write_text("chr1\tx\tgene\t1\t30\t.\t+\t.\tID=gene:Ref.1g00050\n")
+    format = infer_gene_id_format(genome, annotation)
+    assert format == {"prefix": "Ref.", "separator": "g", "digits": 5,
+                      "chromosomes": ["1", "7"], "source": "annotation_sample"}
+    annotation.write_text("chr1\tx\tgene\t1\t30\t.\t+\t.\tID=Ref.1g00050\n"
+                          "chr1\tx\tgene\t31\t60\t.\t+\t.\tID=Different.1g00060\n")
+    assert infer_gene_id_format(genome, annotation) is None

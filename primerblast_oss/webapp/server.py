@@ -10,6 +10,7 @@ GET  /                     -> static UI (index.html)
 GET  /<asset>              -> static asset (app.js, style.css, i18n.js, ...)
 GET  /api/health           -> tool availability + versions
 GET  /api/databases        -> discovered BLAST nucleotide databases
+GET  /api/references       -> local reference paths and gene-ID format metadata
 POST /api/run/<mode>       -> {job_id}          (mode = design|check|tile|sequence|assay|markers|makedb)
 GET  /api/job/<job_id>     -> {status, result?, error?}
 """

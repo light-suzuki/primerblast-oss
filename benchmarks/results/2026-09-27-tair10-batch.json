@@ -1,6 +1,6 @@
 {
-  "database": "/home/kouhei/.cache/primerblast-bench-20260927/data/tair10.fa",
-  "genome": "/home/kouhei/.cache/primerblast-bench-20260927/data/tair10.fa",
+  "database": "tair10.fa",
+  "genome": "tair10.fa",
   "threads": 2,
   "memory_method": "Sum of /proc VmRSS for worker and descendants, sampled every 10 ms; includes BLAST, excludes supervisor. Shared resident pages may be counted more than once; this is sampled RSS, not an exact physical-memory peak.",
   "full_length_realign": true,

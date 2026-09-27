@@ -178,5 +178,10 @@ select { border: 2px solid #164ca2; color: #17212f; background: #edf3ff; padding
 .reference-picker { margin: 20px 0; padding: 16px 20px; border-left: 4px solid #164ca2; background: #edf3ff; }
 .reference-picker select { width: 100%; background: white; margin-top: 8px; }
 .reference-status span { display: block; font-size: 14px; margin-top: 6px; }
+.gene-id-builder { grid-column: 1 / -1; padding: 16px; margin: 10px 0; border: 2px solid #164ca2; background: #edf3ff; }
+.gene-id-parts { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin-top: 12px; }
+.gene-id-parts code { font-size: 22px; line-height: 44px; color: #17212f; background: transparent; }
+.gene-id-parts label { min-width: 100px; }
+.gene-id-parts input { width: 180px; font-size: 18px; }
 @media (max-width: 780px) { .mode-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .experiment-choices { grid-template-columns: 1fr; } }
 @media (max-width: 600px) { .mode-grid { grid-template-columns: 1fr; } }
