@@ -105,3 +105,31 @@ def test_clean_database_is_complete_even_without_fasta():
     digest = result[0]["offtarget_digest"]
     assert digest["complete"] is True
     assert digest["background_fragments"] == []
+
+
+def test_reconstruction_preserves_interior_after_gapped_primer_alignment():
+    from primerblast_oss.assay import _amp_dict
+    from primerblast_oss.specificity import PrimingSite, SpecParams, enumerate_amplicons
+
+    sites = [
+        PrimingSite("F", "chr1", "+", 5, 1, 0, 4, mapped_end5=1),
+        PrimingSite("R", "chr1", "-", 12, 0, 0, 4, mapped_end5=15),
+    ]
+    products = enumerate_amplicons(sites, SpecParams(min_product=1, max_product=100))
+    product = _amp_dict(products[0])
+    sequence, error = reconstruct_pcr_product(
+        FakeGenome("ACAGT" + "GAATTC" + "CCCC"), product,
+        {"F": "ACGT", "R": "GGGG"},
+    )
+    assert error is None
+    assert sequence == "ACGTGAATTCCCCC"
+    assert len(sequence) == 14  # genomic span includes a primer-site insertion
+
+
+def test_truncated_or_ambiguous_reference_is_not_exact_digest_evidence():
+    product = {"subject": "chr1", "start": 1, "end": 30, "orientation": "F/R"}
+    primers = {"F": "GAATTC", "R": "TTTTTT"}
+    sequence, error = reconstruct_pcr_product(FakeGenome("A" * 20), product, primers)
+    assert sequence is None and error == "incomplete_genome_fetch"
+    sequence, error = reconstruct_pcr_product(FakeGenome("A" * 15 + "N" + "A" * 14), product, primers)
+    assert sequence is None and error == "ambiguous_product_sequence"

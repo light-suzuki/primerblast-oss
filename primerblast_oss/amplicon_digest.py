@@ -43,14 +43,29 @@ def reconstruct_pcr_product(
         return None, "genome_fetch_failed:%s" % error
     if not template:
         return None, "empty_genome_fetch"
-    if len(left_primer) + len(right_primer) > len(template):
+    if len(template) != end - start + 1:
+        return None, "incomplete_genome_fetch"
+    if set(template + left_primer + right_primer) - set("ACGT"):
+        return None, "ambiguous_product_sequence"
+    try:
+        left_end3 = product.get("fwd_end3")
+        right_end3 = product.get("rev_end3")
+        left_span = (int(left_end3) - start + 1
+                     if left_end3 is not None else len(left_primer))
+        right_span = (end - int(right_end3) + 1
+                      if right_end3 is not None else len(right_primer))
+    except (TypeError, ValueError):
+        return None, "invalid_primer_footprint"
+    if left_span <= 0 or right_span <= 0:
+        return None, "invalid_primer_footprint"
+    if left_span + right_span > len(template):
         return None, "primer_ends_overlap"
 
     # PCR products inherit primer-encoded bases. This matters for dCAPS, where
     # the engineered mismatch may itself create the restriction site.
     product_sequence = (
         left_primer
-        + template[len(left_primer):len(template) - len(right_primer)]
+        + template[left_span:len(template) - right_span]
         + revcomp(right_primer)
     )
     return product_sequence, None
