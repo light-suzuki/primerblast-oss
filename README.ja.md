@@ -140,7 +140,54 @@ python -m primerblast_oss check \
 
 ## 使い方
 
-primerblast-oss は **CLIツール**です。サブコマンド:**design**、**check**、**multiplex**、**multiplex-design**、**tile**、**sequence**、**assay**、**markers**、**makedb**。各サブコマンドの全オプションは `python -m primerblast_oss <subcommand> --help` で確認できます。
+primerblast-oss は **CLIツール**です。サブコマンド:**blast**、**primer3**、**design**、**check**、**multiplex**、**multiplex-design**、**tile**、**sequence**、**assay**、**markers**、**makedb**。各サブコマンドの全オプションは `python -m primerblast_oss <subcommand> --help` で確認できます。
+
+### `blast` / `primer3` — ファイル・パイプ向けの独立コマンド
+
+```bash
+# 通常のBLAST。PCRの3′端フィルタを適用せず両鎖を検索。
+primerblast-oss blast --query-fasta queries.fa --db mydb --out blast.tsv
+
+# DBなしでPrimer3設計。候補オリゴもFASTA保存。
+primerblast-oss primer3 --template-fasta targets.fa --product-size 150-500 \
+  --out primers.tsv --primers-out oligos.fa
+
+# 標準入力（-）から読み、バッチ全体を1つのJSONとして出力。
+cat targets.fa | primerblast-oss primer3 --template-fasta - --format json > design.json
+```
+
+BLASTは`--query DNA`／`--query-fasta FILE`、繰り返し指定できる`--db`、
+`--task blastn|megablast|blastn-short`と検索上限を指定できます。既定のTSVには参照DBと元の
+クエリ名が入り、座標は1始まり・両端を含みます。逆方向ヒットの参照座標は降順のままです。
+
+Primer3は`--template DNA`／`--template-fasta FILE`で入力し、産物長・Tm・プライマー長・GCを
+指定できます。`--target start,length`とTSVの位置はPrimer3の0始まり座標です。
+特異性は常に未確認（`not_evaluated`）。設計とDB検索を一緒に行う用途は既存の`design`を使います。
+`--primers-out FILE`は全候補オリゴ、`--products-fasta FILE`は参照増幅領域をFASTA保存します。
+全候補FASTAを`check`に渡すと、候補ペアごとの反応ではなく混合プライマープールとして検索します。
+
+両コマンドは`--format text|json|tsv`と`--out FILE`に対応し、既定はTSV・標準出力です。
+FASTA指定の`-`は標準入力。ファイル・ストリームはUTF-8を使います。PowerShellでは
+`Get-Content -Raw targets.fa | primerblast-oss primer3 --template-fasta - --format json`と書けます。
+外部ツールがWSL内にある場合はCLIもWSL内で実行してください。GUIの画面切替や参照選択UIはCLIに移しません。
+
+`check`でも`--input-orientation auto`（2本までの逆相補候補）、`--show-sequence-forms`（テキストに
+入力・逆順・相補・逆相補を表示）、`--products-fasta FILE`、`--gff3 FILE`が使えます。
+入力そのものと変更候補を区別し、F/Rラベルが逆の場合も示します。既定は`as_supplied`で入力を保持します。
+`--primers-fasta -`で標準入力、`--format tsv`で表出力にも対応します。
+
+```bash
+primerblast-oss check --primers-fasta pair.fa --db mydb \
+  --input-orientation auto --genome-fasta genome.fa --gff3 genes.gff3 \
+  --products-fasta products.fa --format json --out check.json
+```
+
+産物FASTAは参照＋鎖配列で、DB・結果グループ・産物ごとの識別子を付けます。オリゴのミスマッチや
+5′テールは反映せず、取得できない産物があれば標準エラーとJSONに示します。抽出はFASTA保存を
+指定したときだけ行います。GFF3だけの指定で配列抽出は行いません。
+`--gff3`は最初のDB、他のDBには`--db-gff3 DB=GFF3`、対応FASTAには既存の`--db-genome DB=FASTA`を使います。
+TSVは産物単位の表で、ゼロ産物の結果グループと検索状態は標準エラーに出します。
+完全な結果グループ・一致候補・未確定状態はJSONに保存されます。既存の特異性・熱力学オプションも維持しています。
 
 `multiplex` はプールされたプライマー間のプライマーダイマー互換性をチェックします(`primer3-py` が必要) — 全プライマー総当たりで、一緒に実行できるセットを選びます:
 

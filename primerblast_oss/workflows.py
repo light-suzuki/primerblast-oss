@@ -110,7 +110,10 @@ def _templates(p: Dict) -> List[Tuple[str, str]]:
             if line.startswith(">"):
                 if name is not None:
                     records.append((name, "".join(buf)))
-                name = line[1:].split()[0] if len(line) > 1 else "seq"
+                header = line[1:].strip()
+                if not header:
+                    raise ValueError("FASTA records require a nonempty identifier.")
+                name = header.split()[0]
                 buf = []
             else:
                 buf.append(line.strip())
@@ -187,8 +190,7 @@ def _run_design(p: Dict) -> Dict:
 
 
 def _run_check(p: Dict) -> Dict:
-    from itertools import product
-    from .genome import revcomp
+    from .primer_evidence import oligo_hypotheses, check_evidence_report
     from .sequence_tools import dna_input, product_sequence
     sp = _spec_params(p)
     dbs = _databases(p)
@@ -213,12 +215,7 @@ def _run_check(p: Dict) -> Dict:
         raise ValueError("Provide at least a forward/reverse primer or a primer list.")
     genomes = _associated_genomes(p)
     orientation = _f(p, "input_orientation", "as_supplied")
-    if orientation not in ("as_supplied", "auto"):
-        raise ValueError("input_orientation must be as_supplied or auto")
-    if orientation == "auto" and len(primers) > 2:
-        raise ValueError("Automatic orientation accepts up to two primers. Use 5'-3' oligos for a larger pool.")
-    choices = [[seq] if orientation == "as_supplied" or seq == revcomp(seq) else [seq, revcomp(seq)]
-               for seq in primers.values()]
+    hypotheses = oligo_hypotheses(primers, orientation)
     annotation_map = p.get("db_gff3") or {}
     if not isinstance(annotation_map, dict) or any(db not in dbs for db in annotation_map):
         raise ValueError("db_gff3 must map selected databases to matching GFF3 paths.")
@@ -226,8 +223,7 @@ def _run_check(p: Dict) -> Dict:
     if _f(p, "gff3", None) or _f(p, "annotation_gff3", None):
         annotation_map.setdefault(dbs[0], _f(p, "gff3", None) or p["annotation_gff3"])
     results = []
-    for sequences in product(*choices):
-        oligos = dict(zip(primers, sequences))
+    for oligos in hypotheses:
         raw = [in_silico_pcr(oligos, db, sp=sp, genome=genomes.get(db)) for db in dbs]
         reports = R.insilico_to_dict(raw, oligos)["results"]
         for result in reports:
@@ -237,15 +233,7 @@ def _run_check(p: Dict) -> Dict:
                 product_sequence(amplicon, result["db"], genomes.get(result["db"]), annotation_map.get(result["db"]))
             result["fasta"] = "".join(a.get("fasta", "") for a in result["products"])
         results.extend(reports)
-    from .primer_evidence import annotate_input_evidence
-    assessments = annotate_input_evidence(results, primers)
-    return {"mode": "check", "primers": primers, "input_orientation": orientation,
-            "input_sequence_forms": {name: {
-                "input_5to3": seq, "reverse": seq[::-1],
-                "complement_3to5": revcomp(seq)[::-1],
-                "reverse_complement_5to3": revcomp(seq),
-            } for name, seq in primers.items()},
-            "input_assessments": assessments, "results": results}
+    return check_evidence_report(results, primers, orientation)
 
 
 def _run_blast(p: Dict) -> Dict:
@@ -264,7 +252,8 @@ def _run_primer3(p: Dict) -> Dict:
     templates = []
     for name, sequence in _templates(p):
         sequence = clean_sequence(dna_input(sequence))
-        pairs, explain = design_primers(name, sequence, params)
+        pairs, explain = (design_primers(name, sequence, params, primer3_bin=p["primer3_bin"])
+                          if p.get("primer3_bin") else design_primers(name, sequence, params))
         rows = []
         for pair in pairs:
             row = asdict(pair)

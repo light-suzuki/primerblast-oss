@@ -1,6 +1,31 @@
 """Separate literal oligo predictions from alternative input hypotheses."""
 
 
+def oligo_hypotheses(primers, orientation):
+    """Return separate reaction inputs; never expand a single primer pool."""
+    from itertools import product
+    from .genome import revcomp
+    if orientation not in ("as_supplied", "auto"):
+        raise ValueError("input_orientation must be as_supplied or auto")
+    if orientation == "auto" and len(primers) > 2:
+        raise ValueError("Automatic orientation accepts up to two primers. Use 5'-3' oligos for a larger pool.")
+    choices = [[seq] if orientation == "as_supplied" or seq == revcomp(seq)
+               else [seq, revcomp(seq)] for seq in primers.values()]
+    return [dict(zip(primers, sequences)) for sequences in product(*choices)]
+
+
+def check_evidence_report(results, primers, orientation):
+    """Common JSON evidence for native CLI, GUI and agent workflows."""
+    from .genome import revcomp
+    return {"mode": "check", "primers": primers, "input_orientation": orientation,
+            "input_sequence_forms": {name: {
+                "input_5to3": seq, "reverse": seq[::-1],
+                "complement_3to5": revcomp(seq)[::-1],
+                "reverse_complement_5to3": revcomp(seq),
+            } for name, seq in primers.items()},
+            "input_assessments": annotate_input_evidence(results, primers), "results": results}
+
+
 def annotate_input_evidence(results, primers):
     """Add per-product direction and per-database literal-input evidence.
 

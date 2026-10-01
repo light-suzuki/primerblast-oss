@@ -22,18 +22,20 @@ def fasta_record(name, sequence):
 
 
 def nucleotide_search(records, databases, *, task="blastn", evalue=10.0,
-                      max_target_seqs=100, num_threads=2):
+                      max_target_seqs=100, num_threads=2, blastn_bin=None):
     """Ordinary BLAST HSPs; do not apply PCR priming/3'-end filters."""
     if task not in ("blastn", "megablast", "blastn-short"):
         raise ValueError("Choose blastn, megablast or blastn-short.")
     if not math.isfinite(evalue) or evalue <= 0 or not 1 <= max_target_seqs <= 10000 or not 1 <= num_threads <= 128:
         raise ValueError("Invalid BLAST search limits.")
-    exe = shutil.which("blastn")
+    exe = shutil.which(blastn_bin or "blastn")
     if not exe:
         raise RuntimeError("blastn not found. Install BLAST+.")
     columns = "qseqid sseqid pident length mismatch gapopen qstart qend sstart send evalue bitscore qseq sseq"
     queries = [{"id": "query%d" % i, "name": name, "sequence": dna_input(seq)}
                for i, (name, seq) in enumerate(records, 1)]
+    if not queries or not databases:
+        raise ValueError("At least one query and database are required.")
     results = []
     with tempfile.TemporaryDirectory(prefix="primerblast-search-") as folder:
         query = Path(folder) / "query.fa"
@@ -86,8 +88,13 @@ def product_sequence(product, database, genome=None, annotation=None):
                        fasta=fasta_record("%s:%s-%s_reference_plus" % (product["subject"], product["start"], product["end"]), sequence))
     except (OSError, RuntimeError, ValueError, KeyError) as error:
         product.update(sequence_status="unavailable", sequence_error=str(error))
+    product_annotations(product, annotation)
+
+
+def product_annotations(product, annotation=None):
+    """Attach coordinate-based gene evidence without requiring sequence extraction."""
     context = {"chrom": product["subject"], "start": product["start"], "end": product["end"],
-               "anchor": product["start"], "strand": "+", "sequence": sequence or ""}
+               "anchor": product["start"], "strand": "+", "sequence": product.get("sequence", "")}
     try:
         product["annotations"] = template_annotations(annotation, context)
     except (OSError, ValueError) as error:

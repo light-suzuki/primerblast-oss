@@ -43,6 +43,8 @@ Design, sequencing and assay maps also export their reference amplification span
 
 These tools are shared `blast` / `primer3` operations in `agent run`; inspect
 `python -m primerblast_oss agent schema` for JSON input fields.
+They also have native `blast` / `primer3` CLI commands for FASTA files, stdin
+and tabular reports, without starting a GUI server.
 
 A local, open-source, Primer-BLAST-style **command-line tool** for plant breeding
 and genetics. It designs PCR primers with **Primer3** and verifies their
@@ -239,10 +241,44 @@ optional extra — see [Web GUI (optional)](#web-gui-optional) near the end.
 
 ## Usage
 
-primerblast-oss is a **CLI tool**. Subcommands: **design**, **check**,
+primerblast-oss is a **CLI tool**. Subcommands: **blast**, **primer3**, **design**, **check**,
 **multiplex**, **multiplex-design**, **tile**, **sequence**, **assay**,
 **markers**, **makedb**. Run `python -m primerblast_oss <subcommand> --help` for the full
 option list of any one.
+
+### `blast` / `primer3` — standalone commands for files and pipelines
+
+```bash
+# Ordinary nucleotide alignments; both strands, without PCR priming filters.
+primerblast-oss blast --query-fasta queries.fa --db mydb --out blast.tsv
+
+# Primer3 design without a specificity database.
+primerblast-oss primer3 --template-fasta targets.fa --product-size 150-500 \
+  --out primers.tsv --primers-out oligos.fa
+
+# Read a multi-record FASTA from stdin; emit one JSON result for the entire batch.
+cat targets.fa | primerblast-oss primer3 --template-fasta - --format json > design.json
+```
+
+`blast` accepts `--query DNA` or `--query-fasta FILE` (`-` for stdin), repeated
+`--db`, `--task blastn|megablast|blastn-short`, and BLAST search limits. Its default
+TSV includes the DB and original query name, so multi-reference output stays
+unambiguous. HSP coordinates are 1-based inclusive; reverse hits retain descending
+subject coordinates. Target-limit diagnostics go to stderr.
+
+`primer3` accepts `--template DNA` or `--template-fasta FILE` (`-` for stdin),
+product-size/Tm/length/GC constraints and a 0-based `--target start,length`.
+The default TSV contains oligos, product sizes, Tm, GC, penalty and Primer3's
+0-based positions. Specificity is always `not_evaluated`; use `design` when
+design plus database screening is wanted. `--primers-out FILE` exports every
+candidate oligo as FASTA; passing that entire FASTA to `check` screens a mixed
+pool, not separate reactions. `--products-fasta FILE` exports reference spans.
+
+Both commands support `--format text|json|tsv` and `--out FILE` (stdout if omitted).
+FASTA streams and reports use UTF-8. In PowerShell, pipe with
+`Get-Content -Raw targets.fa | primerblast-oss primer3 --template-fasta - --format json`.
+When the external tools are installed in WSL, run these commands in WSL too.
+GUI navigation, reference-picker state and browser downloads remain GUI features.
 
 `multiplex` checks primer-dimer compatibility across a pool of primers (needs
 `primer3-py`) — every primer against every other, to pick sets you can run
@@ -288,6 +324,29 @@ python -m primerblast_oss design \
 Paste primers; orientation is **not** constrained (any primer may act as
 forward or reverse). Every product is listed with its size and the size gap to
 the nearest other product, so you can judge whether extra bands are resolvable.
+
+`--input-orientation auto` separately tests reverse-complement alternatives for
+up to two primers; the default `as_supplied` preserves the entered oligos. Text
+and JSON distinguish literal-input products, label swaps and changed-oligo
+candidates. `--show-sequence-forms` includes reverse/complement forms in text;
+JSON always contains them. `--primers-fasta -` reads a pool from stdin.
+
+```bash
+primerblast-oss check --primers-fasta pair.fa --db mydb \
+  --input-orientation auto --genome-fasta genome.fa --gff3 genes.gff3 \
+  --products-fasta products.fa --format json --out check.json
+```
+
+The product FASTA is reference plus-strand sequence, with separate IDs for DBs,
+result groups and products. It does not substitute mismatched oligo bases or
+5' tails; incomplete extraction is reported on stderr and in JSON. Extraction
+uses the associated indexed FASTA or `blastdbcmd` and runs only for
+`--products-fasta`. `--gff3` annotates the first DB; repeated `--db-gff3 DB=GFF3`
+maps other references. Annotation alone does not require sequence extraction.
+`--format tsv` produces product rows with DB, changed inputs, completeness,
+participating oligos/directions and genes; zero-product groups and search state
+are reported on stderr. JSON retains all groups, binding-site samples and
+unresolved states. Existing specificity profiles and thermodynamic options apply.
 
 ```bash
 python -m primerblast_oss check \
