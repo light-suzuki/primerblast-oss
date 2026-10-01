@@ -7,6 +7,9 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- PR #62 benchmark review records with synthetic run provenance, separately
+  attributed whole-genome panel measurements, and refreshed English/Japanese
+  README summaries distinguishing historical comparisons and open acceptance.
 - Explicit ON/OFF labels for reverse-complement alternatives in the GUI and a
   native `check --no-auto-orientation` switch. OFF is the default and retains
   both-strand searches and all combinations of the supplied oligos.
