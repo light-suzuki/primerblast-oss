@@ -192,6 +192,11 @@ For each primer pair and each database:
 Pairs are scored and ranked A–D by specificity, Tm balance, GC, and 3'-dimer
 strength.
 
+Genome-verified exact loci retain their nominated coordinates. Repeated HSPs
+for the same binding alignment count once; distinct 3' endpoints or gapped
+alignments remain separate evidence. See [site identity and count semantics](
+docs/priming-site-identity.md).
+
 Use `--specificity-profile ncbi` to switch the mismatch thresholds to a
 NCBI-Primer-BLAST-like stringency profile: up to 5 total mismatches are kept as
 candidate priming sites, up to 1 mismatch is allowed within the 3'-terminal 5 bp,

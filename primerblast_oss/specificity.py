@@ -128,6 +128,7 @@ class PrimingSite:
 class PrimerHitStats:
     primer: str
     raw_blast_hits: int
+    # Unique accepted binding alignments, not the number of supporting HSPs.
     priming_sites: int
     unique_subjects: int
     near_target_limit: bool
@@ -137,6 +138,7 @@ class PrimerHitStats:
     malformed_rows: int = 0
     malformed_row_reason: Optional[str] = None
     realignment_attempted: bool = False
+    # Unique accepted full-primer alignments; raw_blast_hits retains all HSPs.
     realigned_sites: int = 0
     realignment_failures: int = 0
 
@@ -377,9 +379,21 @@ def _realign_hit_to_site(
     if not target:
         return None, False
 
-    aligned_primer, aligned_target, target_start, _target_end = (
-        _fitting_align_primer(primer, target)
-    )
+    # A fitting alignment can have several equally optimal placements in a
+    # tandem repeat. Keep the nominated locus when the actual genome confirms
+    # an exact full-primer match there, rather than moving it to the first tie
+    # in the flanking window. Check the sequence, not BLAST's identity field.
+    nominated_start = approx_5 - low if strand == "+" else high - approx_5
+    nominated_end = nominated_start + len(primer)
+    if (abs(approx_3 - approx_5) + 1 == len(primer)
+            and 0 <= nominated_start < nominated_end <= len(target)
+            and target[nominated_start:nominated_end].upper() == primer.upper()):
+        aligned_primer = aligned_target = primer.upper()
+        target_start = nominated_start
+    else:
+        aligned_primer, aligned_target, target_start, _target_end = (
+            _fitting_align_primer(primer, target)
+        )
     first_index, last_index = _primer_terminal_target_indices(
         aligned_primer, aligned_target, target_start)
     if first_index is None or last_index is None:
@@ -454,6 +468,22 @@ def _hit_to_site(fields: List[str], primer_id: str, sp: SpecParams) -> Optional[
         # indels. Only an unaligned 5' prefix needs coordinate extrapolation.
         mapped_end5=int(subject_start) + (int(query_start) - 1) * (
             -1 if strand == "+" else 1),
+        aligned_query=query_sequence.upper(),
+        aligned_target=subject_sequence.upper(),
+    )
+
+
+def _site_identity(site: PrimingSite) -> Tuple:
+    """Identify one binding alignment, not just its outer product footprint.
+
+    Multiple HSPs can resolve to the same site. Different terminal coordinates
+    or gapped alignments remain separate evidence, even for equal-size products.
+    """
+    return (
+        site.primer, site.subject, site.strand, site.end5, site.end3, site.plen,
+        site.total_mismatch, site.tp_mismatch, site.tp5_mismatch, site.tp10_mismatch,
+        site.aligned_query, site.aligned_target,
+        site.tm, site.end3_dg, site.thermo_viable,
     )
 
 
@@ -503,6 +533,7 @@ def _priming_sites_from_output(
     malformed_reason: Optional[str] = None
     realigned_sites = 0
     realignment_failures = 0
+    seen_sites = set()
     for line in output.splitlines():
         if not line.strip():
             continue
@@ -520,8 +551,6 @@ def _priming_sites_from_output(
                     fields, primer_id, primer, sp, genome)
                 if not resolved:
                     realignment_failures += 1
-                elif site is not None:
-                    realigned_sites += 1
             else:
                 site = _hit_to_site(fields, primer_id, sp)
         except ValueError as error:
@@ -532,7 +561,12 @@ def _priming_sites_from_output(
             continue
         subjects.add(fields[1])
         if site is not None:
-            sites.append(site)
+            identity = _site_identity(site)
+            if identity not in seen_sites:
+                seen_sites.add(identity)
+                sites.append(site)
+                if genome is not None:
+                    realigned_sites += 1
 
     near_limit, high_copy, completeness = _classify_hit_list(
         raw_hits, len(sites), len(subjects), sp)
@@ -738,8 +772,12 @@ def annotate_thermo(sites: Sequence[PrimingSite], primers: Dict[str, str],
 
 def enumerate_amplicons(sites: Sequence[PrimingSite], sp: SpecParams) -> List[Amplicon]:
     by_subject: Dict[str, List[PrimingSite]] = {}
+    seen_sites = set()
     for site in sites:
-        by_subject.setdefault(site.subject, []).append(site)
+        identity = _site_identity(site)
+        if identity not in seen_sites:
+            seen_sites.add(identity)
+            by_subject.setdefault(site.subject, []).append(site)
 
     amplicons: List[Amplicon] = []
     for subject, group in by_subject.items():
