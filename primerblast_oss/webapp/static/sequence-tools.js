@@ -6,15 +6,15 @@ Object.assign(I18N.ja, {
   'tools.reverse': '逆順（文字の並びを反転）',
   'tools.complement': '相補配列（入力に対応する3′→5′）',
   'tools.reverseComplement': '逆相補配列（5′→3′）',
-  'tools.formsHint': '入力したオリゴは自動で書き換えません。変換配列は照合用です。コピー配列モードで検索する変更候補は逆相補だけです。',
+  'tools.formsHint': '入力したオリゴは自動で書き換えません。変換配列は照合用です。自動確認ONで検索する変更候補は逆相補です。逆順・相補配列は照合用に表示します。',
   'tools.reviewDirection': '配列の向きを確認：入力のままの2本の組合せでは産物が未検出ですが、逆相補へ変更した2本では候補があります。コピー元や発注配列と見比べてください。',
   'tools.blast': '通常BLAST', 'tools.primer3': 'Primer3',
   'tools.blastHint': 'DNAまたは複数配列のFASTAを入力します。両鎖を検索し、相同性・座標・アラインメントを表示します。',
   'tools.primer3Hint': '配列だけでプライマーを設計します。検索DBは不要です。特異性は未確認なので、候補をPCR確認へ送って確認できます。',
   'tools.task': '検索方法', 'tools.limit': 'クエリごとの最大ヒット配列数',
-  'tools.orientation': '入力配列の種類', 'tools.oligo': '発注済みオリゴ（5′→3′・両鎖を自動検索）',
-  'tools.auto': 'ゲノムからコピーした配列（逆相補も自動確認・2本まで）',
-  'tools.orientationHint': '配列は5′→3′で入力します。F/Rの名前に関わらず両鎖を検索し、実際の伸長方向と入力のままでの増幅予測を表示します。コピー配列モードは逆相補に変更した別オリゴの候補も比較します。',
+  'tools.orientation': '逆相補候補の自動確認', 'tools.oligo': 'OFF：入力配列のまま（両鎖を検索）',
+  'tools.auto': 'ON：入力と逆相補の候補を比較（2本まで）',
+  'tools.orientationHint': '配列は5′→3′で入力します。OFFは入力したオリゴだけを評価し、ONは逆相補に変更した別オリゴの候補も比較します。どちらも両鎖を検索し、F/R・R/F・F/F・R/Rの増幅候補と実際の伸長方向を表示します。入力配列は書き換えません。',
   'tools.genome': '増幅配列を取得するゲノムFASTA（任意・最初の検索DBと同じ参照）',
   'tools.gff3': '増幅領域の遺伝子を表示するGFF3（任意・最初の検索DBと同じ参照）',
   'tools.reference': '増幅領域の参照配列（＋鎖・1始まり両端を含む）',
@@ -34,15 +34,15 @@ Object.assign(I18N.en, {
   'tools.reverse': 'Reverse (character order reversed)',
   'tools.complement': 'Complement (3′→5′, aligned with the input)',
   'tools.reverseComplement': 'Reverse complement (5′→3′)',
-  'tools.formsHint': 'Supplied oligos are never overwritten. These forms are for comparison. Copied-sequence mode searches only reverse-complement alternatives.',
+  'tools.formsHint': 'Supplied oligos are never overwritten. These forms are for comparison. ON searches reverse-complement alternatives. Reverse and complement-only forms are displayed for comparison.',
   'tools.reviewDirection': 'Review sequence direction: no two-primer product was observed as supplied, but reverse-complement changes yield candidates. Compare the source or ordered oligos.',
   'tools.blast': 'BLAST', 'tools.primer3': 'Primer3',
   'tools.blastHint': 'Enter DNA or multi-record FASTA. Search both strands and inspect identity, coordinates and alignments.',
   'tools.primer3Hint': 'Design primers from sequence alone, without a database. Specificity is not evaluated; send candidates to PCR check.',
   'tools.task': 'Search task', 'tools.limit': 'Maximum target sequences per query',
-  'tools.orientation': 'Input sequence type', 'tools.oligo': 'Ordered oligos (5′→3′; both strands searched)',
-  'tools.auto': 'Copied genomic sequence (also try reverse complements; up to two primers)',
-  'tools.orientationHint': 'No F/R swap or +/− strand setting is needed. Paste ordered oligos unchanged. For copied sequences, each original/reverse-complement combination is calculated separately and candidate oligos are shown. No plain reverse or complement-only conversion is applied.',
+  'tools.orientation': 'Automatic reverse-complement alternatives', 'tools.oligo': 'OFF: supplied oligos only (both strands searched)',
+  'tools.auto': 'ON: compare original and reverse-complement alternatives (up to two primers)',
+  'tools.orientationHint': 'Enter sequences 5′→3′. OFF evaluates the supplied oligos; ON also compares separately changed reverse-complement oligos. Both modes search both strands and all F/R, R/F, F/F and R/R combinations, with actual extension directions. Supplied sequences are never overwritten.',
   'tools.genome': 'Genome FASTA for product extraction (optional; matches the first search DB)',
   'tools.gff3': 'GFF3 for overlapping genes (optional; matches the first search DB)',
   'tools.reference': 'Reference product sequence (+ strand; 1-based inclusive)',
@@ -75,6 +75,16 @@ Object.assign(I18N.ja, {
   'tools.sites': '各プライマーの一致候補・方向',
   'tools.siteHint': '一致候補だけでは増幅を意味しません。向き・距離・ミスマッチ・熱力学条件も判定します。座標は1始まり。＋/−は参照へのアラインメント方向で、結合する鋳型鎖は反対側です。',
   'tools.omittedSites': '省略した一致候補数', 'tools.mismatch': 'ミスマッチ数',
+  'tools.thermoStatus': '熱力学評価',
+  'tools.thermoSkipped': '対応するゲノムFASTAがないため未評価',
+  'tools.thermoUnavailable': '計算ライブラリが利用できないため未評価',
+  'tools.thermoDisabled': '評価を無効にしています',
+  'tools.thermoNoSites': '一致候補がないため評価する部位がありません',
+  'tools.thermoGated': '評価済み。条件に適合しない部位は増幅予測から除外',
+  'tools.thermoAnnotation': '評価済み。部位の除外には使っていません',
+  'tools.thermoPartial': '一部の部位を評価できませんでした。増幅可否は未確定です',
+  'tools.thermoFailed': '部位を評価できませんでした。増幅可否は未確定です',
+  'tools.thermoRejected': '熱力学条件で除外した部位数',
   'tools.thermo': '熱力学的な伸長可否', 'tools.yes': '適合', 'tools.no': '不適合', 'tools.unknown': '未評価'
 });
 Object.assign(I18N.en, {
@@ -96,6 +106,16 @@ Object.assign(I18N.en, {
   'tools.sites': 'Primer alignment candidates and directions',
   'tools.siteHint': 'An alignment alone does not imply amplification. Direction, distance, mismatches and thermodynamic conditions also matter. Coordinates are 1-based. +/− denotes reference alignment direction; the physical template strand is opposite.',
   'tools.omittedSites': 'Omitted alignment candidates', 'tools.mismatch': 'Mismatches',
+  'tools.thermoStatus': 'Thermodynamic evaluation',
+  'tools.thermoSkipped': 'Not evaluated: no associated genome FASTA',
+  'tools.thermoUnavailable': 'Not evaluated: calculation library unavailable',
+  'tools.thermoDisabled': 'Evaluation disabled',
+  'tools.thermoNoSites': 'No candidate sites to evaluate',
+  'tools.thermoGated': 'Evaluated; nonviable sites excluded from product predictions',
+  'tools.thermoAnnotation': 'Evaluated for annotation only; sites are not excluded',
+  'tools.thermoPartial': 'Some sites could not be evaluated; amplification remains unresolved',
+  'tools.thermoFailed': 'Sites could not be evaluated; amplification remains unresolved',
+  'tools.thermoRejected': 'Sites excluded by thermodynamic conditions',
   'tools.thermo': 'Thermodynamic viability', 'tools.yes': 'Viable', 'tools.no': 'Not viable', 'tools.unknown': 'Not evaluated'
 });
 
@@ -120,6 +140,20 @@ function inputSequenceForms(data) {
     html += '</tbody></table></div>';
   }
   return html + '</details>';
+}
+
+function thermoCheckEvidence(result) {
+  if (!result.thermo_status) return '';
+  let label = {
+    skipped_no_associated_genome: 'tools.thermoSkipped', unavailable: 'tools.thermoUnavailable',
+    disabled: 'tools.thermoDisabled', evaluated_defaults_gated: 'tools.thermoGated',
+    evaluated_gated: 'tools.thermoGated', evaluated_defaults_annotation_only: 'tools.thermoAnnotation',
+    evaluated_annotation_only: 'tools.thermoAnnotation', partial_unresolved_sites: 'tools.thermoPartial',
+    failed_no_resolvable_sites: 'tools.thermoFailed'
+  }[result.thermo_status];
+  if (result.thermo_evaluated === false && result.thermo_status.startsWith('evaluated')) label = 'tools.thermoNoSites';
+  const rejected = Object.values((result.thermo_site_stats || {}).gated_per_primer || {}).reduce((a, b) => a + b, 0);
+  return `<p class="hint">${esc(t('tools.thermoStatus'))}: ${esc(label ? t(label) : result.thermo_status)}${rejected ? ` · ${esc(t('tools.thermoRejected'))}: ${rejected}` : ''}</p>`;
 }
 
 function bindingSiteEvidence(result) {
@@ -189,6 +223,7 @@ renderCheck = function(data) {
     for (const result of results) {
       html += checkWithoutSequence({primers: result.oligos || data.primers, results: [result]});
       html += `<p class="hint">${esc(t('studio.search'))}: ${esc(result.search_completeness || 'unknown')}</p>`;
+      html += thermoCheckEvidence(result);
       if ((result.reverse_complemented_inputs || []).length) html += `<p class="evidence-note">${esc(t('tools.hypothesis'))}: ${esc(result.reverse_complemented_inputs.join(', '))}</p>`;
       html += bindingSiteEvidence(result);
       if (result.fasta) html += dl('fasta', 'predicted_products.fa', result.fasta);

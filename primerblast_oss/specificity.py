@@ -421,7 +421,7 @@ def _realign_hit_to_site(
 
 def _hit_to_site(fields: List[str], primer_id: str, sp: SpecParams) -> Optional[PrimingSite]:
     (_query_id, subject_id, _identity, _length, _mismatch, _gapopen,
-     query_start, query_end, _subject_start, subject_end, _evalue, _bits,
+     query_start, query_end, subject_start, subject_end, _evalue, _bits,
      subject_strand, query_sequence, subject_sequence, query_length) = fields
     query_end_i = int(query_end)
     query_length_i = int(query_length)
@@ -450,6 +450,10 @@ def _hit_to_site(fields: List[str], primer_id: str, sp: SpecParams) -> Optional[
         plen=query_length_i,
         tp5_mismatch=tp5,
         tp10_mismatch=tp10,
+        # The genomic span can differ from primer length when the HSP has
+        # indels. Only an unaligned 5' prefix needs coordinate extrapolation.
+        mapped_end5=int(subject_start) + (int(query_start) - 1) * (
+            -1 if strand == "+" else 1),
     )
 
 
@@ -702,10 +706,15 @@ def annotate_thermo(sites: Sequence[PrimingSite], primers: Dict[str, str],
             stats["attempted_per_primer"].get(site.primer, 0) + 1)
         sequence = primers.get(site.primer)
         target = _site_binding_strand(genome, site) if sequence else ""
-        result = (
-            thermo_module.evaluate(sequence, target, tp)
-            if (sequence and target) else None
-        )
+        try:
+            result = (
+                thermo_module.evaluate(sequence, target, tp)
+                if (sequence and target) else None
+            )
+        except (ValueError, RuntimeError, OverflowError):
+            # Unsupported oligos/calculation failures are missing evidence,
+            # not negative priming evidence. Keep the site unresolved.
+            result = None
         if result is None:
             stats["unresolved_per_primer"][site.primer] = (
                 stats["unresolved_per_primer"].get(site.primer, 0) + 1)
@@ -811,6 +820,7 @@ def in_silico_pcr(
     blastn = _detect_blastn(blastn_bin)
     sites, hit_stats = screen_primers_with_stats(
         primers, db, sp, blastn, genome)
+    candidate_sites = sites
     sites, viable_sites, thermo_site_stats = annotate_thermo(
         sites, primers, genome, thermo_params, thermo_gate)
     amplicons = enumerate_amplicons(sites, sp)
@@ -830,7 +840,7 @@ def in_silico_pcr(
             name: sum(site.primer == name for site in sites) for name in primers
         },
         "binding_site_counts": {
-            name: {strand: sum(site.primer == name and site.strand == strand for site in sites)
+            name: {strand: sum(site.primer == name and site.strand == strand for site in candidate_sites)
                    for strand in ("+", "-")} for name in primers
         },
         "binding_sites": [
@@ -838,9 +848,9 @@ def in_silico_pcr(
              "end5": site.end5, "end3": site.end3, "extends": site.extends,
              "mismatches": site.total_mismatch, "three_prime_mismatches": site.tp_mismatch,
              "thermo_viable": site.thermo_viable}
-            for site in sites[:200]
+            for site in candidate_sites[:200]
         ],
-        "binding_sites_truncated": max(0, len(sites) - 200),
+        "binding_sites_truncated": max(0, len(candidate_sites) - 200),
         "thermo_evaluated": bool(sum(
             thermo_site_stats["evaluated_per_primer"].values())),
         "thermo_site_stats": thermo_site_stats,

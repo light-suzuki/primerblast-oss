@@ -41,8 +41,8 @@ the first selected database; other references use `db_genomes` and `db_gff3`
 mappings in the shared API. Missing extraction or annotation is unresolved.
 Design, sequencing and assay maps also export their reference amplification span.
 
-These tools are shared `blast` / `primer3` operations in `agent run`; inspect
-`python -m primerblast_oss agent schema` for JSON input fields.
+Standalone BLAST and Primer3 are GUI tools. The native and JSON agent CLIs
+provide integrated PCR workflows.
 
 A local, open-source, Primer-BLAST-style **command-line tool** for plant breeding
 and genetics. It designs PCR primers with **Primer3** and verifies their
@@ -246,7 +246,14 @@ option list of any one.
 
 The native CLI focuses on integrated PCR workflows: design plus specificity
 screening, primer checks, multiplex compatibility and marker assays.
-Standalone BLAST and Primer3 remain in the GUI and shared agent API.
+Standalone BLAST and Primer3 remain in the GUI.
+
+In PCR check, automatic reverse-complement alternatives are OFF by default.
+Choose ON/OFF in the GUI, or use native `check --no-auto-orientation`
+(`--input-orientation as_supplied`) to explicitly turn them OFF.
+Use `--input-orientation auto` for ON. Both modes search both strands and all
+F/R, R/F, F/F and R/R combinations under the selected search conditions.
+OFF does not remove predictions for the supplied oligos.
 
 `multiplex` checks primer-dimer compatibility across a pool of primers (needs
 `primer3-py`) — every primer against every other, to pick sets you can run
@@ -546,6 +553,11 @@ lightly — matching how such pairs are used in practice.
 ## JSON output (scripting-friendly)
 
 `--format json` emits a stable schema for piping into other tools (or a GUI).
+For native `design` and `tile`, a single template retains the flat result;
+multiple templates produce one document with `mode` and a `templates` array.
+PCR-check binding-site tables retain thermodynamically rejected candidates;
+these are excluded from product predictions, with evaluation state reported
+separately. Failed thermodynamic calculations remain unresolved.
 Every object carries what a consumer needs without recomputation:
 
 - **primer**: `forward`/`reverse`, `tm_f`/`tm_r`, `gc_f`/`gc_r`, `left_start`/
@@ -597,7 +609,8 @@ DB, auto-discovers BLAST databases under `~/.codex/blast_databases`,
 `~/blast_databases` and `./databases`, runs each job in a background thread, and
 offers one-click TSV/CSV/BED/JSON downloads. English / 日本語 toggle in the header.
 It binds to loopback (`127.0.0.1`) only; on WSL2 Windows browsers reach it via the
-default localhost forwarding. Everything it does is also available from the CLI.
+default localhost forwarding. Integrated PCR workflows are also available from
+the CLI; standalone BLAST and Primer3 are GUI tools.
 
 The purpose-first start page, beginner/advanced controls, inline input guidance,
 and responsive layout work in both languages. Load a small FASTA/text file into

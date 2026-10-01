@@ -264,6 +264,19 @@ def _templates(arguments) -> List[Tuple[str, str]]:
     return [(arguments.template_id, arguments.template)]
 
 
+def _emit_template_reports(outputs, arguments) -> None:
+    """Keep single-template JSON stable; wrap a batch in one JSON document."""
+    if not outputs:
+        raise ValueError("FASTA input must contain at least one template record")
+    if arguments.format == "json":
+        reports = [json.loads(output) for output in outputs]
+        data = reports[0] if len(reports) == 1 else {
+            "mode": reports[0]["mode"], "templates": reports}
+        _emit(json.dumps(data, indent=2, default=str), arguments.out)
+    else:
+        _emit("\n\n".join(outputs), arguments.out)
+
+
 def _cmd_design(arguments) -> int:
     target = None
     if arguments.target:
@@ -306,8 +319,7 @@ def _cmd_design(arguments) -> int:
             else R.to_tsv(result) if arguments.format == "tsv"
             else R.to_text(result)
         )
-    _emit(("\n" if arguments.format == "json" else "\n\n").join(outputs),
-          arguments.out)
+    _emit_template_reports(outputs, arguments)
     return 0
 
 
@@ -610,8 +622,7 @@ def _cmd_tile(arguments) -> int:
         else:
             outputs.append(R.tiling_to_text(
                 tiles, template_id, requested_region))
-    _emit(("\n" if arguments.format == "json" else "\n\n").join(outputs),
-          arguments.out)
+    _emit_template_reports(outputs, arguments)
     return 0
 
 
@@ -1037,8 +1048,11 @@ def build_parser() -> argparse.ArgumentParser:
     check.add_argument("--reverse")
     check.add_argument("--primer", action="append", help="NAME=SEQ or SEQ")
     check.add_argument("--primers-fasta", help="FASTA primer pool; - reads stdin")
-    check.add_argument("--input-orientation", choices=("as_supplied", "auto"), default="as_supplied",
-                       help="auto also searches reverse-complement alternatives (up to two primers)")
+    orientation = check.add_mutually_exclusive_group()
+    orientation.add_argument("--input-orientation", choices=("as_supplied", "auto"), default="as_supplied",
+                             help="as_supplied: OFF (default); auto: also test changed reverse-complement oligos (up to two primers). Both modes search both strands and all primer combinations")
+    orientation.add_argument("--no-auto-orientation", dest="input_orientation", action="store_const", const="as_supplied",
+                             help="turn OFF changed-oligo hypotheses; keep both-strand searches of supplied oligos")
     check.add_argument("--show-sequence-forms", action="store_true",
                        help="include input/reverse/complement/reverse-complement in text output; always in JSON")
     check.add_argument("--products-fasta", help="write reference product sequences; hypotheses have separate IDs")

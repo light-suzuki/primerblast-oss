@@ -48,4 +48,13 @@ const grouped = run(`renderCheck({primers:{F:'ACGA'},input_sequence_forms:{F:{in
 assert.ok(grouped.indexOf('<h2>tools.literalGroup') < grouped.indexOf('<h2>tools.alternativeGroup'));
 for (const sequence of ['ACGA','AGCA','TGCT','TCGT']) assert.ok(grouped.includes(sequence));
 assert.ok(grouped.includes('tools.complement') && grouped.includes('tools.reverseComplement'));
+const gated = run(`thermoCheckEvidence({thermo_status:'evaluated_defaults_gated',thermo_site_stats:{gated_per_primer:{F:2,R:1}}})`);
+assert.ok(gated.includes('tools.thermoGated') && gated.includes('tools.thermoRejected: 3'));
+const skipped = run(`thermoCheckEvidence({thermo_status:'skipped_no_associated_genome'})`);
+assert.ok(skipped.includes('tools.thermoSkipped'));
+const noSites = run(`thermoCheckEvidence({thermo_status:'evaluated_defaults_gated',thermo_evaluated:false})`);
+assert.ok(noSites.includes('tools.thermoNoSites') && !noSites.includes('tools.thermoGated'));
+assert.ok(run('I18N.ja["tools.oligo"]').startsWith('OFF'));
+assert.ok(run('I18N.ja["tools.auto"]').startsWith('ON'));
+assert.ok(run('I18N.ja["tools.orientationHint"]').includes('F/R・R/F・F/F・R/R'));
 console.log('Standalone BLAST/Primer3, orientation hypotheses and FASTA evidence passed.');
