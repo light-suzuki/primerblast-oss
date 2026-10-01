@@ -7,6 +7,9 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- Illustrated English/Japanese GUI walkthroughs, synthetic-only reproducible
+  screenshot setup, and an issue-priority guide separating code tasks from
+  real-genome acceptance and wet-lab calibration.
 - PR #62 benchmark review records with synthetic run provenance, separately
   attributed whole-genome panel measurements, and refreshed English/Japanese
   README summaries distinguishing historical comparisons and open acceptance.
@@ -50,6 +53,8 @@ All notable changes to this project are documented here. The format follows
   order oligos without changing specificity evaluation.
 
 ### Changed / Fixed
+- The active task-selection tab retains readable white text on its blue
+  background instead of inheriting the older blue-text override.
 - Genome-verified exact primer loci retain their nominated coordinates instead
   of moving to an equally scoring neighboring repeat. Identical binding
   alignments are counted once; distinct primers, terminal coordinates and
