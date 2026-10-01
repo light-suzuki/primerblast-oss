@@ -167,7 +167,7 @@ select { border: 2px solid #164ca2; color: #17212f; background: #edf3ff; padding
 .app { max-width: 1560px; }
 .tabs { display: flex; flex-wrap: wrap; gap: 6px; }
 .tab { font-size: 15px; padding: 14px 18px; }
-.tab.active { color: #fff; background: #164ca2; border-color: #164ca2; }
+.tab.active, .tab.tab-guide.active { color: #fff; background: #164ca2; border-color: #164ca2; }
 .mode-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .experiment-choices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; padding: 16px; }
 .experiment-choice { display: grid; grid-template-columns: 22px 1fr; gap: 8px; padding: 16px; border: 2px solid #7b899c; border-radius: 6px; cursor: pointer; }

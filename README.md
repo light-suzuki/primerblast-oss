@@ -8,6 +8,66 @@
 
 **English** | [日本語](README.ja.md)
 
+Design PCR primers and inspect what existing oligos could amplify, using a
+local browser GUI or integrated CLI workflows. Primer3 and BLAST+ run beside
+your reference genomes; input sequences stay on your machine.
+
+![Local PCR GUI with task selection, BLAST and Primer3 tabs](docs/screenshots/start-en.jpg)
+
+## Start here
+
+| What you want to do | GUI | CLI |
+|---|---|---|
+| Design primers and screen specificity | PCR design | `design` |
+| Check products from existing oligos | PCR check | `check` |
+| Search a DNA sequence with ordinary BLAST | BLAST | Use BLAST+ directly |
+| Design candidate primers without a search DB | Primer3 | Use Primer3 directly |
+| Prepare a genome search database | Genome setup | `makedb` |
+
+After [installing the package and required tools](#install), start the GUI:
+
+```bash
+python -m primerblast_oss.webapp --no-browser
+```
+
+Open [localhost:8799](http://localhost:8799/). BLAST+ and `primer3_core` are
+required; Windows users can run them and the server in WSL and open the GUI
+from a Windows browser. See [requirements](#requirements) and the
+[GUI setup guide](#web-gui-optional).
+
+1. Choose or build a reference BLAST database. Matching indexed FASTA/GFF3
+   additionally provide thermodynamics, reference sequence and gene annotation.
+2. Paste your ordered oligos **5′→3′** into PCR check. Leave reverse-complement
+   alternatives **OFF** to evaluate the supplied sequences. OFF still searches
+   both strands and F/R, R/F, F/F and R/R combinations under your search settings.
+3. To review a possible copied-strand mistake, turn alternatives **ON**. Inspect
+   the original and changed-oligo results separately; the input is retained.
+
+![PCR check input with the explicit OFF switch and both-strand search](docs/screenshots/input-en.jpg)
+
+<details>
+<summary>Example results: original oligos versus reverse-complement alternatives</summary>
+
+![Separate original and changed-oligo product results](docs/screenshots/results-en.jpg)
+
+This synthetic example predicts one 120 bp F/F product from the supplied
+oligos. Changing R to its reverse complement adds two 103 bp F/R candidates.
+The unchanged F/F product also appears in that hypothetical reaction; it is
+not a new reverse-complement candidate. Search alone cannot establish a typo
+or guarantee a laboratory PCR result.
+
+![Product details with input/candidate oligos, directions, gene name and reference FASTA](docs/screenshots/product-en.jpg)
+
+Expand a product to see the actual extension directions and oligos, overlapping
+gene names and reference FASTA. Reference sequence is the genomic plus strand,
+without oligo mismatches or 5′ tails incorporated. All screenshots use synthetic
+data; [reproduce this walkthrough](docs/screenshots/README.md).
+
+</details>
+
+[CLI usage](#usage) · [Validation](#validation-status) ·
+[Benchmarks](#benchmark) · [Next priorities](docs/ROADMAP.md)
+
 This repository is the PCR engine. [Sequence Workbench](https://github.com/light-suzuki/Gene-research)
 embeds it as part of broader breeding and gene-research workflows. See
 [the embedding boundary](docs/EMBEDDING.md). The standalone GUI defaults to PCR
@@ -20,8 +80,8 @@ HSP alignments as TSV. Primer3 designs without a database, labels specificity as
 not evaluated, and transfers candidate oligos to PCR check.
 
 PCR check accepts ordered 5'-3' oligos without F/R swapping or strand settings.
-For sequences copied from a genomic display, select the copied-sequence input
-mode to test original/reverse-complement combinations separately (up to two
+For sequences copied from a genomic display, turn automatic reverse-complement
+alternatives ON to test original/reverse-complement combinations separately (up to two
 primers). Review the candidate oligos; products from separate hypotheses are not
 products of a single mixed PCR reaction. Results distinguish literal-input
 products, F/R label swaps (R extends right and F extends left), single-primer
@@ -242,8 +302,8 @@ python -m primerblast_oss check \
   --forward GACAAGGAATCAGCGGCTCT --reverse GCAGCGTTTTGTAGTGGGTG --db mydb
 ```
 
-A local browser GUI wrapping these subcommands also exists, but it is an
-optional extra — see [Web GUI (optional)](#web-gui-optional) near the end.
+The local browser GUI also provides these PCR workflows — see
+[Web GUI (optional)](#web-gui-optional) for setup and configuration.
 
 ## Usage
 
@@ -603,9 +663,9 @@ tiles = design_tiling("gene", template_seq, ["/data/db/genome"],
 
 ## Web GUI (optional)
 
-The CLI is the primary interface. As a convenience, a **local browser front end**
-wraps the main design workflows — no cloud, no third-party Python dependencies (it is built
-on the standard-library `http.server`). It is an extra, not the main tool. Run it
+The **local browser front end** provides the PCR workflows, standalone BLAST
+and Primer3, and reference setup. The web server uses the standard-library
+`http.server`, without a cloud service or web-framework dependency. Run it
 on the machine where `primer3_core`, `blastn`, and your BLAST databases live (e.g.
 inside WSL):
 
