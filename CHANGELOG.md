@@ -7,6 +7,16 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- Standalone local BLAST nucleotide search and Primer3 GUI tabs, also available
+  as `blast` / `primer3` operations through the shared agent API. BLAST reports
+  both-strand HSP alignments without PCR filters; Primer3 requires no database
+  and labels specificity as not evaluated, with candidate transfer to PCR check.
+- Explicit automatic reverse-complement hypotheses for up to two copied
+  genomic primer inputs, preserving ordered 5'-3' oligos and separate searches.
+- Predicted-product reference FASTA downloads and overlapping GFF3 gene names
+  in PCR check. Extraction uses an associated indexed FASTA or `blastdbcmd`;
+  missing sequence/annotation remains unresolved. Existing design, sequencing
+  and assay maps also export their reference amplification span.
 - Allele-specific PCR / ARMS design for SNP assays: ref/alt primers terminate
   at the SNP, optional deliberate -2/-3 mismatches are enumerated, best
   classical AS-PCR and tetra-primer ARMS sets are generated, AA/AB/BB gel

@@ -40,9 +40,11 @@ jobs:
           node --check primerblast_oss/webapp/static/references.js
           node --check primerblast_oss/webapp/static/help.js
           node --check primerblast_oss/webapp/static/enzymes.js
+          node --check primerblast_oss/webapp/static/sequence-tools.js
           node tests/web_locus.test.js
           node tests/web_reference.test.js
           node tests/web_enzymes.test.js
+          node tests/web_sequence_tools.test.js
       - name: Module self-tests
         run: |
           python primerblast_oss/caps.py

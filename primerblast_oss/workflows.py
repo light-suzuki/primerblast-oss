@@ -187,13 +187,16 @@ def _run_design(p: Dict) -> Dict:
 
 
 def _run_check(p: Dict) -> Dict:
+    from itertools import product
+    from .genome import revcomp
+    from .sequence_tools import dna_input, product_sequence
     sp = _spec_params(p)
     dbs = _databases(p)
     primers: Dict[str, str] = {}
     if p.get("forward"):
-        primers["F"] = str(p["forward"]).upper().strip()
+        primers["F"] = dna_input(p["forward"])
     if p.get("reverse"):
-        primers["R"] = str(p["reverse"]).upper().strip()
+        primers["R"] = dna_input(p["reverse"])
     for i, spec in enumerate(p.get("primers") or [], 1):
         spec = str(spec).strip()
         if not spec:
@@ -202,12 +205,67 @@ def _run_check(p: Dict) -> Dict:
             name, seq = spec.split("=", 1)
         else:
             name, seq = f"P{i}", spec
-        primers[name.strip()] = seq.upper().strip()
+        name = name.strip()
+        if not name or name in primers:
+            raise ValueError("Primer names must be nonempty and unique.")
+        primers[name] = dna_input(seq)
     if not primers:
         raise ValueError("Provide at least a forward/reverse primer or a primer list.")
     genomes = _associated_genomes(p)
-    results = [in_silico_pcr(primers, db, sp=sp, genome=genomes.get(db)) for db in dbs]
-    return {"mode": "check", **R.insilico_to_dict(results, primers)}
+    orientation = _f(p, "input_orientation", "as_supplied")
+    if orientation not in ("as_supplied", "auto"):
+        raise ValueError("input_orientation must be as_supplied or auto")
+    if orientation == "auto" and len(primers) > 2:
+        raise ValueError("Automatic orientation accepts up to two primers. Use 5'-3' oligos for a larger pool.")
+    choices = [[seq] if orientation == "as_supplied" or seq == revcomp(seq) else [seq, revcomp(seq)]
+               for seq in primers.values()]
+    annotation_map = p.get("db_gff3") or {}
+    if not isinstance(annotation_map, dict) or any(db not in dbs for db in annotation_map):
+        raise ValueError("db_gff3 must map selected databases to matching GFF3 paths.")
+    annotation_map = dict(annotation_map)
+    if _f(p, "gff3", None) or _f(p, "annotation_gff3", None):
+        annotation_map.setdefault(dbs[0], _f(p, "gff3", None) or p["annotation_gff3"])
+    results = []
+    for sequences in product(*choices):
+        oligos = dict(zip(primers, sequences))
+        raw = [in_silico_pcr(oligos, db, sp=sp, genome=genomes.get(db)) for db in dbs]
+        reports = R.insilico_to_dict(raw, oligos)["results"]
+        for result in reports:
+            result["oligos"] = oligos
+            result["reverse_complemented_inputs"] = [name for name in primers if primers[name] != oligos[name]]
+            for amplicon in result["products"]:
+                product_sequence(amplicon, result["db"], genomes.get(result["db"]), annotation_map.get(result["db"]))
+            result["fasta"] = "".join(a.get("fasta", "") for a in result["products"])
+        results.extend(reports)
+    return {"mode": "check", "primers": primers, "input_orientation": orientation, "results": results}
+
+
+def _run_blast(p: Dict) -> Dict:
+    from .sequence_tools import nucleotide_search
+    return nucleotide_search(_templates(p), _databases(p), task=_f(p, "task", "blastn"),
+                             evalue=float(_f(p, "evalue", 10)),
+                             max_target_seqs=int(_f(p, "max_target_seqs", 100)),
+                             num_threads=int(_f(p, "num_threads", 2)))
+
+
+def _run_primer3(p: Dict) -> Dict:
+    from dataclasses import asdict
+    from .design import design_primers
+    from .sequence_tools import dna_input, fasta_record
+    params = _design_params(p)
+    templates = []
+    for name, sequence in _templates(p):
+        sequence = clean_sequence(dna_input(sequence))
+        pairs, explain = design_primers(name, sequence, params)
+        rows = []
+        for pair in pairs:
+            row = asdict(pair)
+            row["sequence"] = sequence[pair.left_start:pair.right_start + 1]
+            row["fasta"] = fasta_record("%s_pair%d_reference" % (name, pair.index + 1), row["sequence"])
+            rows.append(row)
+        templates.append({"template_id": name, "template_sequence": sequence,
+                          "template_len": len(sequence), "pairs": rows, "primer3_explain": explain})
+    return {"mode": "primer3", "specificity_status": "not_evaluated", "templates": templates}
 
 
 def _run_tile(p: Dict) -> Dict:
@@ -400,6 +458,8 @@ def _safe(fn: Callable, *args):
 
 
 HANDLERS: Dict[str, Callable[[Dict], Dict]] = {
+    "blast": _run_blast,
+    "primer3": _run_primer3,
     "design": _run_design,
     "check": _run_check,
     "tile": _run_tile,

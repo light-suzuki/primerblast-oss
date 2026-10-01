@@ -100,6 +100,12 @@ function locusView(context, forwardSpan, reverseSpan, pair, targetSpan) {
   let html = `<section class="locus-card"><h4>${esc(t('map.title'))} · ${esc(label)}</h4>${svg}<p class="hint">${esc(t('map.coordinates'))}</p><p>${esc(t('map.product'))}: ${esc(displayCoordinate(low, context))}–${esc(displayCoordinate(high, context))} · ${esc(pair.product_size || high - low + 1)} bp</p>`;
   if (targetSpan) html += `<p><span class="target-key"></span>${esc(t('map.target'))}: ${esc(displayCoordinate(targetSpan[0], context))}–${esc(displayCoordinate(targetSpan[1], context))}</p>`;
   if (typeof geneView === 'function') html += geneView(context, [low, high]);
+  if (sequence) {
+    const product = sequence.slice(low, high + 1);
+    const name = `${context.chrom || 'template'}:${displayCoordinate(low, context)}-${displayCoordinate(high, context)}_reference_${context.strand || '+'}`;
+    const fasta = `>${name}\n${product.match(/.{1,80}/g).join('\n')}\n`;
+    html += dl('fasta', 'amplified_region.fa', fasta);
+  }
   if (sequence && typeof sequenceLevelView === 'function') html += sequenceLevelView(context, forwardSpan, reverseSpan, pair);
   if (sequence) html += `<details class="adv"><summary>${esc(t('map.binding'))}</summary><p class="hint">${esc(t('map.reference'))} · ${esc(t('map.engineered'))}</p>${bindingWindow(sequence, forwardSpan, pair.forward, false, context)}${bindingWindow(sequence, reverseSpan, pair.reverse, true, context)}</details>`;
   return html + '</section>';
@@ -221,7 +227,7 @@ function refreshProjects() {
 }
 function restoreProject(project) {
   if (studioJob) throw new Error(t('btn.running'));
-  if (!project || project.schema !== 'primerblast-oss-project' || project.version !== 1 || !project.result || !['design','check','tile','sequence','assay','markers','makedb'].includes(project.result.mode)) throw new Error(t('save.failed'));
+  if (!project || project.schema !== 'primerblast-oss-project' || project.version !== 1 || !project.result || !['design','check','tile','sequence','assay','markers','makedb','blast','primer3'].includes(project.result.mode)) throw new Error(t('save.failed'));
   if (!project.input || project.input.mode !== project.result.mode || !project.input.params || typeof project.input.params !== 'object') throw new Error(t('save.failed'));
   const previous = lastResult;
   try { renderResult(project.result); }
