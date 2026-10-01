@@ -237,7 +237,15 @@ def _run_check(p: Dict) -> Dict:
                 product_sequence(amplicon, result["db"], genomes.get(result["db"]), annotation_map.get(result["db"]))
             result["fasta"] = "".join(a.get("fasta", "") for a in result["products"])
         results.extend(reports)
-    return {"mode": "check", "primers": primers, "input_orientation": orientation, "results": results}
+    from .primer_evidence import annotate_input_evidence
+    assessments = annotate_input_evidence(results, primers)
+    return {"mode": "check", "primers": primers, "input_orientation": orientation,
+            "input_sequence_forms": {name: {
+                "input_5to3": seq, "reverse": seq[::-1],
+                "complement_3to5": revcomp(seq)[::-1],
+                "reverse_complement_5to3": revcomp(seq),
+            } for name, seq in primers.items()},
+            "input_assessments": assessments, "results": results}
 
 
 def _run_blast(p: Dict) -> Dict:

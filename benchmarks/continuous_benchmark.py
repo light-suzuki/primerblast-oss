@@ -184,6 +184,20 @@ def run_benchmark(max_seconds: float) -> dict:
         corrected = [r for r in automatic["results"] if r["reverse_complemented_inputs"] == ["R"]]
         target_products = [p for r in corrected for p in r["products"] if p["subject"] == "chr_target"]
         checks["automatic_orientation_product"] = len(target_products) == 1
+        checks["changed_sequence_is_alternative"] = bool(target_products) and (
+            target_products[0]["input_evidence"]["sequence_status"] == "reverse_complement_candidate"
+            and target_products[0]["input_evidence"]["changed_primers"] == ["R"]
+            and not target_products[0]["input_evidence"]["as_supplied_locus_observed"])
+        checks["original_self_product_separate"] = (
+            automatic["input_assessments"][0]["same_primer_products"] == 1
+            and automatic["input_assessments"][0]["distinct_primer_products"] == 0)
+        swapped = timed("swapped_labels", lambda: execute("check", {
+            "forward": REV, "reverse": FWD, "db": [str(db)],
+            "min_product": 40, "max_product": 220}), timings)
+        checks["swapped_labels_literal_product"] = any(
+            p["subject"] == "chr_target" and p["input_evidence"]["label_orientation"] == "swapped"
+            and p["input_evidence"]["sequence_status"] == "as_supplied"
+            for r in swapped["results"] for p in r["products"])
         checks["product_reference_fasta"] = bool(target_products) and target_products[0].get("sequence") == TARGET_AMPLICON
         checks["product_overlapping_gene"] = bool(target_products) and any(
             gene["name"] == "ExampleGene" for gene in target_products[0]["annotations"]["genes"])

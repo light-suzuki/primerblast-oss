@@ -240,6 +240,9 @@ def insilico_to_dict(results: List[Dict], primers: Dict[str, str]) -> dict:
         databases.append({
             "db": result["db"],
             "sites_per_primer": result["sites_per_primer"],
+            "binding_site_counts": result.get("binding_site_counts", {}),
+            "binding_sites": result.get("binding_sites", []),
+            "binding_sites_truncated": result.get("binding_sites_truncated", 0),
             "thermo_status": result.get("thermo_status"),
             "thermo_evaluated": result.get("thermo_evaluated"),
             "thermo_genome_fasta": result.get("thermo_genome_fasta"),

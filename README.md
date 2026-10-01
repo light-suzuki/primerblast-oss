@@ -23,7 +23,17 @@ PCR check accepts ordered 5'-3' oligos without F/R swapping or strand settings.
 For sequences copied from a genomic display, select the copied-sequence input
 mode to test original/reverse-complement combinations separately (up to two
 primers). Review the candidate oligos; products from separate hypotheses are not
-products of a single mixed PCR reaction. Predicted products export reference
+products of a single mixed PCR reaction. Results distinguish literal-input
+products, F/R label swaps (R extends right and F extends left), single-primer
+products, and alternative oligos requiring reverse-complement changes. Each
+product shows input versus candidate sequences, extension directions, coordinates
+and mismatches. A comparison table displays input, reverse, complement (3'-5')
+and reverse complement (5'-3'); supplied inputs are never overwritten. Literal
+results and changed-oligo hypotheses appear in separate sections. Binding-site
+tables show directions even without products (up to
+200 sites, with full counts). A missing product under an incomplete search is
+unresolved; search cannot establish a typo or guarantee experimental amplification.
+Predicted products export reference
 FASTA from the associated indexed genome or `blastdbcmd`, and display overlapping
 gene names/IDs from a matching GFF3. Reference FASTA is the genomic plus strand,
 without primer mismatches or 5' tails incorporated. The FASTA/GFF3 fields apply to

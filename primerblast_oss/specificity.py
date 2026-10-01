@@ -829,6 +829,18 @@ def in_silico_pcr(
         "sites_per_primer": {
             name: sum(site.primer == name for site in sites) for name in primers
         },
+        "binding_site_counts": {
+            name: {strand: sum(site.primer == name and site.strand == strand for site in sites)
+                   for strand in ("+", "-")} for name in primers
+        },
+        "binding_sites": [
+            {"primer": site.primer, "subject": site.subject, "reference_strand": site.strand,
+             "end5": site.end5, "end3": site.end3, "extends": site.extends,
+             "mismatches": site.total_mismatch, "three_prime_mismatches": site.tp_mismatch,
+             "thermo_viable": site.thermo_viable}
+            for site in sites[:200]
+        ],
+        "binding_sites_truncated": max(0, len(sites) - 200),
         "thermo_evaluated": bool(sum(
             thermo_site_stats["evaluated_per_primer"].values())),
         "thermo_site_stats": thermo_site_stats,

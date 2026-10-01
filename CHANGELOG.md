@@ -7,6 +7,13 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- PCR-check evidence distinguishes amplification with the supplied oligos from
+  reverse-complement alternatives, shows actual F/R extension directions and
+  separates label swaps and single-primer products. Binding-site directions are
+  available even without products; incomplete searches and input-error diagnosis
+  remain unresolved. Literal and changed inputs have separate result sections;
+  comparison tables show input, reverse, complement and reverse complement.
+  Site tables include up to 200 candidates with full counts.
 - Standalone local BLAST nucleotide search and Primer3 GUI tabs, also available
   as `blast` / `primer3` operations through the shared agent API. BLAST reports
   both-strand HSP alignments without PCR filters; Primer3 requires no database

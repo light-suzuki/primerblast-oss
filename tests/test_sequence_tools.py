@@ -38,6 +38,9 @@ def test_auto_orientation_keeps_hypotheses_separate_and_original_input(monkeypat
     assert len(calls) == 4 and all(set(call) == {"F", "R"} for call in calls)
     assert {call["R"] for call in calls} == {reverse, revcomp(reverse)}
     assert output["primers"] == {"F": forward, "R": reverse}
+    forms = output["input_sequence_forms"]["R"]
+    assert forms == {"input_5to3": reverse, "reverse": reverse[::-1],
+                     "complement_3to5": revcomp(reverse)[::-1], "reverse_complement_5to3": revcomp(reverse)}
     assert all(row["search_complete"] is False for row in output["results"])
     assert all(row["products"][0]["sequence"] == sequence for row in output["results"])
     assert output["results"][-1]["reverse_complemented_inputs"] == ["F", "R"]
