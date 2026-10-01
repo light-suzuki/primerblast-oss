@@ -52,4 +52,6 @@ const gated = run(`thermoCheckEvidence({thermo_status:'evaluated_defaults_gated'
 assert.ok(gated.includes('tools.thermoGated') && gated.includes('tools.thermoRejected: 3'));
 const skipped = run(`thermoCheckEvidence({thermo_status:'skipped_no_associated_genome'})`);
 assert.ok(skipped.includes('tools.thermoSkipped'));
+const noSites = run(`thermoCheckEvidence({thermo_status:'evaluated_defaults_gated',thermo_evaluated:false})`);
+assert.ok(noSites.includes('tools.thermoNoSites') && !noSites.includes('tools.thermoGated'));
 console.log('Standalone BLAST/Primer3, orientation hypotheses and FASTA evidence passed.');

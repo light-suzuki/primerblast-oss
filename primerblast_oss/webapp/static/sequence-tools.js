@@ -79,6 +79,7 @@ Object.assign(I18N.ja, {
   'tools.thermoSkipped': '対応するゲノムFASTAがないため未評価',
   'tools.thermoUnavailable': '計算ライブラリが利用できないため未評価',
   'tools.thermoDisabled': '評価を無効にしています',
+  'tools.thermoNoSites': '一致候補がないため評価する部位がありません',
   'tools.thermoGated': '評価済み。条件に適合しない部位は増幅予測から除外',
   'tools.thermoAnnotation': '評価済み。部位の除外には使っていません',
   'tools.thermoPartial': '一部の部位を評価できませんでした。増幅可否は未確定です',
@@ -109,6 +110,7 @@ Object.assign(I18N.en, {
   'tools.thermoSkipped': 'Not evaluated: no associated genome FASTA',
   'tools.thermoUnavailable': 'Not evaluated: calculation library unavailable',
   'tools.thermoDisabled': 'Evaluation disabled',
+  'tools.thermoNoSites': 'No candidate sites to evaluate',
   'tools.thermoGated': 'Evaluated; nonviable sites excluded from product predictions',
   'tools.thermoAnnotation': 'Evaluated for annotation only; sites are not excluded',
   'tools.thermoPartial': 'Some sites could not be evaluated; amplification remains unresolved',
@@ -142,13 +144,14 @@ function inputSequenceForms(data) {
 
 function thermoCheckEvidence(result) {
   if (!result.thermo_status) return '';
-  const label = {
+  let label = {
     skipped_no_associated_genome: 'tools.thermoSkipped', unavailable: 'tools.thermoUnavailable',
     disabled: 'tools.thermoDisabled', evaluated_defaults_gated: 'tools.thermoGated',
     evaluated_gated: 'tools.thermoGated', evaluated_defaults_annotation_only: 'tools.thermoAnnotation',
     evaluated_annotation_only: 'tools.thermoAnnotation', partial_unresolved_sites: 'tools.thermoPartial',
     failed_no_resolvable_sites: 'tools.thermoFailed'
   }[result.thermo_status];
+  if (result.thermo_evaluated === false && result.thermo_status.startsWith('evaluated')) label = 'tools.thermoNoSites';
   const rejected = Object.values((result.thermo_site_stats || {}).gated_per_primer || {}).reduce((a, b) => a + b, 0);
   return `<p class="hint">${esc(t('tools.thermoStatus'))}: ${esc(label ? t(label) : result.thermo_status)}${rejected ? ` · ${esc(t('tools.thermoRejected'))}: ${rejected}` : ''}</p>`;
 }
