@@ -75,6 +75,15 @@ Object.assign(I18N.ja, {
   'tools.sites': '各プライマーの一致候補・方向',
   'tools.siteHint': '一致候補だけでは増幅を意味しません。向き・距離・ミスマッチ・熱力学条件も判定します。座標は1始まり。＋/−は参照へのアラインメント方向で、結合する鋳型鎖は反対側です。',
   'tools.omittedSites': '省略した一致候補数', 'tools.mismatch': 'ミスマッチ数',
+  'tools.thermoStatus': '熱力学評価',
+  'tools.thermoSkipped': '対応するゲノムFASTAがないため未評価',
+  'tools.thermoUnavailable': '計算ライブラリが利用できないため未評価',
+  'tools.thermoDisabled': '評価を無効にしています',
+  'tools.thermoGated': '評価済み。条件に適合しない部位は増幅予測から除外',
+  'tools.thermoAnnotation': '評価済み。部位の除外には使っていません',
+  'tools.thermoPartial': '一部の部位を評価できませんでした。増幅可否は未確定です',
+  'tools.thermoFailed': '部位を評価できませんでした。増幅可否は未確定です',
+  'tools.thermoRejected': '熱力学条件で除外した部位数',
   'tools.thermo': '熱力学的な伸長可否', 'tools.yes': '適合', 'tools.no': '不適合', 'tools.unknown': '未評価'
 });
 Object.assign(I18N.en, {
@@ -96,6 +105,15 @@ Object.assign(I18N.en, {
   'tools.sites': 'Primer alignment candidates and directions',
   'tools.siteHint': 'An alignment alone does not imply amplification. Direction, distance, mismatches and thermodynamic conditions also matter. Coordinates are 1-based. +/− denotes reference alignment direction; the physical template strand is opposite.',
   'tools.omittedSites': 'Omitted alignment candidates', 'tools.mismatch': 'Mismatches',
+  'tools.thermoStatus': 'Thermodynamic evaluation',
+  'tools.thermoSkipped': 'Not evaluated: no associated genome FASTA',
+  'tools.thermoUnavailable': 'Not evaluated: calculation library unavailable',
+  'tools.thermoDisabled': 'Evaluation disabled',
+  'tools.thermoGated': 'Evaluated; nonviable sites excluded from product predictions',
+  'tools.thermoAnnotation': 'Evaluated for annotation only; sites are not excluded',
+  'tools.thermoPartial': 'Some sites could not be evaluated; amplification remains unresolved',
+  'tools.thermoFailed': 'Sites could not be evaluated; amplification remains unresolved',
+  'tools.thermoRejected': 'Sites excluded by thermodynamic conditions',
   'tools.thermo': 'Thermodynamic viability', 'tools.yes': 'Viable', 'tools.no': 'Not viable', 'tools.unknown': 'Not evaluated'
 });
 
@@ -120,6 +138,19 @@ function inputSequenceForms(data) {
     html += '</tbody></table></div>';
   }
   return html + '</details>';
+}
+
+function thermoCheckEvidence(result) {
+  if (!result.thermo_status) return '';
+  const label = {
+    skipped_no_associated_genome: 'tools.thermoSkipped', unavailable: 'tools.thermoUnavailable',
+    disabled: 'tools.thermoDisabled', evaluated_defaults_gated: 'tools.thermoGated',
+    evaluated_gated: 'tools.thermoGated', evaluated_defaults_annotation_only: 'tools.thermoAnnotation',
+    evaluated_annotation_only: 'tools.thermoAnnotation', partial_unresolved_sites: 'tools.thermoPartial',
+    failed_no_resolvable_sites: 'tools.thermoFailed'
+  }[result.thermo_status];
+  const rejected = Object.values((result.thermo_site_stats || {}).gated_per_primer || {}).reduce((a, b) => a + b, 0);
+  return `<p class="hint">${esc(t('tools.thermoStatus'))}: ${esc(label ? t(label) : result.thermo_status)}${rejected ? ` · ${esc(t('tools.thermoRejected'))}: ${rejected}` : ''}</p>`;
 }
 
 function bindingSiteEvidence(result) {
@@ -189,6 +220,7 @@ renderCheck = function(data) {
     for (const result of results) {
       html += checkWithoutSequence({primers: result.oligos || data.primers, results: [result]});
       html += `<p class="hint">${esc(t('studio.search'))}: ${esc(result.search_completeness || 'unknown')}</p>`;
+      html += thermoCheckEvidence(result);
       if ((result.reverse_complemented_inputs || []).length) html += `<p class="evidence-note">${esc(t('tools.hypothesis'))}: ${esc(result.reverse_complemented_inputs.join(', '))}</p>`;
       html += bindingSiteEvidence(result);
       if (result.fasta) html += dl('fasta', 'predicted_products.fa', result.fasta);

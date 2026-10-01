@@ -192,6 +192,7 @@ def _run_design(p: Dict) -> Dict:
 def _run_check(p: Dict) -> Dict:
     from .primer_evidence import oligo_hypotheses, check_evidence_report
     from .sequence_tools import dna_input, product_sequence
+    from .pipeline import resolve_genome_for_database, thermo_metadata
     sp = _spec_params(p)
     dbs = _databases(p)
     primers: Dict[str, str] = {}
@@ -224,7 +225,13 @@ def _run_check(p: Dict) -> Dict:
         annotation_map.setdefault(dbs[0], _f(p, "gff3", None) or p["annotation_gff3"])
     results = []
     for oligos in hypotheses:
-        raw = [in_silico_pcr(oligos, db, sp=sp, genome=genomes.get(db)) for db in dbs]
+        raw = []
+        for db in dbs:
+            genome, association = resolve_genome_for_database(db, dbs, genomes_by_db=genomes)
+            result = in_silico_pcr(oligos, db, sp=sp, genome=genome)
+            result.update(thermo_metadata(genome, None, True, association,
+                                         result.get("thermo_site_stats")))
+            raw.append(result)
         reports = R.insilico_to_dict(raw, oligos)["results"]
         for result in reports:
             result["oligos"] = oligos

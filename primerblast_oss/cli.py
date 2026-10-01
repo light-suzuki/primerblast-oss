@@ -264,6 +264,19 @@ def _templates(arguments) -> List[Tuple[str, str]]:
     return [(arguments.template_id, arguments.template)]
 
 
+def _emit_template_reports(outputs, arguments) -> None:
+    """Keep single-template JSON stable; wrap a batch in one JSON document."""
+    if not outputs:
+        raise ValueError("FASTA input must contain at least one template record")
+    if arguments.format == "json":
+        reports = [json.loads(output) for output in outputs]
+        data = reports[0] if len(reports) == 1 else {
+            "mode": reports[0]["mode"], "templates": reports}
+        _emit(json.dumps(data, indent=2, default=str), arguments.out)
+    else:
+        _emit("\n\n".join(outputs), arguments.out)
+
+
 def _cmd_design(arguments) -> int:
     target = None
     if arguments.target:
@@ -306,8 +319,7 @@ def _cmd_design(arguments) -> int:
             else R.to_tsv(result) if arguments.format == "tsv"
             else R.to_text(result)
         )
-    _emit(("\n" if arguments.format == "json" else "\n\n").join(outputs),
-          arguments.out)
+    _emit_template_reports(outputs, arguments)
     return 0
 
 
@@ -610,8 +622,7 @@ def _cmd_tile(arguments) -> int:
         else:
             outputs.append(R.tiling_to_text(
                 tiles, template_id, requested_region))
-    _emit(("\n" if arguments.format == "json" else "\n\n").join(outputs),
-          arguments.out)
+    _emit_template_reports(outputs, arguments)
     return 0
 
 

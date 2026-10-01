@@ -243,6 +243,7 @@ def insilico_to_dict(results: List[Dict], primers: Dict[str, str]) -> dict:
             "binding_site_counts": result.get("binding_site_counts", {}),
             "binding_sites": result.get("binding_sites", []),
             "binding_sites_truncated": result.get("binding_sites_truncated", 0),
+            "thermo_site_stats": result.get("thermo_site_stats", {}),
             "thermo_status": result.get("thermo_status"),
             "thermo_evaluated": result.get("thermo_evaluated"),
             "thermo_genome_fasta": result.get("thermo_genome_fasta"),

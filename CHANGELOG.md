@@ -45,6 +45,14 @@ All notable changes to this project are documented here. The format follows
   order oligos without changing specificity evaluation.
 
 ### Changed / Fixed
+- BLAST-only gapped primer hits retain their reference 5' footprint instead of
+  inferring it from oligo length; product coordinates and size filters now use
+  that mapped endpoint on either strand.
+- PCR-check candidate-site tables retain thermodynamically rejected sites while
+  product predictions remain gated. Failed thermodynamic calculations keep sites
+  unresolved. GUI check reports evaluation coverage and excluded-site counts.
+- Native `design` / `tile` batch JSON is one document with a `templates` array;
+  single-template JSON retains its existing shape.
 - The native CLI focuses on integrated PCR workflows; standalone `blast` and
   `primer3` wrappers are removed. Their GUI tabs and shared agent operations remain
   available, along with native PCR-check evidence and FASTA/annotation exports.

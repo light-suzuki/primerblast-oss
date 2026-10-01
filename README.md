@@ -546,6 +546,11 @@ lightly — matching how such pairs are used in practice.
 ## JSON output (scripting-friendly)
 
 `--format json` emits a stable schema for piping into other tools (or a GUI).
+For native `design` and `tile`, a single template retains the flat result;
+multiple templates produce one document with `mode` and a `templates` array.
+PCR-check binding-site tables retain thermodynamically rejected candidates;
+these are excluded from product predictions, with evaluation state reported
+separately. Failed thermodynamic calculations remain unresolved.
 Every object carries what a consumer needs without recomputation:
 
 - **primer**: `forward`/`reverse`, `tm_f`/`tm_r`, `gc_f`/`gc_r`, `left_start`/
