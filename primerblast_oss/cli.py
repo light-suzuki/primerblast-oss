@@ -134,23 +134,23 @@ def _add_spec_args(parser: argparse.ArgumentParser) -> None:
 
 
 def _parse_db_genome_specs(specifications: List[str],
-                           databases: List[str]) -> Dict[str, str]:
+                           databases: List[str], option="--db-genome", file_type="FASTA") -> Dict[str, str]:
     mappings: Dict[str, str] = {}
     for specification in specifications or []:
         if "=" not in specification:
             raise ValueError(
-                "invalid --db-genome '%s'; use exact DB=FASTA" % specification)
+                "invalid %s '%s'; use exact DB=%s" % (option, specification, file_type))
         database, fasta = specification.split("=", 1)
         database, fasta = database.strip(), fasta.strip()
         if not database or not fasta:
             raise ValueError(
-                "invalid --db-genome '%s'; DB and FASTA are required" % specification)
+                "invalid %s '%s'; DB and %s are required" % (option, specification, file_type))
         if database not in databases:
             raise ValueError(
-                "--db-genome DB '%s' does not exactly match a supplied --db" % database)
+                "%s DB '%s' does not exactly match a supplied --db" % (option, database))
         if database in mappings and mappings[database] != fasta:
             raise ValueError(
-                "multiple different FASTA files supplied for DB '%s'" % database)
+                "multiple different %s files supplied for DB '%s'" % (file_type, database))
         mappings[database] = fasta
     return mappings
 
@@ -251,7 +251,7 @@ def _add_out_args(parser: argparse.ArgumentParser,
 
 def _emit(text: str, output_path: Optional[str]) -> None:
     if output_path:
-        with open(output_path, "w") as handle:
+        with open(output_path, "w", encoding="utf-8") as handle:
             handle.write(text + "\n")
         print("wrote %s" % output_path, file=sys.stderr)
     else:
@@ -312,52 +312,84 @@ def _cmd_design(arguments) -> int:
 
 
 def _collect_primers(arguments) -> Dict[str, str]:
+    from .sequence_tools import dna_input
     primers: Dict[str, str] = {}
+    def add(name, sequence):
+        name = name.strip()
+        if not name or name in primers:
+            raise ValueError("Primer names must be nonempty and unique: " + name)
+        primers[name] = dna_input(sequence)
     if arguments.primers_fasta:
-        for name, sequence in read_fasta(arguments.primers_fasta):
-            primers[name] = sequence.upper()
+        from .cli_sequence_tools import sequence_params
+        _, records = sequence_params(None, arguments.primers_fasta, "primer")
+        for name, sequence in records:
+            add(name, sequence)
     if arguments.forward:
-        primers["F"] = arguments.forward.upper()
+        add("F", arguments.forward)
     if arguments.reverse:
-        primers["R"] = arguments.reverse.upper()
+        add("R", arguments.reverse)
     for index, specification in enumerate(arguments.primer or [], 1):
         if "=" in specification:
             name, sequence = specification.split("=", 1)
         else:
             name, sequence = "P%s" % index, specification
-        primers[name] = sequence.upper()
+        add(name, sequence)
     if not primers:
-        raise SystemExit(
-            "check: provide primers via --forward/--reverse, --primer, or --primers-fasta")
+        raise ValueError(
+            "provide primers via --forward/--reverse, --primer, or --primers-fasta")
     return primers
 
 
 def _cmd_check(arguments) -> int:
+    from .primer_evidence import oligo_hypotheses, check_evidence_report
+    from .sequence_tools import product_sequence, product_annotations
+    from .cli_sequence_tools import check_tsv, check_text, export_check_fasta, distinct_outputs
+    distinct_outputs(arguments.out, arguments.products_fasta)
     primers = _collect_primers(arguments)
+    hypotheses = oligo_hypotheses(primers, arguments.input_orientation)
     specificity = _spec_from_args(arguments)
+    annotations = _parse_db_genome_specs(arguments.db_gff3, arguments.db, "--db-gff3", "GFF3")
+    if arguments.gff3:
+        annotations.setdefault(arguments.db[0], arguments.gff3)
     genomes_by_db, thermo_params, thermo_gate = _thermo_setup(arguments)
-    results = []
-    for database in arguments.db:
-        genome, association = resolve_genome_for_database(
-            database, arguments.db, genomes_by_db=genomes_by_db)
-        result = in_silico_pcr(
-            primers,
-            database,
-            sp=specificity,
-            blastn_bin=arguments.blastn_bin,
-            genome=genome,
-            thermo_params=thermo_params,
-            thermo_gate=thermo_gate,
-        )
-        result.update(thermo_metadata(
-                genome, thermo_params, thermo_gate, association,
-                result.get("thermo_site_stats")))
-        results.append(result)
+    results, raw_groups = [], []
+    for oligos in hypotheses:
+        raw = []
+        changed = [name for name in primers if primers[name] != oligos[name]]
+        for database in arguments.db:
+            genome, association = resolve_genome_for_database(
+                database, arguments.db, genomes_by_db=genomes_by_db)
+            result = in_silico_pcr(
+                oligos, database, sp=specificity, blastn_bin=arguments.blastn_bin,
+                genome=genome, thermo_params=thermo_params, thermo_gate=thermo_gate)
+            result.update(thermo_metadata(
+                    genome, thermo_params, thermo_gate, association,
+                    result.get("thermo_site_stats")))
+            raw.append(result)
+        reports = R.insilico_to_dict(raw, oligos)["results"]
+        for report in reports:
+            report.update(oligos=oligos, reverse_complemented_inputs=changed)
+            for product in report["products"]:
+                if arguments.products_fasta:
+                    product_sequence(product, report["db"], genomes_by_db.get(report["db"]),
+                                     annotations.get(report["db"]))
+                elif annotations:
+                    product_annotations(product, annotations.get(report["db"]))
+        results.extend(reports)
+        raw_groups.append((raw, oligos, changed))
+    data = check_evidence_report(results, primers, arguments.input_orientation)
+    if arguments.products_fasta:
+        export_check_fasta(data, arguments.products_fasta)
     if arguments.format == "json":
-        text = json.dumps(
-            R.insilico_to_dict(results, primers), indent=2, default=str)
+        text = json.dumps(data, indent=2, default=str)
+    elif arguments.format == "tsv":
+        text = check_tsv(data)
+        for r in results:
+            print("%s: %s product(s); changed=%s; search=%s" % (
+                r["db"], r["n_products"], ",".join(r["reverse_complemented_inputs"]) or "none",
+                r["search_completeness"]), file=sys.stderr)
     else:
-        text = R.insilico_to_text(results, primers)
+        text = check_text(data, raw_groups, arguments.show_sequence_forms)
     _emit(text, arguments.out)
     return 0
 
@@ -946,15 +978,15 @@ def _cmd_makedb(arguments) -> int:
     return 0
 
 
-def _add_template_args(parser) -> None:
+def _add_template_args(parser, *, stdin=False) -> None:
     template = parser.add_argument_group("template")
     source = template.add_mutually_exclusive_group(required=True)
     source.add_argument("--template", help="template DNA sequence")
-    source.add_argument("--template-fasta", help="FASTA with one or more templates")
+    source.add_argument("--template-fasta", help="FASTA with one or more templates" + ("; - reads stdin" if stdin else ""))
     template.add_argument("--template-id", default="template")
 
 
-def _add_design_knobs(parser) -> None:
+def _add_design_knobs(parser, *, size_tolerance=True) -> None:
     design = parser.add_argument_group("primer3")
     design.add_argument("--opt-size", type=int, default=20)
     design.add_argument("--min-size", type=int, default=18)
@@ -964,7 +996,8 @@ def _add_design_knobs(parser) -> None:
     design.add_argument("--max-tm", type=float, default=63.0)
     design.add_argument("--min-gc", type=float, default=20.0)
     design.add_argument("--max-gc", type=float, default=80.0)
-    design.add_argument("--size-tolerance", type=int, default=10)
+    if size_tolerance:
+        design.add_argument("--size-tolerance", type=int, default=10)
     design.add_argument("--primer3-bin")
 
 
@@ -987,6 +1020,9 @@ def build_parser() -> argparse.ArgumentParser:
     from .agent_cli import command
     agent.set_defaults(func=command)
 
+    from .cli_sequence_tools import add_parsers
+    add_parsers(subcommands)
+
     design = subcommands.add_parser(
         "design", help="design primer pairs and check specificity")
     _add_template_args(design)
@@ -1005,8 +1041,16 @@ def build_parser() -> argparse.ArgumentParser:
     check.add_argument("--reverse")
     check.add_argument("--primer", action="append", help="NAME=SEQ or SEQ")
     check.add_argument("--primers-fasta")
+    check.add_argument("--input-orientation", choices=("as_supplied", "auto"), default="as_supplied",
+                       help="auto also searches reverse-complement alternatives (up to two primers)")
+    check.add_argument("--show-sequence-forms", action="store_true",
+                       help="include input/reverse/complement/reverse-complement in text output; always in JSON")
+    check.add_argument("--products-fasta", help="write reference product sequences; hypotheses have separate IDs")
+    check.add_argument("--gff3", help="matching gene annotations for the first DB")
+    check.add_argument("--db-gff3", action="append", default=[], metavar="DB=GFF3",
+                       help="associate annotations with an exact DB path; repeat per reference")
     _add_spec_args(check)
-    _add_out_args(check, formats=("text", "json"))
+    _add_out_args(check, formats=("text", "json", "tsv"))
     check.set_defaults(func=_cmd_check)
 
     multiplex = subcommands.add_parser(
@@ -1161,11 +1205,14 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv=None) -> int:
+    for stream in (sys.stdin, sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8")
     parser = build_parser()
     arguments = parser.parse_args(argv)
     try:
         return arguments.func(arguments)
-    except (ValueError, KeyError, RuntimeError) as error:
+    except (ValueError, KeyError, RuntimeError, OSError) as error:
         parser.error(str(error))
         return 2
 

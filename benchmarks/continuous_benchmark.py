@@ -207,6 +207,36 @@ def run_benchmark(max_seconds: float) -> dict:
         checks["product_blastdb_extraction"] = any(
             p.get("sequence") == TARGET_AMPLICON for r in db_extract["results"] for p in r["products"] if p["subject"] == "chr_target")
 
+        def native(args, stdin=None):
+            process = subprocess.run([sys.executable, "-m", "primerblast_oss"] + args,
+                                     input=stdin, capture_output=True, encoding="utf-8", cwd=str(ROOT), check=True)
+            return json.loads(process.stdout)
+
+        native_blast = timed("native_blast_stdin", lambda: native([
+            "blast", "--query-fasta", "-", "--db", str(db), "--format", "json"],
+            ">forward\n" + TARGET_AMPLICON + "\n>reverse\n" + revcomp(TARGET_AMPLICON)), timings)
+        checks["native_blast_stdin_both_strands"] = any(
+            h["qseqid"] == "query2" and h["sseqid"] == "chr_target" and h["strand"] == "-"
+            for h in native_blast["results"][0]["hits"])
+        native_primer3 = timed("native_primer3_stdin", lambda: native([
+            "primer3", "--template-fasta", "-", "--product-size", "80-180",
+            "--num-return", "2", "--format", "json"], ">template\n" + design_seq), timings)
+        checks["native_primer3_without_db"] = (
+            native_primer3["specificity_status"] == "not_evaluated" and len(native_primer3["templates"][0]["pairs"]) > 0)
+        native_fasta = tmp / "native_products.fa"
+        native_check = timed("native_check_auto_export", lambda: native([
+            "check", "--forward", FWD, "--reverse", revcomp(REV), "--db", str(db),
+            "--input-orientation", "auto", "--genome-fasta", str(fasta), "--gff3", str(annotation),
+            "--no-thermo", "--max-product", "220", "--products-fasta", str(native_fasta), "--format", "json"]), timings)
+        native_targets = [p for r in native_check["results"] for p in r["products"] if p["subject"] == "chr_target"]
+        checks["native_check_literal_and_alternative"] = (
+            native_check["input_assessments"][0]["distinct_primer_products"] == 0 and len(native_targets) == 1
+            and native_targets[0]["input_evidence"]["sequence_status"] == "reverse_complement_candidate")
+        checks["native_check_fasta_and_gene"] = (
+            "reverse_complement_candidate" in native_fasta.read_text() and bool(native_targets)
+            and native_targets[0]["sequence"] == TARGET_AMPLICON
+            and native_targets[0]["annotations"]["genes"][0]["name"] == "ExampleGene")
+
         try:
             from primerblast_oss import dimers
             if dimers.available():

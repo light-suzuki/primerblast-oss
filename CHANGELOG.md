@@ -7,6 +7,13 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- Native `blast` and `primer3` CLI commands with FASTA file/stdin inputs, text /
+  JSON / TSV reports, custom executable paths and file exports. These require no
+  GUI server. Primer3 runs without a BLAST database and exports candidate oligos.
+- Native `check` supports separate reverse-complement hypotheses, input-sequence
+  evidence, TSV output, optional reference-product FASTA export and per-reference
+  GFF3 gene annotation. Existing profiles and thermodynamic options are preserved;
+  sequence extraction runs only when requested. CLI streams/files use UTF-8.
 - PCR-check evidence distinguishes amplification with the supplied oligos from
   reverse-complement alternatives, shows actual F/R extension directions and
   separates label swaps and single-primer products. Binding-site directions are
