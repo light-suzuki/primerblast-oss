@@ -77,7 +77,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   $$('form[data-mode]').forEach(form => {
     const first = $('fieldset', form); if (!first) return;
-    const heading = document.createElement('h3'); heading.className = 'flow-heading'; heading.dataset.i18n = form.dataset.mode === 'check' ? 'flow.checkInput' : form.dataset.mode === 'makedb' ? 'flow.dbInput' : 'flow.input'; first.before(heading);
+    const heading = document.createElement('h3'); heading.className = 'flow-heading'; heading.dataset.i18n = form.dataset.mode === 'blast' ? 'tools.query' : form.dataset.mode === 'check' ? 'flow.checkInput' : form.dataset.mode === 'makedb' ? 'flow.dbInput' : 'flow.input'; first.before(heading);
     const hint = document.createElement('p'); hint.className = 'flow-hint'; hint.dataset.i18n = 'flow.placeholder'; first.before(hint);
     const example = $('.example-btn', form);
     if (example) {
@@ -142,6 +142,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const originalShowTab = showTab;
   showTab = name => {
     originalShowTab(name);
+    dbTitle.dataset.i18n = name === 'blast' ? 'tools.searchDb' : 'flow.db';
+    dbTitle.textContent = t(dbTitle.dataset.i18n);
     const form = $(`form[data-mode="${name}"]`);
     if (form && name !== 'makedb') $('.actions', form).before(db);
     else $('#tabs').before(db);

@@ -346,6 +346,8 @@ pre.ascii, pre.explain { background: var(--code-bg); color: var(--code-ink); bor
     <button class="tab tab-guide active" data-tab="guide"><span data-i18n="tab.guide"></span></button>
     <button class="tab" data-tab="design"><span data-i18n="tab.design"></span></button>
     <button class="tab" data-tab="check"><span data-i18n="tab.check"></span></button>
+    <button class="tab" data-tab="blast"><span data-i18n="tools.blast"></span></button>
+    <button class="tab" data-tab="primer3"><span data-i18n="tools.primer3"></span></button>
     <button class="tab" data-tab="tile"><span data-i18n="tab.tile"></span></button>
     <button class="tab" data-tab="sequence"><span data-i18n="tab.sequence"></span></button>
     <button class="tab" data-tab="assay"><span data-i18n="tab.assay"></span></button>
@@ -476,6 +478,28 @@ pre.ascii, pre.explain { background: var(--code-bg); color: var(--code-ink); bor
       <p class="guide-foot" data-i18n-html="g.foot"></p>
     </section>
 
+    <form class="panel" data-panel="blast" data-mode="blast">
+      <div class="mode-intro"><h2 data-i18n="tools.blast"></h2><p data-i18n="tools.blastHint"></p></div>
+      <fieldset><legend data-i18n="grp.template"></legend>
+        <label class="full"><span data-i18n="f.template"></span><textarea name="template" rows="6"></textarea></label>
+        <label><span data-i18n="tools.task"></span><select name="task"><option>blastn</option><option>megablast</option><option>blastn-short</option></select></label>
+        <label><span>E-value</span><input name="evalue" type="number" value="10" min="0" step="any"></label>
+        <label><span data-i18n="tools.limit"></span><input name="max_target_seqs" type="number" value="100" min="1" max="10000"></label>
+        <label><span data-i18n="f.num_threads"></span><input name="num_threads" type="number" value="2" min="1" max="128"></label>
+      </fieldset>
+      <div class="actions"><button type="submit" class="run" data-i18n="btn.run"></button><button type="reset" class="ghost" data-i18n="btn.reset"></button></div>
+    </form>
+    <form class="panel" data-panel="primer3" data-mode="primer3">
+      <div class="mode-intro"><h2 data-i18n="tools.primer3"></h2><p data-i18n="tools.primer3Hint"></p></div>
+      <fieldset><legend data-i18n="grp.template"></legend>
+        <label class="full"><span data-i18n="f.template"></span><textarea name="template" rows="6"></textarea></label>
+        <label><span data-i18n="f.product_size"></span><input name="product_size" value="70-1000"></label>
+        <label><span data-i18n="f.num_return"></span><input name="num_return" type="number" min="1" value="10"></label>
+        <label><span data-i18n="f.target"></span><input name="target" placeholder="500,200"><em class="hint" data-i18n="f.target.hint"></em></label>
+      </fieldset>
+      <div data-knobs></div>
+      <div class="actions"><button type="submit" class="run" data-i18n="btn.run"></button><button type="reset" class="ghost" data-i18n="btn.reset"></button></div>
+    </form>
     <!-- DESIGN -->
     <form class="panel" data-panel="design" data-mode="design">
       <div class="mode-intro"><h2 data-i18n="intro.design.t"></h2><p data-i18n="intro.design.d"></p></div>
@@ -522,8 +546,11 @@ pre.ascii, pre.explain { background: var(--code-bg); color: var(--code-ink); bor
       <fieldset><legend data-i18n="grp.template"></legend>
         <label><span data-i18n="f.forward"></span><input name="forward" /></label>
         <label><span data-i18n="f.reverse"></span><input name="reverse" /></label>
+        <label class="full"><span data-i18n="tools.orientation"></span><select name="input_orientation"><option value="as_supplied" data-i18n="tools.oligo"></option><option value="auto" data-i18n="tools.auto"></option></select><em class="hint" data-i18n="tools.orientationHint"></em></label>
         <label class="full"><span data-i18n="f.primers"></span>
           <textarea name="primers" rows="3" placeholder="P3=ACGT...&#10;GGATCC..."></textarea></label>
+        <label class="full"><span data-i18n="tools.genome"></span><input name="genome" placeholder="/path/to/genome.fa"></label>
+        <label class="full"><span data-i18n="tools.gff3"></span><input name="gff3" placeholder="/path/to/annotation.gff3"></label>
       </fieldset>
       <div data-spec></div>
       <div class="actions">
@@ -1484,6 +1511,7 @@ function renderResult(data) {
   const renderers = {
     design: renderDesign, check: renderCheck, tile: renderTile,
     assay: renderAssay, markers: renderMarkers, makedb: renderMakedb, sequence: renderSequence,
+    blast: renderBlast, primer3: renderPrimer3,
   };
   const fn = renderers[data.mode];
   $("#results").innerHTML = fn ? fn(data) : `<pre class="explain">${esc(JSON.stringify(data, null, 2))}</pre>`;
@@ -1768,5 +1796,6 @@ document.addEventListener("DOMContentLoaded", boot);
 <script src="references.js"></script>
 <script src="help.js"></script>
 <script src="enzymes.js"></script>
+<script src="sequence-tools.js"></script>
 </body>
 </html>

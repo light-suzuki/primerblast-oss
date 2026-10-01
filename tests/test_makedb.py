@@ -107,7 +107,8 @@ def test_cleanup_failure_reports_leftover_temp_prefix(tmp_path, monkeypatch):
     monkeypatch.setattr(Path, "unlink", original_unlink)
 
 
-def test_missing_makeblastdb_is_reported():
+def test_missing_makeblastdb_is_reported(monkeypatch):
+    monkeypatch.setattr(tools.shutil, "which", lambda _: None)
     try:
         tools.make_blastdb("x.fa", out="db", makeblastdb_bin="")
     except RuntimeError as error:

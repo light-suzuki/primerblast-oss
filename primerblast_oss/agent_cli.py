@@ -23,8 +23,10 @@ COMMON_INPUT = {
     "num_threads": {"type": "integer", "minimum": 1},
 }
 MODE_INPUT = {
+    "blast": {"task": {"enum": ["blastn", "megablast", "blastn-short"]}, "evalue": {"type": "number", "exclusiveMinimum": 0}},
+    "primer3": {"product_size": {"type": "string"}, "num_return": {"type": "integer", "minimum": 1}},
     "design": {"product_size": {"type": "string"}, "num_return": {"type": "integer", "minimum": 1}},
-    "check": {"forward": {"type": "string"}, "reverse": {"type": "string"}, "primers": {"type": "array", "items": {"type": "string"}}},
+    "check": {"forward": {"type": "string"}, "reverse": {"type": "string"}, "primers": {"type": "array", "items": {"type": "string"}}, "input_orientation": {"enum": ["as_supplied", "auto"]}, "db_gff3": {"type": "object"}},
     "tile": {"amplicon_min": {"type": "integer"}, "amplicon_max": {"type": "integer"}, "overlap": {"type": "integer"}},
     "sequence": {"source": {"enum": ["sequence", "gene", "interval"]}, "amplicon_size": {"type": "string"}, "m13_tails": {"type": "boolean"}},
     "assay": {"snp": {"type": "string"}, "alt": {"type": "string"}},

@@ -13,6 +13,27 @@ embeds it as part of broader breeding and gene-research workflows. See
 [the embedding boundary](docs/EMBEDDING.md). The standalone GUI defaults to PCR
 tools; legacy research views remain available through the legacy-tools switch.
 
+The GUI (`python -m primerblast_oss.webapp`) includes standalone **BLAST** and
+**Primer3** tabs. `blastn`, `makeblastdb` and `primer3_core` are required external
+tools. BLAST accepts DNA or multi-record FASTA, searches both strands and exports
+HSP alignments as TSV. Primer3 designs without a database, labels specificity as
+not evaluated, and transfers candidate oligos to PCR check.
+
+PCR check accepts ordered 5'-3' oligos without F/R swapping or strand settings.
+For sequences copied from a genomic display, select the copied-sequence input
+mode to test original/reverse-complement combinations separately (up to two
+primers). Review the candidate oligos; products from separate hypotheses are not
+products of a single mixed PCR reaction. Predicted products export reference
+FASTA from the associated indexed genome or `blastdbcmd`, and display overlapping
+gene names/IDs from a matching GFF3. Reference FASTA is the genomic plus strand,
+without primer mismatches or 5' tails incorporated. The FASTA/GFF3 fields apply to
+the first selected database; other references use `db_genomes` and `db_gff3`
+mappings in the shared API. Missing extraction or annotation is unresolved.
+Design, sequencing and assay maps also export their reference amplification span.
+
+These tools are shared `blast` / `primer3` operations in `agent run`; inspect
+`python -m primerblast_oss agent schema` for JSON input fields.
+
 A local, open-source, Primer-BLAST-style **command-line tool** for plant breeding
 and genetics. It designs PCR primers with **Primer3** and verifies their
 **specificity** entirely offline against local BLAST+ databases — including

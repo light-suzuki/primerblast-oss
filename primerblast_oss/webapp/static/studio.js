@@ -160,6 +160,8 @@ function validateStudio(form, mode) {
   }
   const required = mode === 'makedb' ? ['infile'] : [];
   if (mode === 'check' && !p.forward && !p.reverse && !(p.primers || []).length) invalid('forward', 'studio.required');
+  if (mode === 'blast' || mode === 'primer3') required.push('template');
+  if (mode === 'blast' && Number(p.evalue) <= 0) invalid('evalue', 'studio.number');
   if (mode === 'design' || mode === 'sequence') {
     const source = p.source || p.src || p.design_src || 'sequence';
     required.push(source === 'gene' ? 'gene' : source === 'interval' ? 'interval' : 'template');
@@ -192,7 +194,7 @@ function validateStudio(form, mode) {
 runMode = async function(mode, form) {
   if (studioJob) return;
   if (!validateStudio(form, mode)) return;
-  if (mode !== 'makedb' && !selectedDbs.length) {
+  if (!['makedb', 'primer3'].includes(mode) && !selectedDbs.length) {
     $('#results').innerHTML = `<div class="err">${esc(t('db.pick'))}</div>`; $('#db-custom-input').focus(); return;
   }
   studioError = null; lastResult = null;

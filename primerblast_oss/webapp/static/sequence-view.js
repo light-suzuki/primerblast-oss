@@ -37,8 +37,9 @@ function geneView(context, product) {
   const annotation = context.annotations;
   if (!annotation || annotation.status === 'not_provided' || annotation.status === 'no_genomic_coordinates') return `<p class="hint">${esc(t('seq.noAnnotation'))}</p>`;
   if (annotation.status === 'seqid_not_found') return `<p class="evidence-note">${esc(t('seq.badSeqid'))}</p>`;
+  if (annotation.status === 'unavailable') return `<p class="evidence-note">${esc(t('tools.annotationMissing'))}</p>`;
   if (!(annotation.genes || []).length) return `<p class="hint">${esc(t('seq.noGenes'))}</p>`;
-  const length = context.sequence.length;
+  const length = context.sequence.length || context.length || 0;
   let html = `<h4>${esc(t('seq.genes'))}</h4>`;
   for (const gene of annotation.genes) {
     const span = localSpan([gene.start,gene.end],context,true), view = span;

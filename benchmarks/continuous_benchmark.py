@@ -163,6 +163,36 @@ def run_benchmark(max_seconds: float) -> dict:
         )
         checks["pipeline_returns_pairs"] = len(pipeline_res.pairs) > 0
 
+        from primerblast_oss.workflows import execute
+        standalone = timed("standalone_primer3", lambda: execute("primer3", {
+            "template": design_seq, "product_size": "80-180", "num_return": 2}), timings)
+        checks["standalone_primer3_unscreened"] = (
+            standalone["specificity_status"] == "not_evaluated" and
+            len(standalone["templates"][0]["pairs"]) > 0)
+        blast = timed("ordinary_blast", lambda: execute("blast", {
+            "template": ">forward\n" + TARGET_AMPLICON + "\n>reverse\n" + revcomp(TARGET_AMPLICON),
+            "db": [str(db)]}), timings)
+        checks["ordinary_blast_both_strands"] = any(
+            h["qseqid"] == "query2" and h["sseqid"] == "chr_target" and h["strand"] == "-"
+            for h in blast["results"][0]["hits"])
+        annotation = tmp / "synthetic.gff3"
+        annotation.write_text("##gff-version 3\nchr_target\tfixture\tgene\t10\t80\t.\t-\t.\tID=g1;Name=ExampleGene\n")
+        automatic = timed("automatic_orientation", lambda: execute("check", {
+            "forward": FWD, "reverse": revcomp(REV), "input_orientation": "auto",
+            "db": [str(db)], "genome": str(fasta), "gff3": str(annotation),
+            "min_product": 40, "max_product": 220}), timings)
+        corrected = [r for r in automatic["results"] if r["reverse_complemented_inputs"] == ["R"]]
+        target_products = [p for r in corrected for p in r["products"] if p["subject"] == "chr_target"]
+        checks["automatic_orientation_product"] = len(target_products) == 1
+        checks["product_reference_fasta"] = bool(target_products) and target_products[0].get("sequence") == TARGET_AMPLICON
+        checks["product_overlapping_gene"] = bool(target_products) and any(
+            gene["name"] == "ExampleGene" for gene in target_products[0]["annotations"]["genes"])
+        db_extract = timed("product_blastdb_extraction", lambda: execute("check", {
+            "forward": FWD, "reverse": REV, "db": [str(db)],
+            "min_product": 40, "max_product": 220}), timings)
+        checks["product_blastdb_extraction"] = any(
+            p.get("sequence") == TARGET_AMPLICON for r in db_extract["results"] for p in r["products"] if p["subject"] == "chr_target")
+
         try:
             from primerblast_oss import dimers
             if dimers.available():
