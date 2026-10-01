@@ -1048,8 +1048,11 @@ def build_parser() -> argparse.ArgumentParser:
     check.add_argument("--reverse")
     check.add_argument("--primer", action="append", help="NAME=SEQ or SEQ")
     check.add_argument("--primers-fasta", help="FASTA primer pool; - reads stdin")
-    check.add_argument("--input-orientation", choices=("as_supplied", "auto"), default="as_supplied",
-                       help="auto also searches reverse-complement alternatives (up to two primers)")
+    orientation = check.add_mutually_exclusive_group()
+    orientation.add_argument("--input-orientation", choices=("as_supplied", "auto"), default="as_supplied",
+                             help="as_supplied: OFF (default); auto: also test changed reverse-complement oligos (up to two primers). Both modes search both strands and all primer combinations")
+    orientation.add_argument("--no-auto-orientation", dest="input_orientation", action="store_const", const="as_supplied",
+                             help="turn OFF changed-oligo hypotheses; keep both-strand searches of supplied oligos")
     check.add_argument("--show-sequence-forms", action="store_true",
                        help="include input/reverse/complement/reverse-complement in text output; always in JSON")
     check.add_argument("--products-fasta", help="write reference product sequences; hypotheses have separate IDs")

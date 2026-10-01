@@ -54,4 +54,7 @@ const skipped = run(`thermoCheckEvidence({thermo_status:'skipped_no_associated_g
 assert.ok(skipped.includes('tools.thermoSkipped'));
 const noSites = run(`thermoCheckEvidence({thermo_status:'evaluated_defaults_gated',thermo_evaluated:false})`);
 assert.ok(noSites.includes('tools.thermoNoSites') && !noSites.includes('tools.thermoGated'));
+assert.ok(run('I18N.ja["tools.oligo"]').startsWith('OFF'));
+assert.ok(run('I18N.ja["tools.auto"]').startsWith('ON'));
+assert.ok(run('I18N.ja["tools.orientationHint"]').includes('F/R・R/F・F/F・R/R'));
 console.log('Standalone BLAST/Primer3, orientation hypotheses and FASTA evidence passed.');

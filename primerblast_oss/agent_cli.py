@@ -7,6 +7,7 @@ import sys
 from .workflows import HANDLERS, execute
 
 SCHEMA_VERSION = "primerblast-agent/1"
+CLI_OPERATIONS = tuple(name for name in HANDLERS if name not in ("blast", "primer3"))
 
 
 def _reject_constant(value):
@@ -23,8 +24,6 @@ COMMON_INPUT = {
     "num_threads": {"type": "integer", "minimum": 1},
 }
 MODE_INPUT = {
-    "blast": {"task": {"enum": ["blastn", "megablast", "blastn-short"]}, "evalue": {"type": "number", "exclusiveMinimum": 0}},
-    "primer3": {"product_size": {"type": "string"}, "num_return": {"type": "integer", "minimum": 1}},
     "design": {"product_size": {"type": "string"}, "num_return": {"type": "integer", "minimum": 1}},
     "check": {"forward": {"type": "string"}, "reverse": {"type": "string"}, "primers": {"type": "array", "items": {"type": "string"}}, "input_orientation": {"enum": ["as_supplied", "auto"]}, "db_gff3": {"type": "object"}},
     "tile": {"amplicon_min": {"type": "integer"}, "amplicon_max": {"type": "integer"}, "overlap": {"type": "integer"}},
@@ -43,10 +42,10 @@ def schema():
                             **(COMMON_INPUT if name != "makedb" else {}), **MODE_INPUT[name]},
                             "additionalProperties": True},
                         "input": "GUI parameters; primary fields described above; full options in native CLI help"}
-                       for name in HANDLERS],
+                       for name in CLI_OPERATIONS],
         "request_schema": {"type": "object", "required": ["operation", "params"],
                            "additionalProperties": False, "properties": {
-            "operation": {"enum": list(HANDLERS)}, "params": {"type": "object"},
+            "operation": {"enum": list(CLI_OPERATIONS)}, "params": {"type": "object"},
             "request_id": {"type": "string"}}},
         "execution": "local", "starts_gui": False, "uploads_data": False,
     }
@@ -70,6 +69,8 @@ def command(args):
             raise ValueError("operation and params are required")
         if "request_id" in request and not isinstance(request["request_id"], str):
             raise ValueError("request_id must be a string")
+        if request["operation"] not in CLI_OPERATIONS:
+            raise ValueError("Operation is not available in the CLI. Standalone BLAST and Primer3 are GUI tools.")
         # Native adapters may print diagnostics; stdout stays exactly one JSON value.
         with contextlib.redirect_stdout(sys.stderr):
             result = execute(request["operation"], request["params"], allow_db_write=args.allow_db_write)

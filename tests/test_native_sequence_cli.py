@@ -148,3 +148,21 @@ def test_standalone_wrappers_are_not_native_commands(command, capsys):
         parser.parse_args([command])
     assert error.value.code == 2
     assert "invalid choice" in capsys.readouterr().err
+
+
+def test_explicit_orientation_off_keeps_literal_search(monkeypatch, capsys):
+    calls = install_fake_pcr(monkeypatch)
+    copied_reverse = revcomp(REV)
+    assert cli.main(["check", "--forward", FWD, "--reverse", copied_reverse,
+                     "--db", "synthetic", "--no-auto-orientation", "--no-thermo", "--format", "json"]) == 0
+    data = json.loads(capsys.readouterr().out)
+    assert calls[0][0] == {"F": FWD, "R": copied_reverse} and len(calls) == 1
+    assert data["input_orientation"] == "as_supplied"
+    assert all(not r["reverse_complemented_inputs"] for r in data["results"])
+    assert data["input_sequence_forms"]["R"]["reverse_complement_5to3"] == REV
+
+
+def test_conflicting_orientation_options_are_rejected():
+    with pytest.raises(SystemExit) as error:
+        cli.build_parser().parse_args(["check", "--db", "synthetic", "--input-orientation", "auto", "--no-auto-orientation"])
+    assert error.value.code == 2

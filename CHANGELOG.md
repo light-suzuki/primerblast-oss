@@ -7,6 +7,9 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- Explicit ON/OFF labels for reverse-complement alternatives in the GUI and a
+  native `check --no-auto-orientation` switch. OFF is the default and retains
+  both-strand searches and all combinations of the supplied oligos.
 - Native `check` supports separate reverse-complement hypotheses, input-sequence
   evidence, TSV output, optional reference-product FASTA export and per-reference
   GFF3 gene annotation. Existing profiles and thermodynamic options are preserved;
@@ -18,8 +21,7 @@ All notable changes to this project are documented here. The format follows
   remain unresolved. Literal and changed inputs have separate result sections;
   comparison tables show input, reverse, complement and reverse complement.
   Site tables include up to 200 candidates with full counts.
-- Standalone local BLAST nucleotide search and Primer3 GUI tabs, also available
-  as `blast` / `primer3` operations through the shared agent API. BLAST reports
+- Standalone local BLAST nucleotide search and Primer3 GUI tabs. BLAST reports
   both-strand HSP alignments without PCR filters; Primer3 requires no database
   and labels specificity as not evaluated, with candidate transfer to PCR check.
 - Explicit automatic reverse-complement hypotheses for up to two copied
@@ -54,8 +56,9 @@ All notable changes to this project are documented here. The format follows
 - Native `design` / `tile` batch JSON is one document with a `templates` array;
   single-template JSON retains its existing shape.
 - The native CLI focuses on integrated PCR workflows; standalone `blast` and
-  `primer3` wrappers are removed. Their GUI tabs and shared agent operations remain
-  available, along with native PCR-check evidence and FASTA/annotation exports.
+  `primer3` wrappers are removed. Their GUI tabs remain available, along with
+  native PCR-check evidence and FASTA/annotation exports. Standalone engine
+  operations are also excluded from the JSON agent CLI.
 - Primer-dimer / hairpin analysis now runs in **`design` and `tile`** too (not
   only `assay` / `multiplex`), affecting rank, and dimer ΔG/Tm are shown in the
   text, TSV and CSV outputs.

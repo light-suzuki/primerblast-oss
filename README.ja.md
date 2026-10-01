@@ -38,9 +38,8 @@ Primer3は検索DBなしで設計でき、特異性は未確認と表示しま�
 FASTA・GFF3の欄は最初の検索DBに対応します。複数DBのFASTAには共通の`DB=FASTA`設定、
 注釈には共有APIの`db_gff3`（DBパス→GFF3パス）を使えます。参照が未指定・不一致の場合は未確認として表示します。
 
-共有CLIでも `python -m primerblast_oss agent schema` で `blast` / `primer3` の入力仕様を確認し、
-`agent run` に `{"operation":"primer3","params":{"template":"...","product_size":"100-300"}}`
-などのJSONを渡せます。すべてローカルで処理します。
+通常BLAST・Primer3単体の入口はGUI専用です。CLIとJSONエージェントCLIはPCRの統合処理に対応し、
+`python -m primerblast_oss agent schema`で利用可能な処理の入力仕様を確認できます。
 
 ## なぜローカルかつオープンソースか
 
@@ -143,7 +142,7 @@ python -m primerblast_oss check \
 primerblast-oss は **CLIツール**です。サブコマンド:**design**、**check**、**multiplex**、**multiplex-design**、**tile**、**sequence**、**assay**、**markers**、**makedb**。各サブコマンドの全オプションは `python -m primerblast_oss <subcommand> --help` で確認できます。
 
 CLIは設計と特異性評価、PCR確認、マルチプレックスの互換性評価、マーカー設計などの
-統合処理に対応します。通常BLASTとPrimer3単体はGUIと共有エージェントAPIで利用できます。
+統合処理に対応します。通常BLASTとPrimer3単体はGUIで利用できます。
 
 ### `check` — PCR確認・結果保存
 
@@ -157,6 +156,10 @@ CLIの`design`・`tile`で複数テンプレートを入力し`--format json`を
 `check`では`--input-orientation auto`（2本までの逆相補候補）、`--show-sequence-forms`（テキストに
 入力・逆順・相補・逆相補を表示）、`--products-fasta FILE`、`--gff3 FILE`が使えます。
 入力そのものと変更候補を区別し、F/Rラベルが逆の場合も示します。既定は`as_supplied`で入力を保持します。
+GUIの「逆相補候補の自動確認」はON/OFFを選べます。CLIで明示的にOFFにするには
+`--no-auto-orientation`、または`--input-orientation as_supplied`を指定します。
+OFFでも入力オリゴは両鎖検索し、指定した検索条件内でF/R・R/F・F/F・R/Rの産物を調べます。
+ONだけが別オリゴへの逆相補変換候補を追加します。OFFでも照合用の変換配列は表示できます。
 `--primers-fasta -`で標準入力、`--format tsv`で表出力にも対応します。
 ファイル・ストリームはUTF-8です。PowerShellでは
 `Get-Content -Raw pair.fa | primerblast-oss check --primers-fasta - --db mydb --format json`
@@ -445,7 +448,7 @@ python -m primerblast_oss.webapp             # http://127.0.0.1:8799 で配信�
 python -m primerblast_oss.webapp --port 9000 --no-browser
 ```
 
-design / in-silico PCR / tiling / assay / QTL markers / build DB のタブを提供し、`~/.codex/blast_databases`・`~/blast_databases`・`./databases` 配下のBLASTデータベースを自動検出し、各ジョブをバックグラウンドスレッドで実行し、TSV/CSV/BED/JSONのワンクリックダウンロードを提供します。ヘッダーで English / 日本語 を切り替え可能。ループバック(`127.0.0.1`)にのみバインドし、WSL2では既定のlocalhostフォワーディングでWindowsのブラウザから到達できます。GUIが行うことはすべてCLIからも利用できます。
+design / in-silico PCR / tiling / assay / QTL markers / build DB のタブを提供し、`~/.codex/blast_databases`・`~/blast_databases`・`./databases` 配下のBLASTデータベースを自動検出し、各ジョブをバックグラウンドスレッドで実行し、TSV/CSV/BED/JSONのワンクリックダウンロードを提供します。ヘッダーで English / 日本語 を切り替え可能。ループバック(`127.0.0.1`)にのみバインドし、WSL2では既定のlocalhostフォワーディングでWindowsのブラウザから到達できます。PCRの統合処理はCLIからも利用できます。通常BLAST・Primer3単体はGUI専用です。
 
 目的から選べる開始画面、初心者／詳細モード、入力欄ごとの案内、狭い画面への対応を
 日本語・英語で利用できます。小さなFASTA／テキストを配列欄に読み込むか、サーバー側の
