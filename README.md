@@ -43,8 +43,6 @@ Design, sequencing and assay maps also export their reference amplification span
 
 These tools are shared `blast` / `primer3` operations in `agent run`; inspect
 `python -m primerblast_oss agent schema` for JSON input fields.
-They also have native `blast` / `primer3` CLI commands for FASTA files, stdin
-and tabular reports, without starting a GUI server.
 
 A local, open-source, Primer-BLAST-style **command-line tool** for plant breeding
 and genetics. It designs PCR primers with **Primer3** and verifies their
@@ -241,44 +239,14 @@ optional extra — see [Web GUI (optional)](#web-gui-optional) near the end.
 
 ## Usage
 
-primerblast-oss is a **CLI tool**. Subcommands: **blast**, **primer3**, **design**, **check**,
+primerblast-oss is a **CLI tool**. Subcommands: **design**, **check**,
 **multiplex**, **multiplex-design**, **tile**, **sequence**, **assay**,
 **markers**, **makedb**. Run `python -m primerblast_oss <subcommand> --help` for the full
 option list of any one.
 
-### `blast` / `primer3` — standalone commands for files and pipelines
-
-```bash
-# Ordinary nucleotide alignments; both strands, without PCR priming filters.
-primerblast-oss blast --query-fasta queries.fa --db mydb --out blast.tsv
-
-# Primer3 design without a specificity database.
-primerblast-oss primer3 --template-fasta targets.fa --product-size 150-500 \
-  --out primers.tsv --primers-out oligos.fa
-
-# Read a multi-record FASTA from stdin; emit one JSON result for the entire batch.
-cat targets.fa | primerblast-oss primer3 --template-fasta - --format json > design.json
-```
-
-`blast` accepts `--query DNA` or `--query-fasta FILE` (`-` for stdin), repeated
-`--db`, `--task blastn|megablast|blastn-short`, and BLAST search limits. Its default
-TSV includes the DB and original query name, so multi-reference output stays
-unambiguous. HSP coordinates are 1-based inclusive; reverse hits retain descending
-subject coordinates. Target-limit diagnostics go to stderr.
-
-`primer3` accepts `--template DNA` or `--template-fasta FILE` (`-` for stdin),
-product-size/Tm/length/GC constraints and a 0-based `--target start,length`.
-The default TSV contains oligos, product sizes, Tm, GC, penalty and Primer3's
-0-based positions. Specificity is always `not_evaluated`; use `design` when
-design plus database screening is wanted. `--primers-out FILE` exports every
-candidate oligo as FASTA; passing that entire FASTA to `check` screens a mixed
-pool, not separate reactions. `--products-fasta FILE` exports reference spans.
-
-Both commands support `--format text|json|tsv` and `--out FILE` (stdout if omitted).
-FASTA streams and reports use UTF-8. In PowerShell, pipe with
-`Get-Content -Raw targets.fa | primerblast-oss primer3 --template-fasta - --format json`.
-When the external tools are installed in WSL, run these commands in WSL too.
-GUI navigation, reference-picker state and browser downloads remain GUI features.
+The native CLI focuses on integrated PCR workflows: design plus specificity
+screening, primer checks, multiplex compatibility and marker assays.
+Standalone BLAST and Primer3 remain in the GUI and shared agent API.
 
 `multiplex` checks primer-dimer compatibility across a pool of primers (needs
 `primer3-py`) — every primer against every other, to pick sets you can run

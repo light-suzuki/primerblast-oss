@@ -978,15 +978,15 @@ def _cmd_makedb(arguments) -> int:
     return 0
 
 
-def _add_template_args(parser, *, stdin=False) -> None:
+def _add_template_args(parser) -> None:
     template = parser.add_argument_group("template")
     source = template.add_mutually_exclusive_group(required=True)
     source.add_argument("--template", help="template DNA sequence")
-    source.add_argument("--template-fasta", help="FASTA with one or more templates" + ("; - reads stdin" if stdin else ""))
+    source.add_argument("--template-fasta", help="FASTA with one or more templates")
     template.add_argument("--template-id", default="template")
 
 
-def _add_design_knobs(parser, *, size_tolerance=True) -> None:
+def _add_design_knobs(parser) -> None:
     design = parser.add_argument_group("primer3")
     design.add_argument("--opt-size", type=int, default=20)
     design.add_argument("--min-size", type=int, default=18)
@@ -996,8 +996,7 @@ def _add_design_knobs(parser, *, size_tolerance=True) -> None:
     design.add_argument("--max-tm", type=float, default=63.0)
     design.add_argument("--min-gc", type=float, default=20.0)
     design.add_argument("--max-gc", type=float, default=80.0)
-    if size_tolerance:
-        design.add_argument("--size-tolerance", type=int, default=10)
+    design.add_argument("--size-tolerance", type=int, default=10)
     design.add_argument("--primer3-bin")
 
 
@@ -1020,9 +1019,6 @@ def build_parser() -> argparse.ArgumentParser:
     from .agent_cli import command
     agent.set_defaults(func=command)
 
-    from .cli_sequence_tools import add_parsers
-    add_parsers(subcommands)
-
     design = subcommands.add_parser(
         "design", help="design primer pairs and check specificity")
     _add_template_args(design)
@@ -1040,7 +1036,7 @@ def build_parser() -> argparse.ArgumentParser:
     check.add_argument("--forward")
     check.add_argument("--reverse")
     check.add_argument("--primer", action="append", help="NAME=SEQ or SEQ")
-    check.add_argument("--primers-fasta")
+    check.add_argument("--primers-fasta", help="FASTA primer pool; - reads stdin")
     check.add_argument("--input-orientation", choices=("as_supplied", "auto"), default="as_supplied",
                        help="auto also searches reverse-complement alternatives (up to two primers)")
     check.add_argument("--show-sequence-forms", action="store_true",
@@ -1058,7 +1054,7 @@ def build_parser() -> argparse.ArgumentParser:
     multiplex.add_argument("--forward")
     multiplex.add_argument("--reverse")
     multiplex.add_argument("--primer", action="append", help="NAME=SEQ or SEQ")
-    multiplex.add_argument("--primers-fasta")
+    multiplex.add_argument("--primers-fasta", help="FASTA primer pool; - reads stdin")
     _add_dimer_args(multiplex)
     _add_out_args(multiplex, formats=("text", "json"))
     multiplex.set_defaults(func=_cmd_multiplex)
