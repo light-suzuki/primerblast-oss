@@ -212,17 +212,6 @@ def run_benchmark(max_seconds: float) -> dict:
                                      input=stdin, capture_output=True, encoding="utf-8", cwd=str(ROOT), check=True)
             return json.loads(process.stdout)
 
-        native_blast = timed("native_blast_stdin", lambda: native([
-            "blast", "--query-fasta", "-", "--db", str(db), "--format", "json"],
-            ">forward\n" + TARGET_AMPLICON + "\n>reverse\n" + revcomp(TARGET_AMPLICON)), timings)
-        checks["native_blast_stdin_both_strands"] = any(
-            h["qseqid"] == "query2" and h["sseqid"] == "chr_target" and h["strand"] == "-"
-            for h in native_blast["results"][0]["hits"])
-        native_primer3 = timed("native_primer3_stdin", lambda: native([
-            "primer3", "--template-fasta", "-", "--product-size", "80-180",
-            "--num-return", "2", "--format", "json"], ">template\n" + design_seq), timings)
-        checks["native_primer3_without_db"] = (
-            native_primer3["specificity_status"] == "not_evaluated" and len(native_primer3["templates"][0]["pairs"]) > 0)
         native_fasta = tmp / "native_products.fa"
         native_check = timed("native_check_auto_export", lambda: native([
             "check", "--forward", FWD, "--reverse", revcomp(REV), "--db", str(db),

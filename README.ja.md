@@ -140,41 +140,20 @@ python -m primerblast_oss check \
 
 ## 使い方
 
-primerblast-oss は **CLIツール**です。サブコマンド:**blast**、**primer3**、**design**、**check**、**multiplex**、**multiplex-design**、**tile**、**sequence**、**assay**、**markers**、**makedb**。各サブコマンドの全オプションは `python -m primerblast_oss <subcommand> --help` で確認できます。
+primerblast-oss は **CLIツール**です。サブコマンド:**design**、**check**、**multiplex**、**multiplex-design**、**tile**、**sequence**、**assay**、**markers**、**makedb**。各サブコマンドの全オプションは `python -m primerblast_oss <subcommand> --help` で確認できます。
 
-### `blast` / `primer3` — ファイル・パイプ向けの独立コマンド
+CLIは設計と特異性評価、PCR確認、マルチプレックスの互換性評価、マーカー設計などの
+統合処理に対応します。通常BLASTとPrimer3単体はGUIと共有エージェントAPIで利用できます。
 
-```bash
-# 通常のBLAST。PCRの3′端フィルタを適用せず両鎖を検索。
-primerblast-oss blast --query-fasta queries.fa --db mydb --out blast.tsv
+### `check` — PCR確認・結果保存
 
-# DBなしでPrimer3設計。候補オリゴもFASTA保存。
-primerblast-oss primer3 --template-fasta targets.fa --product-size 150-500 \
-  --out primers.tsv --primers-out oligos.fa
-
-# 標準入力（-）から読み、バッチ全体を1つのJSONとして出力。
-cat targets.fa | primerblast-oss primer3 --template-fasta - --format json > design.json
-```
-
-BLASTは`--query DNA`／`--query-fasta FILE`、繰り返し指定できる`--db`、
-`--task blastn|megablast|blastn-short`と検索上限を指定できます。既定のTSVには参照DBと元の
-クエリ名が入り、座標は1始まり・両端を含みます。逆方向ヒットの参照座標は降順のままです。
-
-Primer3は`--template DNA`／`--template-fasta FILE`で入力し、産物長・Tm・プライマー長・GCを
-指定できます。`--target start,length`とTSVの位置はPrimer3の0始まり座標です。
-特異性は常に未確認（`not_evaluated`）。設計とDB検索を一緒に行う用途は既存の`design`を使います。
-`--primers-out FILE`は全候補オリゴ、`--products-fasta FILE`は参照増幅領域をFASTA保存します。
-全候補FASTAを`check`に渡すと、候補ペアごとの反応ではなく混合プライマープールとして検索します。
-
-両コマンドは`--format text|json|tsv`と`--out FILE`に対応し、既定はTSV・標準出力です。
-FASTA指定の`-`は標準入力。ファイル・ストリームはUTF-8を使います。PowerShellでは
-`Get-Content -Raw targets.fa | primerblast-oss primer3 --template-fasta - --format json`と書けます。
-外部ツールがWSL内にある場合はCLIもWSL内で実行してください。GUIの画面切替や参照選択UIはCLIに移しません。
-
-`check`でも`--input-orientation auto`（2本までの逆相補候補）、`--show-sequence-forms`（テキストに
+`check`では`--input-orientation auto`（2本までの逆相補候補）、`--show-sequence-forms`（テキストに
 入力・逆順・相補・逆相補を表示）、`--products-fasta FILE`、`--gff3 FILE`が使えます。
 入力そのものと変更候補を区別し、F/Rラベルが逆の場合も示します。既定は`as_supplied`で入力を保持します。
 `--primers-fasta -`で標準入力、`--format tsv`で表出力にも対応します。
+ファイル・ストリームはUTF-8です。PowerShellでは
+`Get-Content -Raw pair.fa | primerblast-oss check --primers-fasta - --db mydb --format json`
+と書けます。外部ツールがWSL内にある場合はCLIもWSL内で実行してください。
 
 ```bash
 primerblast-oss check --primers-fasta pair.fa --db mydb \

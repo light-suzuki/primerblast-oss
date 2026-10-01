@@ -1,12 +1,11 @@
-"""File/stdin inputs and tabular exports for standalone sequence commands."""
+"""File/stdin primer inputs and PCR-check result exports."""
 import csv
 import io
-import json
 import sys
 from pathlib import Path
 
-from .sequence_tools import dna_input, fasta_record, nucleotide_search
-from .workflows import _templates, execute
+from .sequence_tools import dna_input, fasta_record
+from .workflows import _templates
 
 
 def distinct_outputs(*paths):
@@ -35,128 +34,6 @@ def tsv_rows(header, rows):
     writer.writerow(header)
     writer.writerows(rows)
     return stream.getvalue().rstrip("\n")
-
-
-def blast_tsv(data):
-    names = {q["id"]: q["name"] for q in data["queries"]}
-    header, rows = None, []
-    for result in data["results"]:
-        lines = list(csv.reader(io.StringIO(result["tsv"]), delimiter="\t"))
-        header = ["db", "query_name"] + lines[0] + ["strand"]
-        rows.extend([result["db"], names[line[0]]] + line + ["+" if int(line[8]) <= int(line[9]) else "-"]
-                    for line in lines[1:] if line)
-    return tsv_rows(header, rows)
-
-
-def blast_text(data):
-    names = {q["id"]: q["name"] for q in data["queries"]}
-    lines = ["BLAST %s (both strands; HSP alignments, without PCR filters)" % data["task"]]
-    for result in data["results"]:
-        lines.append("\n# %s: %d HSP(s)" % (result["db"], len(result["hits"])))
-        for hit in result["hits"]:
-            lines.extend([
-                "  %s:%s-%s -> %s:%s-%s (%s) identity=%s%% length=%s E=%s" % (
-                    names[hit["qseqid"]], hit["qstart"], hit["qend"], hit["sseqid"],
-                    hit["sstart"], hit["send"], hit["strand"], hit["pident"], hit["length"], hit["evalue"]),
-                "    Query   " + hit["qseq"], "    Subject " + hit["sseq"],
-            ])
-    return "\n".join(lines)
-
-
-def cmd_blast(args):
-    from .cli import _emit
-    _, records = sequence_params(args.query, args.query_fasta, args.query_id)
-    data = nucleotide_search(records, args.db, task=args.task, evalue=args.evalue,
-                             max_target_seqs=args.max_target_seqs,
-                             num_threads=args.num_threads, blastn_bin=args.blastn_bin)
-    for result in data["results"]:
-        if result["stderr"]:
-            print(result["stderr"], file=sys.stderr)
-        if result["at_target_limit"]:
-            print("warning: BLAST target limit reached in %s for %s; search may be incomplete" % (
-                result["db"], ", ".join(result["at_target_limit"])), file=sys.stderr)
-    output = (json.dumps(data, indent=2) if args.format == "json" else
-              blast_tsv(data) if args.format == "tsv" else blast_text(data))
-    _emit(output, args.out)
-    return 0
-
-
-def primer3_tsv(data):
-    return tsv_rows(
-        ["template_id", "pair", "forward_5to3", "reverse_5to3", "product_size",
-         "left_start_0based", "right_end_0based", "tm_f", "tm_r", "gc_f", "gc_r", "penalty",
-         "specificity_status"],
-        ([template["template_id"], p["index"] + 1, p["forward"], p["reverse"], p["product_size"],
-          p["left_start"], p["right_start"], p["tm_f"], p["tm_r"], p["gc_f"], p["gc_r"],
-          p["penalty"], "not_evaluated"] for template in data["templates"] for p in template["pairs"]))
-
-
-def primer3_text(data):
-    lines = ["Primer3 only: specificity not evaluated"]
-    for template in data["templates"]:
-        lines.append("\n# %s: %d pair(s)" % (template["template_id"], len(template["pairs"])))
-        for p in template["pairs"]:
-            lines.extend(["  pair %s: %s bp  Tm %s / %s" % (
-                p["index"] + 1, p["product_size"], p["tm_f"], p["tm_r"]),
-                "    F 5'-" + p["forward"] + "-3'", "    R 5'-" + p["reverse"] + "-3'"])
-        lines.append("  Primer3 explain: " + template["primer3_explain"])
-    return "\n".join(lines)
-
-
-def cmd_primer3(args):
-    from .cli import _emit, _parse_size_ranges
-    distinct_outputs(args.out, args.primers_out, args.products_fasta)
-    params, _ = sequence_params(args.template, args.template_fasta, args.template_id)
-    _parse_size_ranges(args.product_size)
-    params.update({key: getattr(args, key) for key in (
-        "product_size", "num_return", "target", "opt_size", "min_size", "max_size",
-        "opt_tm", "min_tm", "max_tm", "min_gc", "max_gc", "primer3_bin")})
-    data = execute("primer3", params)
-    for template in data["templates"]:
-        if not template["pairs"]:
-            print("%s: no primer pairs; %s" % (template["template_id"], template["primer3_explain"]),
-                  file=sys.stderr)
-    if args.primers_out:
-        records = [fasta_record("template%d_pair%d_%s" % (i, p["index"] + 1, side), p[key])
-                   for i, template in enumerate(data["templates"], 1) for p in template["pairs"]
-                   for side, key in (("F", "forward"), ("R", "reverse"))]
-        Path(args.primers_out).write_text("".join(records), encoding="utf-8")
-    if args.products_fasta:
-        records = [fasta_record("template%d_pair%d_reference" % (i, p["index"] + 1), p["sequence"])
-                   for i, template in enumerate(data["templates"], 1) for p in template["pairs"]]
-        Path(args.products_fasta).write_text("".join(records), encoding="utf-8")
-    output = (json.dumps(data, indent=2) if args.format == "json" else
-              primer3_tsv(data) if args.format == "tsv" else primer3_text(data))
-    _emit(output, args.out)
-    return 0
-
-
-def add_parsers(subcommands):
-    from .cli import _add_design_knobs, _add_template_args, _add_out_args
-    blast = subcommands.add_parser("blast", help="ordinary nucleotide BLAST (no PCR filters)")
-    source = blast.add_mutually_exclusive_group(required=True)
-    source.add_argument("--query", help="DNA or pasted FASTA")
-    source.add_argument("--query-fasta", help="FASTA file; - reads stdin")
-    blast.add_argument("--query-id", default="query")
-    blast.add_argument("--db", action="append", required=True, help="BLAST DB prefix; repeat per reference")
-    blast.add_argument("--task", choices=("blastn", "megablast", "blastn-short"), default="blastn")
-    blast.add_argument("--evalue", type=float, default=10.0)
-    blast.add_argument("--max-target-seqs", type=int, default=100)
-    blast.add_argument("--num-threads", type=int, default=2)
-    blast.add_argument("--blastn-bin")
-    _add_out_args(blast)
-    blast.set_defaults(func=cmd_blast, format="tsv")
-
-    primer3 = subcommands.add_parser("primer3", help="design primers without a specificity database")
-    _add_template_args(primer3, stdin=True)
-    primer3.add_argument("--product-size", default="70-1000")
-    primer3.add_argument("--num-return", type=int, default=10)
-    primer3.add_argument("--target", help="start,length on template (0-based)")
-    _add_design_knobs(primer3, size_tolerance=False)
-    primer3.add_argument("--primers-out", help="write candidate oligos as FASTA; all pairs form a pool")
-    primer3.add_argument("--products-fasta", help="write designed reference product spans as FASTA")
-    _add_out_args(primer3)
-    primer3.set_defaults(func=cmd_primer3, format="tsv")
 
 
 def hypothesis_numbers(data):

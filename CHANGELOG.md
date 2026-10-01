@@ -7,9 +7,6 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
-- Native `blast` and `primer3` CLI commands with FASTA file/stdin inputs, text /
-  JSON / TSV reports, custom executable paths and file exports. These require no
-  GUI server. Primer3 runs without a BLAST database and exports candidate oligos.
 - Native `check` supports separate reverse-complement hypotheses, input-sequence
   evidence, TSV output, optional reference-product FASTA export and per-reference
   GFF3 gene annotation. Existing profiles and thermodynamic options are preserved;
@@ -48,6 +45,9 @@ All notable changes to this project are documented here. The format follows
   order oligos without changing specificity evaluation.
 
 ### Changed / Fixed
+- The native CLI focuses on integrated PCR workflows; standalone `blast` and
+  `primer3` wrappers are removed. Their GUI tabs and shared agent operations remain
+  available, along with native PCR-check evidence and FASTA/annotation exports.
 - Primer-dimer / hairpin analysis now runs in **`design` and `tile`** too (not
   only `assay` / `multiplex`), affecting rank, and dimer ΔG/Tm are shown in the
   text, TSV and CSV outputs.
