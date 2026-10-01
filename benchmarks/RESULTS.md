@@ -377,6 +377,99 @@ python benchmarks/real_genome_batch.py --genome /path/tair10.fa \
 
 No result in this section constitutes Wet validation.
 
+## 12. Exact-locus and duplicate-evidence repair review (2026-10-02)
+
+[PR #62](https://github.com/light-suzuki/primerblast-oss/pull/62) preserves
+genome-verified exact primer loci in tandem repeats and coalesces identical
+binding alignments. Distinct primer identities, 3' endpoints and gapped
+alignment evidence remain separate. See [the identity rules](../docs/priming-site-identity.md).
+
+### Independently rerun small checks
+
+The review pinned baseline `3a8d1931ffec168cfad309521112da4445b86fa8` and
+implementation `cdb827a37b3688156f28ab81c912d909f89400de`.
+[Machine-readable result](results/2026-10-02-pr62-synthetic-review.json) records
+the synthetic checks, timings, versions and commits. Python was 3.12.3,
+BLAST+ 2.12.0+, primer3_core 2.6.1 and primer3-py 2.3.1.
+
+| Check | Baseline | PR implementation |
+|---|---:|---:|
+| New exact-site / identity regressions | 12 passed, 18 failed | 30 passed |
+| Full Python suite | Not rerun in this review | 271 passed |
+| Real-tool continuous synthetic checks | Not rerun in this review | 20/20 passed |
+
+The new regression's independent substring oracle expects six repeat products
+of 130, 132, 134, 136, 138 and 140 bp. Injected complete HSPs isolate
+post-BLAST realignment; they do not measure BLAST seed/reporting completeness.
+Both strands, partial HSPs, contig edges, indels and distinct evidence are covered.
+The old module was loaded in an isolated process against the same new tests;
+18 failures were reproduced without changing the reviewed implementation.
+
+The continuous synthetic run exercised actual BLAST+, Primer3, thermodynamics,
+F/F and swapped-label products, original/changed-oligo separation, native CLI
+exports, reference FASTA and gene annotation. Its timed operations summed to
+**2.0626 seconds**. This is one small-fixture run, not process wall time,
+an isolated performance comparison or a whole-genome speedup.
+
+Reproduce the fixed small checks (external tools and the `thermo` extra needed
+for the second command):
+
+```bash
+python -m pytest -q tests/test_realign_site_identity.py
+python benchmarks/continuous_benchmark.py --max-seconds 30 --json-out synthetic.json
+```
+
+### DoTs whole-genome panel reported in PR #62
+
+The following measurements are transcribed from the
+[PR author's report](https://github.com/light-suzuki/primerblast-oss/pull/62).
+They were **not rerun in this review**; the underlying bulk HSP/output artifacts
+are not committed here. Keep these reported measurements separate from the
+independent small checks above.
+
+The reported reference is all seven Ensembl Plants release-63 TAIR10 records,
+119,667,750 bp, uncompressed FASTA SHA-256
+`85c83b6dd6820769dae5df190adda7ca0762872d61e5634a91f1d14c8f4fd8ce`.
+Baseline/fixed commits are the same pins as above. Each literal F/R reaction
+used a whole-genome BLAST search, with saved HSPs replayed into both engines.
+A bounded cache memoized only an unchanged fitting helper; native-output
+parity was reported. These are output comparisons, not native runtime timings.
+
+| Separate panel | Pairs | Evaluation | Baseline rows | Fixed rows | Exact oracle events recovered by both |
+|---|---:|---|---:|---:|---:|
+| Published experimental-source pairs | 737 | Genome realignment + default thermo gate | 1,258 | 1,215 | 751/751 |
+| Published computational Toal markers | 2,072 | HSP-only, no thermo gate | 7,792 | 7,792 | 2,075/2,075 |
+| Prior repository controls | 40 | Genome realignment + default thermo gate | 93 | 92 | 56/56 |
+
+The 737 pairs comprise [Liu 2012](https://doi.org/10.1186/1746-4811-8-12)
+(327), [Pant 2009](https://doi.org/10.1104/pp.109.139139) (181), and
+[Păcurar 2012](https://doi.org/10.1093/jxb/err422) (229).
+[Toal 2016](https://doi.org/10.1104/pp.16.00354) contributes the separate 2,072
+computational markers. The 2,809 literature reactions were reported unique
+after ignoring F/R slot order; an ambiguous additional Liu block was excluded
+from those totals. Published experimental provenance does not turn this
+sequence comparison into prospective wet-PCR validation.
+
+Product windows were 50–15,000 / 50–2,000 / 50–10,000 bp for
+Liu / Pant / Păcurar, and 50–2,000 bp for Toal and historical controls.
+The exact oracle enumerated full-length literal matches on the same linear
+reference in those windows. Neither panel tests exhaustive imperfect binding.
+
+The reported experimental panel removes 43 identical rows across 14 reactions,
+retaining all 1,215 unique product records and 1,213 coordinate footprints.
+The two repeated footprints retain distinct primer identities; the historical
+case with distinct 3' endpoints also remains separate. Native product-record
+sets were reported unchanged except for the derived `nearest_gap`, which is
+recomputed after deduplication. For example, one candidate's gap changes from
+0 to 370 bp when repeated copies of its own row are removed.
+
+Raw-HSP high-copy warnings remain conservative. The reported seven subjects
+are below a 5,000-subject cap; a high-copy warning is not itself evidence that
+this subject cap was hit. A 200-site preview can be clipped while enumeration
+uses the full accepted list. The repair does not make BLAST exhaustive, resolve
+all imperfect alignment ties, prove laboratory amplification, or adjudicate
+the nine PrimerServer2 disagreements in section 11.
+
 ## Reproduce
 
 ```bash

@@ -7,6 +7,9 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- PR #62 benchmark review records with synthetic run provenance, separately
+  attributed whole-genome panel measurements, and refreshed English/Japanese
+  README summaries distinguishing historical comparisons and open acceptance.
 - Explicit ON/OFF labels for reverse-complement alternatives in the GUI and a
   native `check --no-auto-orientation` switch. OFF is the default and retains
   both-strand searches and all combinations of the supplied oligos.
@@ -47,6 +50,11 @@ All notable changes to this project are documented here. The format follows
   order oligos without changing specificity evaluation.
 
 ### Changed / Fixed
+- Genome-verified exact primer loci retain their nominated coordinates instead
+  of moving to an equally scoring neighboring repeat. Identical binding
+  alignments are counted once; distinct primers, terminal coordinates and
+  gapped alignment evidence remain separate. Raw HSP counts and conservative
+  search-completeness warnings are preserved.
 - BLAST-only gapped primer hits retain their reference 5' footprint instead of
   inferring it from oligo length; product coordinates and size filters now use
   that mapped endpoint on either strand.

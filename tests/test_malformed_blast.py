@@ -69,15 +69,15 @@ def test_non_numeric_coordinate_is_counted_as_malformed():
     assert stats.completeness == SEARCH_POSSIBLY_TRUNCATED
 
 
-def test_clean_16_column_output_is_unchanged():
+def test_clean_duplicate_rows_are_complete_but_count_one_site():
     lines = [_valid_line(), _valid_line()]
     sites, stats = _run_with_output(_blast_output(lines))
-    assert len(sites) == 2
+    assert len(sites) == 1
     assert stats.raw_blast_hits == 2
     assert stats.malformed_rows == 0
     assert stats.malformed_row_reason is None
     assert stats.completeness == SEARCH_COMPLETE
-    assert stats.priming_sites == 2
+    assert stats.priming_sites == 1
 
 
 def test_mixed_clean_and_malformed_rows_are_not_complete():

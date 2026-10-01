@@ -115,15 +115,15 @@ rather than only dimer *checking*. A ✅ in more than one column means the capab
 exists on each side — not that the underlying models are identical or that outputs
 will match.
 
-**Benchmarks (summary):** across **40 randomly-placed Arabidopsis TAIR10 loci**,
-primerblast-oss and PrimerServer2 predict the same amplicon set (count, size,
-coordinates) on **92 % of non-repetitive loci**; three hand-checked *Lotus
-japonicus* pairs matched PrimerServer2 exactly; and across **six loci** run
-against the **live NCBI Primer-BLAST** service, primerblast-oss stays within the
-NCBI / PrimerServer2 range on every one — matching NCBI in rejecting a
-non-3'-anchored off-target that PrimerServer2 keeps. Full method, numbers, and an
-analysis of the residual disagreements are in
-[`benchmarks/RESULTS.md`](benchmarks/RESULTS.md) §7–§9.
+**Benchmarks (summary):** the 2026-10-02 PR #62 review passed **271 Python
+tests and 20/20 real-tool synthetic checks**; 18 new regression failures were
+reproduced on the pinned baseline. DoTs separately reported whole-genome
+comparisons of 737 published experimental-source pairs and 2,072 computational
+markers; that panel was not rerun in this review and is not wet-PCR validation.
+The 2026-09-27 PrimerServer2 rerun agreed on exact coordinates at **31/40 loci
+(77.5%)**, with nine disagreements still unadjudicated. Historical comparisons
+remain in §7–§10; newer methods, provenance and limits are in
+[`benchmarks/RESULTS.md`](benchmarks/RESULTS.md) §11–§12.
 
 ## Validation status
 
@@ -132,14 +132,17 @@ scriptable primer work: matching its specificity behaviour on local genomes whil
 adding multi-database screening, tiling, marker design, breeding-assay outputs,
 and offline reproducibility. The evidence to date:
 
-- **PrimerServer2, 40-locus automated head-to-head (Arabidopsis TAIR10).** With
-  matched parameters, the two tools agree on the exact predicted amplicon set for
-  **33 / 36 (92 %) non-repetitive loci**. Every residual disagreement is
-  accounted for: repetitive loci where both tools call the primer non-specific but
-  enumerate repeat copies differently, and marginal sites where a primer's 3' end
-  is not fully aligned — which primerblast-oss rejects as non-priming and
-  PrimerServer2 keeps on duplex Tm. None trace to an implementation error
-  ([`benchmarks/RESULTS.md`](benchmarks/RESULTS.md) §9).
+- **PrimerServer2, 40-locus TAIR10 rerun (2026-09-27).** Product counts
+  agree at 32/40 loci; sizes and coordinates at **31/40 (77.5%)**.
+  The deterministic sampler is not a balanced random sample. Nine disagreements
+  remain unadjudicated; neither tool's prediction is biological ground truth.
+  The older 33/36 non-repetitive result is a separate historical experiment
+  ([`benchmarks/RESULTS.md`](benchmarks/RESULTS.md) §9, §11).
+- **Exact-locus and duplicate-evidence repair (2026-10-02).** The PR #62
+  independent small review passed 271 tests and 20 synthetic integration checks.
+  The separately reported whole-genome panel removed 43 identical rows across
+  14 experimental-source reactions without changing the unique product-record
+  set. It does not establish wet-PCR sensitivity or specificity (§12).
 - **PrimerServer2, *Lotus japonicus*.** Three hand-checked pairs matched exactly
   on amplicon count, size, and coordinates (§7).
 - **NCBI Primer-BLAST (six loci).** Six pairs were run through the live NCBI
@@ -191,6 +194,11 @@ For each primer pair and each database:
 
 Pairs are scored and ranked A–D by specificity, Tm balance, GC, and 3'-dimer
 strength.
+
+Genome-verified exact loci retain their nominated coordinates. Repeated HSPs
+for the same binding alignment count once; distinct 3' endpoints or gapped
+alignments remain separate evidence. See [site identity and count semantics](
+docs/priming-site-identity.md).
 
 Use `--specificity-profile ncbi` to switch the mismatch thresholds to a
 NCBI-Primer-BLAST-like stringency profile: up to 5 total mismatches are kept as
@@ -510,8 +518,10 @@ Honest scope, so you know what it does *not* do:
   repeat mask.
 - **dCAPS support is best-effort** and CAPS calls depend on the enzyme table
   (~40 common enzymes), not an exhaustive REBASE set.
-- **Batch/QTL modes work but are not benchmarked at large scale**; each pair
-  costs a BLAST search, so wide sweeps are IO/CPU bound.
+- **Large-scale performance acceptance remains open.** The ten-primer
+  real-genome batch check in §11 did not show a speedup or memory improvement.
+  The larger PR #62 panel in §12 compares outputs with replay/cache assistance;
+  it is not a native runtime benchmark. Wide sweeps remain IO/CPU intensive.
 - **primer-dimer / hairpin analysis needs primer3-py** (optional). With it, each
   pair gets hairpin / self-dimer / cross-dimer scoring and the `multiplex`
   subcommand checks a whole pool; without it, only Primer3's design-time limits
@@ -714,6 +724,11 @@ node tests/web_locus.test.js          # optional: coordinate/strand and display 
 ```
 
 ## Benchmark
+
+The latest [review results](benchmarks/RESULTS.md#12-exact-locus-and-duplicate-evidence-repair-review-2026-10-02)
+separate independently rerun synthetic checks from DoTs' reported whole-genome
+panel. A [machine-readable synthetic result](benchmarks/results/2026-10-02-pr62-synthetic-review.json)
+includes version/commit provenance and timing scope. Neither is wet validation.
 
 `benchmarks/run_benchmark.py` extracts a real region from an `.fai`-indexed
 genome, designs primers, and screens specificity — reporting timing and the

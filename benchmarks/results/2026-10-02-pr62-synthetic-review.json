@@ -1,0 +1,63 @@
+{
+  "benchmark": "continuous_synthetic",
+  "checks": {
+    "automatic_orientation_product": true,
+    "changed_sequence_is_alternative": true,
+    "detects_duplicate_amplicon": true,
+    "detects_ff_amplicon": true,
+    "detects_target_amplicon": true,
+    "duplicate_pair_comigrating": true,
+    "duplicate_pair_not_specific": true,
+    "multiplex_runs": true,
+    "native_check_fasta_and_gene": true,
+    "native_check_literal_and_alternative": true,
+    "ordinary_blast_both_strands": true,
+    "original_self_product_separate": true,
+    "pipeline_returns_pairs": true,
+    "primer3_returns_pairs": true,
+    "product_blastdb_extraction": true,
+    "product_overlapping_gene": true,
+    "product_reference_fasta": true,
+    "standalone_primer3_unscreened": true,
+    "swapped_labels_literal_product": true,
+    "thermo_path_runs": true
+  },
+  "max_seconds": 30.0,
+  "passed": true,
+  "timings": {
+    "automatic_orientation": 0.4829,
+    "in_silico_pcr": 0.1939,
+    "multiplex": 0.0002,
+    "native_check_auto_export": 0.722,
+    "ordinary_blast": 0.0253,
+    "pair_specificity": 0.0249,
+    "pair_specificity_thermo": 0.0373,
+    "pipeline": 0.1689,
+    "primer3_design": 0.1127,
+    "product_blastdb_extraction": 0.069,
+    "standalone_primer3": 0.1523,
+    "swapped_labels": 0.0732
+  },
+  "total_timed_seconds": 2.0626,
+  "provenance": {
+    "review_date_jst": "2026-10-02",
+    "source_commit": "cdb827a37b3688156f28ab81c912d909f89400de",
+    "baseline_commit": "3a8d1931ffec168cfad309521112da4445b86fa8",
+    "source_pr": "https://github.com/light-suzuki/primerblast-oss/pull/62",
+    "data": "Self-contained synthetic fixtures in benchmarks/continuous_benchmark.py",
+    "python": "3.12.3",
+    "primer3_py": "2.3.1",
+    "blastn": "blastn: 2.12.0+",
+    "primer3_core": "libprimer3 release 2.6.1",
+    "timing_scope": "Sum of timed synthetic operations; not process wall time or native whole-genome performance"
+  },
+  "independent_review": {
+    "full_pytest_passed": 271,
+    "new_regression_cases": 30,
+    "baseline_new_regression_failed": 18,
+    "baseline_new_regression_passed": 12,
+    "fixed_new_regression_passed": 30,
+    "wet_validation": "not_performed",
+    "whole_genome_panel": "Reported separately in PR #62; not rerun in this review"
+  }
+}

@@ -171,7 +171,9 @@ def test_priming_site_stats_warn_high_copy_hits(monkeypatch=None):
             "primer", "chr1", "100.0", "20", "0", "0", "1", "20",
             "500", "519", "1e-5", "40", "plus", q, q, "20"
         ])
-        return "\n".join([line, line])
+        other = line.split("\t")
+        other[8:10] = ["600", "619"]
+        return "\n".join([line, "\t".join(other)])
 
     import primerblast_oss.specificity as S
     old = S._run_blast
