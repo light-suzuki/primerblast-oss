@@ -170,9 +170,16 @@ def db_fingerprint(db_path: str, *, strong: bool = False) -> Dict:
         "mtime": None,
         "files": [],
     }
-    if index_files:
-        first = index_files[0]
-        stat = first.stat()
+    summary_path = None
+    for extension in (".nin", ".nsq", ".ndb"):
+        candidate = Path(db_path + extension)
+        if candidate.is_file():
+            summary_path = candidate
+            break
+    if summary_path is None and index_files:
+        summary_path = index_files[0]
+    if summary_path is not None:
+        stat = summary_path.stat()
         info["index_bytes"] = str(stat.st_size)
         info["mtime"] = _timestamp(stat)
     for path in index_files:
