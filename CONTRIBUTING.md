@@ -35,6 +35,18 @@ DB and are not run in ordinary CI. The self-contained
 `benchmarks/continuous_benchmark.py` workflow builds a synthetic database and
 runs weekly (or manually) in GitHub Actions.
 
+Before a release, run the fixed scientific acceptance suite with real BLAST+ and
+Primer3 installed:
+
+```bash
+pip install -e ".[dev,thermo]"
+python benchmarks/release_acceptance.py --json-out release-acceptance.json
+```
+
+Pull requests also run this suite in the `Release acceptance` workflow. It is a
+software/scientific-invariant gate, not a substitute for prospective wet-PCR
+validation.
+
 ## Guidelines
 
 - Standard library only in the core package (the tool shells out to
