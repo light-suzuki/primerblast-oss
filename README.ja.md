@@ -575,6 +575,21 @@ python benchmarks/head_to_head_ps2.py --genome tair10.fa --db tair10.fa \
 python benchmarks/continuous_benchmark.py --max-seconds 30
 ```
 
+リリース判定には、より厳しい固定acceptance suiteを使えます。実際の
+`primer3_core` と BLAST+ を使うPCRケースに加え、clean specificity、重複/F-F、
+full-primer indel再アラインメント、不完全検索、CAPS切断、ゲルで分離できる
+オフターゲットと共泳して判別不能なオフターゲットを固定検証します。
+この成功は実装の受入条件であり、Wet検証を意味しません。
+
+```bash
+python benchmarks/release_acceptance.py --json-out release-acceptance.json
+```
+
+assayのprovenanceはpackage/API versionとは別に、specificity・gel・risk・
+restrictionの科学モデル版とprovenance schema版を記録します。通常は巨大ゲノムを
+毎回全読みしない軽量fingerprintを使い、保存用の実行では
+`--strong-provenance` によりFASTA/GFF3/VCFとBLAST indexのfull SHA-256を取得できます。
+
 ## コントリビュート
 
 貢献を歓迎します — [CONTRIBUTING.md](CONTRIBUTING.md) を参照。変更は [CHANGELOG.md](CHANGELOG.md) で追跡しています。

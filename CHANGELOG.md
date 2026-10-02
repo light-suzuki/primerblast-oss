@@ -7,6 +7,8 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- Versioned provenance schema and scientific-model identifiers for specificity, gel, risk and restriction logic; optional `--strong-provenance` streams complete reference and BLAST-index files through SHA-256 without making full hashing the interactive default.
+- Fixed `benchmarks/release_acceptance.py` plus a pull-request Actions workflow covering real Primer3/BLAST PCR checks, full-primer indel realignment, incomplete-search handling, CAPS digest geometry, and gel-separated versus co-migrating off-target patterns.
 - PCR job stage/count progress, retained server timing, and completed DB/oligo
   hypothesis partial results with unfinished searches explicitly marked pending.
 - Visible fragment-length/FASTA actions and copyable reference FASTA text;

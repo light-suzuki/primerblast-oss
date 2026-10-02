@@ -560,7 +560,7 @@ items are partial — see [Limitations](#limitations).
 | 10 | not built for CAPS/dCAPS | `caps` scan: enzymes that digest two alleles differently, gel gap |
 | 11 | weak GFF3 / VCF / QTL integration | `--gene`/`--gff3`, `--vcf`, `--interval`, BED input |
 | 12 | opaque empty results | Primer3 explain string surfaced; per-stage diagnostics |
-| 13 | weak reproducibility | provenance manifest pins tool versions, params, DB fingerprints |
+| 13 | weak reproducibility | provenance manifest records tool + scientific-model versions, source revision, params and DB/reference fingerprints; `--strong-provenance` adds full SHA-256 |
 | 14 | weak experimenter-facing scoring | `risk` rolls up every signal into low/medium/high with reasons |
 | 15 | side products not visualized | ASCII off-target map + BED track for a genome browser |
 
@@ -823,6 +823,23 @@ thermodynamic gating, and multiplex dimer checks.
 ```bash
 python benchmarks/continuous_benchmark.py --max-seconds 30
 ```
+
+For a release gate, run the stricter fixed acceptance suite. It uses real
+`primer3_core` and BLAST+ for end-to-end PCR cases and additionally pins clean
+specificity, duplicate/F-F detection, full-primer indel realignment, incomplete
+search handling, CAPS digest geometry, and both gel-separated and co-migrating
+off-target patterns. Passing this suite is implementation acceptance, **not**
+wet-lab validation.
+
+```bash
+python benchmarks/release_acceptance.py --json-out release-acceptance.json
+```
+
+Assay provenance has its own schema and scientific-model version identifiers
+(specificity, gel, risk and restriction models), separate from the package/API
+version. Normal reports use lightweight fingerprints so multi-gigabase genomes
+are not reread. Add `--strong-provenance` to `assay` when an archival run should
+stream complete FASTA/GFF3/VCF and BLAST-index files through SHA-256.
 
 ## Contributing
 
