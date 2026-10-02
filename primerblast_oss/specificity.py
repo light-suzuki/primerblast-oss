@@ -375,6 +375,11 @@ def _realign_hit_to_site(
     low = max(1, min(approx_5, approx_3) - slack)
     high = max(approx_5, approx_3) + slack
     try:
+        # Keep accepted products in the associated FASTA's coordinate namespace
+        # so exact-locus anchors, annotation and sequence extraction agree.
+        # Custom genome readers without a resolver retain their existing IDs.
+        if hasattr(genome, "resolve_name"):
+            subject_id = genome.resolve_name(subject_id)
         if hasattr(genome, "length"):
             high = min(int(genome.length(subject_id)), high)
         target = genome.fetch(subject_id, low, high, strand)
