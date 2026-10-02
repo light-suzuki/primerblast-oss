@@ -347,15 +347,31 @@ def _run_assay(p: Dict) -> Dict:
     dp = _design_params(p)
     sp = _spec_params(p)
     variants = parse_vcf(p["vcf"]) if _f(p, "vcf", None) else []
+    associated_genomes = _associated_genomes(p, genome)
     result = run_assay(region, genome, dbs, flank=flank, design_params=dp,
                        spec_params=sp, variants=variants, caps_snp=caps_snp,
-                       genomes_by_db=_associated_genomes(p, genome),
+                       genomes_by_db=associated_genomes,
                        gel_ladder=_f(p, "gel_ladder", "auto"),
                        custom_ladder_bands=[int(v) for v in str(_f(p, "ladder_bands", "")).split(",") if v.strip()],
                        gel_percent=float(p["gel_percent"]) if _f(p, "gel_percent", "auto") != "auto" else None,
                        aspcr_pairs_to_screen=int(_f(p, "aspcr_pairs_to_screen", 2)))
-    prov = make_manifest({"design": dp.__dict__, "spec": sp.__dict__, "flank": flank},
-                         dbs, template_info=result["target"])
+    thermo_genomes = {
+        database: getattr(associated_genomes.get(database), "fasta", None)
+        for database in dbs
+    }
+    prov = make_manifest(
+        {"design": dp.__dict__, "spec": sp.__dict__, "flank": flank,
+         "thermo_genomes": thermo_genomes},
+        dbs,
+        template_info=result["target"],
+        thermo_genomes=thermo_genomes,
+        reference_files={
+            "design_genome": genome_path,
+            "gff3": _f(p, "annotation_gff3", None) or _f(p, "gff3", None),
+            "vcf": _f(p, "vcf", None),
+        },
+        strong_hashes=bool(p.get("strong_provenance", False)),
+    )
     result["provenance"] = prov
     from .annotations import template_annotations
     result["template"]["annotations"] = template_annotations(_f(p, "annotation_gff3", None) or _f(p, "gff3", None), result["template"])
