@@ -1,5 +1,7 @@
 /* Standalone local tools and reference product exports. */
 Object.assign(I18N.ja, {
+  'tools.showFasta':'FASTAを表示・コピー', 'tools.copyFasta':'FASTAをコピー',
+  'tools.copied':'FASTAをコピーしました。', 'tools.copyFallback':'配列を選択しました。Ctrl+C / Command+Cでコピーしてください。',
   'tools.literalGroup': '入力配列そのものの検索結果',
   'tools.alternativeGroup': '入力を変更した配列の候補（別オリゴ）',
   'tools.forms': '入力配列と変換配列を見比べる',
@@ -28,6 +30,8 @@ Object.assign(I18N.ja, {
 });
 Object.assign(I18N.ja, {'f.num_threads': '検索に使うスレッド数', 'tools.annotationMissing': '遺伝子注釈を取得できませんでした。遺伝子の有無は未確認です。', 'tools.query': '1. 検索したい配列を入力', 'tools.searchDb': '2. 相同性を検索するゲノムを選択'});
 Object.assign(I18N.en, {
+  'tools.showFasta':'Show / copy FASTA', 'tools.copyFasta':'Copy FASTA',
+  'tools.copied':'FASTA copied.', 'tools.copyFallback':'Sequence selected. Press Ctrl+C / Command+C to copy.',
   'tools.literalGroup': 'Search results for the supplied sequences',
   'tools.alternativeGroup': 'Candidates using changed sequences (different oligos)',
   'tools.forms': 'Compare input and transformed sequences',
@@ -213,8 +217,21 @@ function renderPrimer3(data) {
 }
 
 const checkWithoutSequence = renderCheck;
+function fastaCopyPanel(fasta) {
+  return `<details class="fasta-export"><summary>${esc(t('tools.showFasta'))}</summary><div class="fasta-copy"><button class="ghost" type="button" data-copy-fasta>${esc(t('tools.copyFasta'))}</button><p role="status"></p><textarea readonly rows="5" aria-label="FASTA">${esc(fasta)}</textarea></div></details>`;
+}
+Object.assign(I18N.ja, {
+  'tools.length':'予測断片長（bp）', 'tools.export':'参照FASTAを保存',
+  'tools.noFragment':'予測産物が0件のため、断片長と産物FASTAはありません。一致候補だけから産物配列を作ることはできません。',
+  'tools.extractFailed':'この産物の参照配列は未取得です。詳細に取得エラーを表示しています。'
+});
+Object.assign(I18N.en, {
+  'tools.length':'Predicted fragment length (bp)', 'tools.export':'Save reference FASTA',
+  'tools.noFragment':'No predicted products: there is no product length or FASTA to export. Binding candidates alone do not define a product sequence.',
+  'tools.extractFailed':'Reference sequence is unavailable for this product. Extraction errors are shown in its details.'
+});
 renderCheck = function(data) {
-  let html = inputAssessments(data) + inputSequenceForms(data) + dl('json', 'pcr_check_all.json', JSON.stringify(data, null, 2));
+  let html = (data.partial ? `<p class="evidence-note">${esc(t('run.partial'))} ${data.completed_units}/${data.total_units}</p>` : inputAssessments(data)) + inputSequenceForms(data) + dl('json', 'pcr_check_all.json', JSON.stringify(data, null, 2));
   const literal = (data.results || []).filter(r => !(r.reverse_complemented_inputs || []).length);
   const alternatives = (data.results || []).filter(r => (r.reverse_complemented_inputs || []).length);
   for (const [label, results] of [['tools.literalGroup', literal], ['tools.alternativeGroup', alternatives]]) {
@@ -222,11 +239,12 @@ renderCheck = function(data) {
     html += `<h2>${esc(t(label))}</h2>`;
     for (const result of results) {
       html += checkWithoutSequence({primers: result.oligos || data.primers, results: [result]});
+      if (!(result.products || []).length) html += `<p class="evidence-note">${esc(t('tools.noFragment'))}</p>`;
       html += `<p class="hint">${esc(t('studio.search'))}: ${esc(result.search_completeness || 'unknown')}</p>`;
       html += thermoCheckEvidence(result);
       if ((result.reverse_complemented_inputs || []).length) html += `<p class="evidence-note">${esc(t('tools.hypothesis'))}: ${esc(result.reverse_complemented_inputs.join(', '))}</p>`;
       html += bindingSiteEvidence(result);
-      if (result.fasta) html += dl('fasta', 'predicted_products.fa', result.fasta);
+      if (result.fasta) html += dl('fasta', 'predicted_products.fa', result.fasta) + fastaCopyPanel(result.fasta);
       for (const product of result.products || []) {
         const status = product.input_evidence && t(product.input_evidence.sequence_status === 'as_supplied' ? 'tools.literalProduct' : 'tools.changedProduct');
         html += `<details class="pair-card"><summary>${esc(product.subject)}:${product.start}–${product.end} · ${product.size} bp · ${esc(product.fwd_primer)} ＋ → / ${esc(product.rev_primer)} − ←${status ? ' · ' + esc(status) : ''}</summary>`;
@@ -234,7 +252,7 @@ renderCheck = function(data) {
         html += primerRows({[product.fwd_primer]: (result.oligos || data.primers)[product.fwd_primer], [product.rev_primer]: (result.oligos || data.primers)[product.rev_primer]});
         const context = {chrom: product.subject, start: product.start, end: product.end, anchor: product.start, strand: '+', length: product.size, sequence: product.sequence || '', annotations: product.annotations};
         html += geneView(context, [0, product.size - 1]);
-        if (product.sequence) html += `<h4>${esc(t('tools.reference'))}</h4><p class="hint">${esc(t('tools.referenceHint'))}</p>${dl('fasta', 'product.fa', product.fasta)}<textarea readonly rows="5" aria-label="FASTA">${esc(product.fasta)}</textarea>`;
+        if (product.sequence) html += `<h4>${esc(t('tools.reference'))}</h4><p class="hint">${esc(t('tools.referenceHint'))}</p>${dl('fasta', 'product.fa', product.fasta)}${fastaCopyPanel(product.fasta)}`;
         else html += `<p class="hint">${esc(t('tools.missing'))}</p><pre class="ascii">${esc(product.sequence_error || '')}</pre>`;
         html += '</details>';
       }
@@ -247,6 +265,16 @@ document.addEventListener('DOMContentLoaded', () => {
   const previousShowTab = showTab;
   showTab = name => { previousShowTab(name); if (name === 'primer3') $('.db-panel').hidden = true; };
   document.addEventListener('click', event => {
+    const copyButton = event.target.closest('[data-copy-fasta]');
+    if (copyButton) {
+      const panel = copyButton.closest('.fasta-copy');
+      const textarea = panel.querySelector('textarea');
+      const message = panel.querySelector('[role="status"]');
+      Promise.resolve().then(() => navigator.clipboard.writeText(textarea.value))
+        .then(() => { message.textContent = t('tools.copied'); })
+        .catch(() => { textarea.focus(); textarea.select(); message.textContent = t('tools.copyFallback'); });
+      return;
+    }
     const button = event.target.closest('[data-primer3-check]');
     if (!button) return;
     const pair = primer3Candidates[Number(button.dataset.primer3Check)];

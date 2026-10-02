@@ -9,8 +9,11 @@ const context = vm.createContext({
   runMode() {},
   t: key => key, esc: value => String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;'),
   dl: (type, name, data) => `<download type="${type}">${String(data).replaceAll('<', '&lt;')}</download>`,
-  primerRows: primers => Object.values(primers).join(' ')
+  primerRows: primers => Object.values(primers).join(' '), legendHTML: () => ''
 });
+const indexSource = fs.readFileSync('primerblast_oss/webapp/static/index.html','utf8').replace(/\r\n/g, '\n');
+const baseCheck = indexSource.match(/function renderCheck\(data\) \{[\s\S]*?\n\}\n\nfunction renderTile/)[0].replace(/\n\nfunction renderTile$/, '');
+vm.runInContext(baseCheck, context);
 for (const file of ['locus.js', 'sequence-view.js', 'sequence-tools.js']) {
   vm.runInContext(fs.readFileSync('primerblast_oss/webapp/static/' + file, 'utf8'), context);
 }
@@ -19,12 +22,15 @@ const blast = run(`renderBlast({task:'blastn',queries:[{id:'query1',name:'<query
 assert.ok(blast.includes('80–20 (-)'));
 assert.ok(blast.includes('tools.limited'));
 assert.ok(blast.includes('&lt;query>'));
-const product = run(String.raw`renderCheck({input_orientation:'auto',primers:{F:'AAAA',R:'AAAA'},results:[{oligos:{F:'ACGT',R:'CGTA'},reverse_complemented_inputs:['R'],search_completeness:'incomplete',fasta:'>chr1\nACGT',products:[{subject:'chr1',start:1,end:4,size:4,orientation:'F/R',fwd_primer:'F',rev_primer:'R',sequence:'ACGT',fasta:'>chr1\nACGT',annotations:{status:'unavailable',genes:[]}}]}]})`);
-assert.ok(product.includes('ACGT CGTA'));
+const product = run(String.raw`renderCheck({input_orientation:'auto',primers:{F:'AAAA',R:'AAAA'},results:[{db:'ref',oligos:{F:'ACGT',R:'CGTA'},reverse_complemented_inputs:['R'],search_completeness:'incomplete',fasta:'>chr1\nACGT',products:[{subject:'chr1',start:1,end:4,size:4,orientation:'F/R',fwd_primer:'F',rev_primer:'R',sequence:'ACGT',fasta:'>chr1\nACGT',annotations:{status:'unavailable',genes:[]}}]}]})`);
+assert.ok(product.includes('F=ACGT') && product.includes('R=CGTA'));
 assert.ok(!product.replace(/<download\b[\s\S]*?<\/download>/g, '').includes('AAAA'));
 assert.ok(product.includes('incomplete'));
 assert.ok(product.includes('tools.hypothesis: R'));
 assert.ok(product.includes('tools.annotationMissing'));
+assert.ok(product.includes('tools.length') && product.includes('<strong>4 bp</strong>'));
+assert.ok(product.includes('tools.export') && product.includes('type="fasta"'));
+assert.ok(product.includes('data-copy-fasta') && product.includes('aria-label="FASTA"'));
 assert.ok(!product.includes('seq.noGenes'));
 const primer3 = run(String.raw`renderPrimer3({templates:[{template_id:'template',template_sequence:'ACGTACGT',pairs:[{index:0,forward:'AC',reverse:'AC',left_start:0,left_len:2,right_start:7,right_len:2,product_size:8,tm_f:60,tm_r:60,gc_f:50,gc_r:50,penalty:1,fasta:'>pair\nACGTACGT'}]}]})`);
 assert.ok(primer3.includes('tools.unscreened'));
@@ -44,10 +50,14 @@ assert.ok(!summary.includes('tools.noLiteral'));
 const sites = run(`bindingSiteEvidence({products:[],binding_site_counts:{F:{'+':0,'-':1}},binding_sites:[{primer:'F',subject:'<chr1>',reference_strand:'-',end5:4,end3:1,mismatches:1,thermo_viable:false}],binding_sites_truncated:50})`);
 assert.ok(sites.includes('<details open>') && sites.includes('− ←'));
 assert.ok(sites.includes('&lt;chr1>') && sites.includes('tools.no') && sites.includes('tools.omittedSites'));
-const grouped = run(`renderCheck({primers:{F:'ACGA'},input_sequence_forms:{F:{input_5to3:'ACGA',reverse:'AGCA',complement_3to5:'TGCT',reverse_complement_5to3:'TCGT'}},results:[{oligos:{F:'TCGT'},reverse_complemented_inputs:['F'],products:[]},{oligos:{F:'ACGA'},reverse_complemented_inputs:[],products:[]}]})`);
+const grouped = run(`renderCheck({primers:{F:'ACGA'},input_sequence_forms:{F:{input_5to3:'ACGA',reverse:'AGCA',complement_3to5:'TGCT',reverse_complement_5to3:'TCGT'}},results:[{db:'ref',oligos:{F:'TCGT'},reverse_complemented_inputs:['F'],products:[]},{db:'ref',oligos:{F:'ACGA'},reverse_complemented_inputs:[],products:[]}]})`);
 assert.ok(grouped.indexOf('<h2>tools.literalGroup') < grouped.indexOf('<h2>tools.alternativeGroup'));
 for (const sequence of ['ACGA','AGCA','TGCT','TCGT']) assert.ok(grouped.includes(sequence));
 assert.ok(grouped.includes('tools.complement') && grouped.includes('tools.reverseComplement'));
+assert.ok(grouped.includes('tools.noFragment'));
+const partial = run(`renderCheck({partial:true,completed_units:1,total_units:2,primers:{F:'ACGA'},input_assessments:[{db:'ref',original_search_complete:true,as_supplied_products:0}],results:[{db:'ref',oligos:{F:'ACGA'},reverse_complemented_inputs:[],products:[]}]})`);
+assert.ok(partial.includes('run.partial') && partial.includes('1/2'));
+assert.ok(!partial.includes('tools.noLiteral'));
 const gated = run(`thermoCheckEvidence({thermo_status:'evaluated_defaults_gated',thermo_site_stats:{gated_per_primer:{F:2,R:1}}})`);
 assert.ok(gated.includes('tools.thermoGated') && gated.includes('tools.thermoRejected: 3'));
 const skipped = run(`thermoCheckEvidence({thermo_status:'skipped_no_associated_genome'})`);

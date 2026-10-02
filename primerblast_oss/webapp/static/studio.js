@@ -68,6 +68,31 @@ Object.assign(I18N.ja, {'studio.indexMissing': 'ゲノムFASTAの索引（.fai�
 Object.assign(I18N.en, {'studio.indexMissing': 'The genome FASTA index (.fai) is missing. Check the path and create the index.'});
 let studioJob = null;
 let studioError = null;
+Object.assign(I18N.ja, {
+  'run.prepare':'入力・参照の準備', 'run.blast':'BLAST検索', 'run.realign':'一致候補の参照配列での再確認',
+  'run.thermo':'熱力学評価', 'run.enumerate':'産物の向き・距離の判定', 'run.export':'参照FASTA・遺伝子注釈の取得',
+  'run.partial':'途中結果：評価が完了した検索単位のみ表示しています。残りは計算中です。',
+  'run.units':'完了した検索単位', 'run.hypothesis':'入力候補', 'run.count':'この工程の処理件数',
+  'run.total':'計算時間', 'run.breakdown':'工程別時間', 'run.phaseElapsed':'この工程の経過'
+});
+Object.assign(I18N.en, {
+  'run.prepare':'Preparing input and references', 'run.blast':'Searching with BLAST', 'run.realign':'Rechecking candidates against reference sequence',
+  'run.thermo':'Evaluating thermodynamic conditions', 'run.enumerate':'Checking product directions and distances', 'run.export':'Extracting lengths, FASTA and annotations',
+  'run.partial':'Partial results: only completed search units are shown. Remaining units are still running.',
+  'run.units':'Completed search units', 'run.hypothesis':'Input hypothesis', 'run.count':'Processed in this stage',
+  'run.total':'Calculation time', 'run.breakdown':'Time by stage', 'run.phaseElapsed':'Elapsed in this stage'
+});
+
+function runTiming(timing) {
+  if (!timing) return '';
+  const seconds = value => Number(value || 0).toFixed(1);
+  return `<section class="run-summary"><strong>${esc(t('run.total'))}: ${seconds(timing.total_seconds)} ${esc(t('studio.seconds'))}</strong><details><summary>${esc(t('run.breakdown'))}</summary>${Object.entries(timing.stage_seconds || {}).map(([stage, value]) => `<p>${esc(t('run.' + stage))}: ${seconds(value)} ${esc(t('studio.seconds'))}</p>`).join('')}</details></section>`;
+}
+const resultWithoutTiming = renderResult;
+renderResult = function(data) {
+  resultWithoutTiming(data);
+  $('#results').insertAdjacentHTML('afterbegin', runTiming(data.timing));
+};
 function searchUnresolved(spec) {
   return !spec || typeof spec.specific_all_db !== 'boolean' || spec.search_complete_all_db === false ||
     (spec.search_completeness != null && spec.search_completeness !== 'complete');
@@ -133,11 +158,37 @@ function primerRows(primers) {
   return `<div class="primer-list">${Object.entries(primers).filter(([, seq]) => seq).map(([name, seq]) => `<div class="primer-row"><strong>${esc(name)}</strong><code>${esc(seq)}</code></div>`).join('')}</div>`;
 }
 function studioRunning() {
-  $('#results').innerHTML = `<div class="run-summary"><span class="spinner"></span><strong>${esc(t('btn.running'))}</strong><p>${esc(t('studio.computing'))}</p><p>${esc(t('studio.elapsed'))}: ${Math.floor((Date.now() - studioJob.start) / 1000)} ${esc(t('studio.seconds'))}</p></div>`;
+  if (!$('#job-progress')) $('#results').innerHTML = '<div id="job-progress"></div><div id="job-partial"></div>';
+  const p = studioJob.progress || {};
+  const age = studioJob.observedAt ? (Date.now() - studioJob.observedAt) / 1000 : 0;
+  const elapsed = p.elapsed_seconds == null ? (Date.now() - studioJob.start) / 1000 : p.elapsed_seconds + age;
+  let html = `<div class="run-summary" role="status"><span class="spinner"></span><strong>${esc(t('btn.running'))}</strong><p>${esc(p.stage ? t('run.' + p.stage) : t('studio.computing'))}</p><p>${esc(t('studio.elapsed'))}: ${Math.floor(elapsed)} ${esc(t('studio.seconds'))}</p>`;
+  if (p.database) html += `<p>${esc(dbNames([p.database]))} · ${esc(t('run.hypothesis'))}: ${p.hypothesis || 1}/${p.hypotheses || 1}${p.primer ? ' · ' + esc(p.primer) : ''}</p>`;
+  if (p.total_units != null) html += `<p>${esc(t('run.units'))}: ${p.completed_units}/${p.total_units}</p>`;
+  if (p.total != null) html += `<p>${esc(t('run.count'))}: ${p.completed || 0}/${p.total}</p>`;
+  if (p.stage_elapsed_seconds != null) html += `<p>${esc(t('run.phaseElapsed'))}: ${Math.floor(p.stage_elapsed_seconds + age)} ${esc(t('studio.seconds'))}</p>`;
+  $('#job-progress').innerHTML = html + '</div>';
+}
+function studioObserve(job) {
+  studioJob.progress = job.progress;
+  studioJob.observedAt = Date.now();
+  studioRunning();
+  if (job.partial_result && studioJob.partialRevision !== job.partial_revision) {
+    studioJob.partialRevision = job.partial_revision;
+    studioJob.partial = job.partial_result;
+    _dlStore = [];
+    $('#job-partial').innerHTML = renderCheck(job.partial_result);
+    wireDownloads();
+  }
 }
 function studioShowError(error) {
   const message = String(error.message || error.error || error);
   $('#results').innerHTML = `<div class="err"><strong>${esc(t('studio.failed'))}</strong><p>${esc(t(message.includes('FASTA index not found') ? 'studio.indexMissing' : 'studio.retry'))}</p><details><summary>${esc(t('studio.details'))}</summary><pre>${esc(message)}\n${esc(error.trace || '')}</pre></details></div>`;
+  if (error.partial) {
+    _dlStore = [];
+    $('#results').insertAdjacentHTML('beforeend', renderCheck(error.partial));
+    wireDownloads();
+  }
 }
 function validateStudio(form, mode) {
   $$('.field-error', form).forEach(el => el.remove());
@@ -215,15 +266,16 @@ runMode = async function(mode, form) {
       if (!poll.ok) throw new Error(`HTTP ${poll.status}`);
       job = await poll.json();
       if (job.status === 'done' || job.status === 'error') break;
+      studioObserve(job);
     }
-    if (job.status === 'error') throw Object.assign(new Error(job.error), {trace: job.trace});
-    lastResult = job.result;
-  } catch (error) { studioError = error; }
+    if (job.status === 'error') throw Object.assign(new Error(job.error), {trace: job.trace, timing: job.timing, partial: job.partial_result});
+    lastResult = {...job.result, timing: job.timing};
+  } catch (error) { error.partial = error.partial || studioJob.partial; studioError = error; }
   finally {
     clearInterval(timer); studioJob = null;
     $$('.run').forEach(btn => { btn.disabled = false; });
     $('#results').setAttribute('aria-busy', 'false');
-    if (studioError) studioShowError(studioError); else renderResult(lastResult);
+    if (studioError) { studioShowError(studioError); $('#results').insertAdjacentHTML('afterbegin', runTiming(studioError.timing)); } else renderResult(lastResult);
   }
 };
 const originalLanguageHook = onLangChange;
@@ -231,7 +283,14 @@ onLangChange = function() {
   originalLanguageHook();
   document.documentElement.lang = LANG;
   document.title = LANG === 'ja' ? 'PrimerBLAST OSS — プライマー設計' : 'PrimerBLAST OSS — Primer design';
-  if (studioJob) studioRunning(); else if (studioError) studioShowError(studioError);
+  if (studioJob) {
+    studioRunning();
+    if (studioJob.partial) {
+      _dlStore = [];
+      $('#job-partial').innerHTML = renderCheck(studioJob.partial);
+      wireDownloads();
+    }
+  } else if (studioError) studioShowError(studioError);
 };
 document.addEventListener('DOMContentLoaded', () => {
   const tabs = $$('.tab');

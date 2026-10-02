@@ -1609,12 +1609,13 @@ function renderCheck(data) {
     if (!db.products.length) { html += `<p class="results-empty">${t("res.none")}</p>`; return; }
     let rows = "";
     db.products.forEach((a) => {
-      rows += `<tr><td class="seqmono">${esc(a.subject)}:${a.start}-${a.end}</td><td>${a.size}</td>
+      const filename = String(a.subject + '_' + a.start + '-' + a.end + '.fa').replace(/[^A-Za-z0-9_.-]/g, '_');
+      rows += `<tr><td class="seqmono">${esc(a.subject)}:${a.start}-${a.end}</td><td><strong>${a.size} bp</strong></td>
         <td class="seqmono">${esc(a.orientation)}</td><td>${a.fwd_mismatch}+${a.rev_mismatch}</td>
-        <td>${a.on_target ? "✓" : ""}</td></tr>`;
+        <td>${a.on_target ? "✓" : ""}</td><td>${a.fasta ? dl('fasta', filename, a.fasta) : esc(t('tools.extractFailed'))}</td></tr>`;
     });
-    html += `<div class="tbl-wrap"><table><thead><tr><th>${t("res.subject")}</th><th>${t("res.size")}</th>
-      <th>${t("res.orientation")}</th><th>${t("res.mismatch")}</th><th>${t("res.ontarget")}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    html += `<div class="tbl-wrap"><table><thead><tr><th>${t("res.subject")}</th><th>${t("tools.length")}</th>
+      <th>${t("res.orientation")}</th><th>${t("res.mismatch")}</th><th>${t("res.ontarget")}</th><th>${t("tools.export")}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
   });
   return html;
 }

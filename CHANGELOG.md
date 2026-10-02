@@ -7,6 +7,10 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- PCR job stage/count progress, retained server timing, and completed DB/oligo
+  hypothesis partial results with unfinished searches explicitly marked pending.
+- Visible fragment-length/FASTA actions and copyable reference FASTA text;
+  zero-product and extraction-failure states explain unavailable sequences.
 - Illustrated English/Japanese GUI walkthroughs, synthetic-only reproducible
   screenshot setup, and an issue-priority guide separating code tasks from
   real-genome acceptance and wet-lab calibration.
@@ -53,6 +57,10 @@ All notable changes to this project are documented here. The format follows
   order oligos without changing specificity evaluation.
 
 ### Changed / Fixed
+- Reuse a thread-isolated FASTA handle during PCR checks and a bounded cache
+  for identical primer/window alignments, preserving locus and completeness evidence.
+- Product extraction uses the resolved matching genome, including references
+  discovered for a DB, instead of unnecessarily requiring blastdbcmd.
 - The active task-selection tab retains readable white text on its blue
   background instead of inheriting the older blue-text override.
 - Genome-verified exact primer loci retain their nominated coordinates instead

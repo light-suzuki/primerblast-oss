@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import lru_cache
+from contextlib import contextmanager
+import threading
 from pathlib import Path
 from typing import Dict, Tuple
 
@@ -55,6 +57,21 @@ class Genome:
         stat = Path(self.fai_path).stat()
         self.index: Dict[str, _FaiEntry] = dict(_load_index(
             str(Path(self.fai_path).resolve()), stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns))
+        self._reader = threading.local()
+
+    @contextmanager
+    def read_session(self):
+        """Reuse one file handle within an operation, isolated per thread."""
+        if hasattr(self._reader, 'handle'):
+            yield self
+            return
+        self._reader.handle = None
+        try:
+            yield self
+        finally:
+            if self._reader.handle is not None:
+                self._reader.handle.close()
+            del self._reader.handle
 
     def __contains__(self, name: str) -> bool:
         return name in self.index
@@ -80,9 +97,16 @@ class Genome:
         byte_start = e.offset + (start0 // e.linebases) * e.linewidth + (start0 % e.linebases)
         end0 = end - 1
         byte_end = e.offset + (end0 // e.linebases) * e.linewidth + (end0 % e.linebases)
-        with open(self.fasta, "rb") as fh:
+        fh = getattr(self._reader, 'handle', None)
+        if fh is None and hasattr(self._reader, 'handle'):
+            fh = self._reader.handle = open(self.fasta, 'rb')
+        if fh is not None:
             fh.seek(byte_start)
             raw = fh.read(byte_end - byte_start + 1)
+        else:
+            with open(self.fasta, "rb") as fh:
+                fh.seek(byte_start)
+                raw = fh.read(byte_end - byte_start + 1)
         seq = raw.replace(b"\n", b"").replace(b"\r", b"")[:want].decode().upper()
         if len(seq) != want or ">" in seq:
             raise ValueError("FASTA index does not match the requested sequence range")

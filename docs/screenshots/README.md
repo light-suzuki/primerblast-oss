@@ -34,3 +34,7 @@ reference catalog. Generated FASTA/BLAST/GFF3 files stay in ignored
 Language changes rebuild the result details; reopen/collapse the relevant
 sections after switching languages. Screenshots illustrate interface behavior,
 not wet-PCR success or exhaustive off-target discovery.
+
+The updated `pcr-fragments-ja.jpg` opens **FASTAを表示・コピー** in the original
+120 bp F/F result and clicks **FASTAをコピー**. The clipboard sequence was checked
+to contain exactly 120 bases, matching the displayed product length.
