@@ -45,6 +45,7 @@ jobs:
           node tests/web_reference.test.js
           node tests/web_enzymes.test.js
           node tests/web_sequence_tools.test.js
+          node tests/web_progress.test.js
       - name: Module self-tests
         run: |
           python primerblast_oss/caps.py

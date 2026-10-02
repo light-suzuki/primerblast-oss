@@ -9,6 +9,9 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+from contextlib import nullcontext
+from functools import lru_cache
+from . import progress
 from dataclasses import dataclass
 from typing import Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 
@@ -256,6 +259,7 @@ def _alignment_edit_count(qseq: str, sseq: str) -> int:
 
 
 
+@lru_cache(maxsize=4096)
 def _fitting_align_primer(primer: str, target: str) -> Tuple[str, str, int, int]:
     """Fit a complete primer to a target window with free target end gaps.
 
@@ -534,7 +538,11 @@ def _priming_sites_from_output(
     realigned_sites = 0
     realignment_failures = 0
     seen_sites = set()
-    for line in output.splitlines():
+    lines = output.splitlines()
+    progress.report('realign', 0, len(lines), primer=primer_id)
+    for row_index, line in enumerate(lines, 1):
+        if row_index % 250 == 0:
+            progress.report('realign', row_index - 1, len(lines), primer=primer_id)
         if not line.strip():
             continue
         raw_hits += 1
@@ -568,6 +576,7 @@ def _priming_sites_from_output(
                 if genome is not None:
                     realigned_sites += 1
 
+    progress.report('realign', len(lines), len(lines), primer=primer_id)
     near_limit, high_copy, completeness = _classify_hit_list(
         raw_hits, len(sites), len(subjects), sp)
     if (malformed_rows or realignment_failures) and (
@@ -620,6 +629,7 @@ def screen_primers_with_stats(
     if not primers:
         return [], {}
 
+    progress.report('blast', database=db, primer=None)
     output, id_to_name = _run_blast_batch(primers, db, sp, blastn)
     rows_by_name: Dict[str, List[str]] = {name: [] for name in primers}
     for line in output.splitlines():
@@ -723,6 +733,7 @@ def annotate_thermo(sites: Sequence[PrimingSite], primers: Dict[str, str],
     Missing contigs, out-of-range coordinates, or failed calculations are
     counted as unresolved instead of being silently described as evaluated.
     """
+    progress.report('thermo', 0, len(sites), primer=None)
     from . import thermo as thermo_module
     stats = {
         "attempted_per_primer": {},
@@ -735,7 +746,9 @@ def annotate_thermo(sites: Sequence[PrimingSite], primers: Dict[str, str],
 
     viable: Dict[str, int] = {}
     kept: List[PrimingSite] = []
-    for site in sites:
+    for site_index, site in enumerate(sites, 1):
+        if site_index % 100 == 0:
+            progress.report('thermo', site_index - 1, len(sites))
         stats["attempted_per_primer"][site.primer] = (
             stats["attempted_per_primer"].get(site.primer, 0) + 1)
         sequence = primers.get(site.primer)
@@ -767,6 +780,7 @@ def annotate_thermo(sites: Sequence[PrimingSite], primers: Dict[str, str],
                 stats["gated_per_primer"].get(site.primer, 0) + 1)
             continue
         kept.append(site)
+    progress.report('thermo', len(sites), len(sites))
     return kept, viable, stats
 
 
@@ -856,11 +870,14 @@ def in_silico_pcr(
     if cancel_check is not None and cancel_check():
         raise CancelledError("in-silico PCR cancelled by caller")
     blastn = _detect_blastn(blastn_bin)
-    sites, hit_stats = screen_primers_with_stats(
-        primers, db, sp, blastn, genome)
-    candidate_sites = sites
-    sites, viable_sites, thermo_site_stats = annotate_thermo(
-        sites, primers, genome, thermo_params, thermo_gate)
+    session = genome.read_session() if hasattr(genome, 'read_session') else nullcontext()
+    with session:
+        sites, hit_stats = screen_primers_with_stats(
+            primers, db, sp, blastn, genome)
+        candidate_sites = sites
+        sites, viable_sites, thermo_site_stats = annotate_thermo(
+            sites, primers, genome, thermo_params, thermo_gate)
+    progress.report('enumerate', primer=None)
     amplicons = enumerate_amplicons(sites, sp)
 
     sizes = [amplicon.size for amplicon in amplicons]

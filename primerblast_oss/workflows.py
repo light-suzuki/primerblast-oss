@@ -11,6 +11,7 @@ from .tiling import design_tiling
 from .tools import make_blastdb
 from . import report as R
 from . import outputs as OUT
+from . import progress
 
 def _f(params: Dict, key: str, default):
     """Fetch a value, treating '' / None as 'use default'."""
@@ -224,22 +225,34 @@ def _run_check(p: Dict) -> Dict:
     if _f(p, "gff3", None) or _f(p, "annotation_gff3", None):
         annotation_map.setdefault(dbs[0], _f(p, "gff3", None) or p["annotation_gff3"])
     results = []
-    for oligos in hypotheses:
-        raw = []
+    units = len(hypotheses) * len(dbs)
+    for hypothesis_index, oligos in enumerate(hypotheses, 1):
         for db in dbs:
+            progress.report('prepare', database=db, hypothesis=hypothesis_index,
+                            hypotheses=len(hypotheses), completed_units=len(results),
+                            total_units=units, primer=None)
             genome, association = resolve_genome_for_database(db, dbs, genomes_by_db=genomes)
             result = in_silico_pcr(oligos, db, sp=sp, genome=genome)
             result.update(thermo_metadata(genome, None, True, association,
                                          result.get("thermo_site_stats")))
-            raw.append(result)
-        reports = R.insilico_to_dict(raw, oligos)["results"]
-        for result in reports:
+            progress.report('export', 0, result['n_products'])
+            result = R.insilico_to_dict([result], oligos)['results'][0]
             result["oligos"] = oligos
             result["reverse_complemented_inputs"] = [name for name in primers if primers[name] != oligos[name]]
-            for amplicon in result["products"]:
-                product_sequence(amplicon, result["db"], genomes.get(result["db"]), annotation_map.get(result["db"]))
+            for product_index, amplicon in enumerate(result["products"], 1):
+                product_sequence(amplicon, result["db"], genome, annotation_map.get(result["db"]))
+                if product_index % 100 == 0:
+                    progress.report('export', product_index, result['n_products'])
             result["fasta"] = "".join(a.get("fasta", "") for a in result["products"])
-        results.extend(reports)
+            results.append(result)
+            progress.report('export', result['n_products'], result['n_products'],
+                            completed_units=len(results))
+            if progress.active():
+                snapshot = check_evidence_report(list(results), primers, orientation)
+                snapshot['partial'] = True
+                snapshot['completed_units'] = len(results)
+                snapshot['total_units'] = units
+                progress.partial(snapshot)
     return check_evidence_report(results, primers, orientation)
 
 

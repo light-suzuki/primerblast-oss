@@ -1,0 +1,42 @@
+{
+  "benchmark": "continuous_synthetic",
+  "checks": {
+    "automatic_orientation_product": true,
+    "changed_sequence_is_alternative": true,
+    "detects_duplicate_amplicon": true,
+    "detects_ff_amplicon": true,
+    "detects_target_amplicon": true,
+    "duplicate_pair_comigrating": true,
+    "duplicate_pair_not_specific": true,
+    "multiplex_runs": true,
+    "native_check_fasta_and_gene": true,
+    "native_check_literal_and_alternative": true,
+    "ordinary_blast_both_strands": true,
+    "original_self_product_separate": true,
+    "pipeline_returns_pairs": true,
+    "primer3_returns_pairs": true,
+    "product_blastdb_extraction": true,
+    "product_overlapping_gene": true,
+    "product_reference_fasta": true,
+    "standalone_primer3_unscreened": true,
+    "swapped_labels_literal_product": true,
+    "thermo_path_runs": true
+  },
+  "max_seconds": 30.0,
+  "passed": true,
+  "timings": {
+    "automatic_orientation": 0.1903,
+    "in_silico_pcr": 0.1501,
+    "multiplex": 0.0002,
+    "native_check_auto_export": 0.534,
+    "ordinary_blast": 0.0279,
+    "pair_specificity": 0.0279,
+    "pair_specificity_thermo": 0.0283,
+    "pipeline": 0.1864,
+    "primer3_design": 0.1216,
+    "product_blastdb_extraction": 0.0756,
+    "standalone_primer3": 0.1603,
+    "swapped_labels": 0.0805
+  },
+  "total_timed_seconds": 1.5831
+}

@@ -1,0 +1,10 @@
+{
+  "benchmark": "synthetic_read_session",
+  "identical_bases": true,
+  "python": "3.12.3",
+  "read_session_seconds": 0.002629,
+  "reads": 500,
+  "reference_bases": 4000,
+  "separate_open_seconds": 1.188201,
+  "window_bases": 26
+}

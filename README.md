@@ -45,6 +45,14 @@ from a Windows browser. See [requirements](#requirements) and the
 
 ![PCR check input with the explicit OFF switch and both-strand search](docs/screenshots/input-en.jpg)
 
+While running, the GUI shows the stage, processed counts and elapsed time.
+Completed DB/hypothesis units appear as partial results; pending searches do
+not become negative findings. Total server calculation time and stage times
+remain after completion, excluding transfer/browser rendering. Product lengths
+(bp) and reference FASTA downloads are listed directly. **Show / copy FASTA**
+provides sequence text when a download is inconvenient. Zero-product results
+explain why no product length or FASTA is available.
+
 <details>
 <summary>Example results: original oligos versus reverse-complement alternatives</summary>
 

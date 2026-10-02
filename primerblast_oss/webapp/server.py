@@ -23,12 +23,15 @@ import subprocess
 import threading
 import traceback
 import uuid
+import copy
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Callable, Dict, List, Optional
 from urllib.parse import unquote, urlparse
 
 from .. import __version__
+from .. import progress
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
@@ -66,27 +69,55 @@ class JobManager:
         handler = lambda payload: execute(mode, payload, allow_db_write=mode == "makedb")
         job_id = uuid.uuid4().hex
         with self._lock:
-            self._jobs[job_id] = {"status": "running", "mode": mode}
+            self._jobs[job_id] = {"status": "running", "mode": mode,
+                                  "started_at": time.time(), "partial_revision": 0}
         t = threading.Thread(target=self._work, args=(job_id, handler, params),
                              daemon=True)
         t.start()
         return job_id
 
     def _work(self, job_id: str, handler: Callable, params: Dict) -> None:
-        try:
-            result = handler(params)
+        def publish(event):
             with self._lock:
-                self._jobs[job_id].update(status="done", result=result)
+                job = self._jobs[job_id]
+                if 'partial_result' in event:
+                    job['partial_result'] = copy.deepcopy(event['partial_result'])
+                    job['partial_revision'] += 1
+                else:
+                    job.update(event)
+                    job['_progress_at'] = time.monotonic()
+        try:
+            with progress.observe(publish) as recorder:
+                progress.report('prepare')
+                result = handler(params)
+                timing = recorder.finish()
+            with self._lock:
+                job = self._jobs[job_id]
+                job.update(status="done", result=result, timing=timing,
+                           finished_at=time.time())
+                job.pop('partial_result', None)
         except Exception as exc:  # noqa: BLE001 - surface any engine error to UI
+            timing = recorder.finish('error')
             with self._lock:
                 self._jobs[job_id].update(
                     status="error", error=str(exc),
+                    timing=timing, finished_at=time.time(),
                     trace=traceback.format_exc())
 
     def get(self, job_id: str) -> Optional[Dict]:
         with self._lock:
             job = self._jobs.get(job_id)
-            return dict(job) if job else None
+            if not job:
+                return None
+            snapshot = dict(job)
+            snapshot.pop('_progress_at', None)
+            if job['status'] == 'running' and 'progress' in job:
+                observation = dict(job['progress'])
+                delta = max(0, time.monotonic() - job['_progress_at'])
+                observation['elapsed_seconds'] += delta
+                observation['stage_elapsed_seconds'] += delta
+                snapshot['progress'] = observation
+            return snapshot
 
 
 JOBS = JobManager()

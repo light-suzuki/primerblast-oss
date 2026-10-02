@@ -470,6 +470,42 @@ uses the full accepted list. The repair does not make BLAST exhaustive, resolve
 all imperfect alignment ties, prove laboratory amplification, or adjudicate
 the nine PrimerServer2 disagreements in section 11.
 
+## 13. PCR progress, bounded reads and FASTA usability (2026-10-02)
+
+The GUI now reports server-side stages and processed counts, retains timing
+after completion, and publishes completed DB/oligo-hypothesis units as partial
+results. Unfinished searches are explicitly pending; an early BLAST candidate
+is not reported as a finished PCR product. Existing CLI engine-result contracts
+remain unchanged. Thread-local FASTA read sessions close their handles at the
+end of each operation; identical primer/window alignments use a 4096-entry cache.
+
+| Synthetic verification | Result |
+|---|---|
+| Existing real-tool continuous suite | **20/20**, 1.5831 s summed timed operations |
+| 500 independent opens, 26 bases/read, 4000 bp synthetic FASTA | 1.188201 s |
+| Same reads in one read session | 0.002629 s; all bases identical |
+| Browser fragment/clipboard example | 120 bp shown; copied reference FASTA contains 120 bases |
+
+Artifacts: [continuous suite](results/pcr-progress-20261002.json) and
+[read-session measurements](results/read-session-20261002.json). The read test
+used Python 3.12.3 in WSL with its temporary synthetic file on a Windows-mounted
+workspace. It measures a small repeated-read workload, not an end-to-end PCR
+speedup or whole-genome acceptance. Timing varies with filesystem/cache state.
+Private local check reports are not included in these public artifacts.
+
+Reproduce from a source checkout:
+
+```bash
+PYTHONPATH=. python benchmarks/read_session_benchmark.py --work-dir .local --reads 500
+PYTHONPATH=. python benchmarks/continuous_benchmark.py
+python scripts/readme_demo.py --port 8880
+```
+
+The [screenshot guide](../docs/screenshots/README.md) gives the synthetic primer
+inputs. Predicted products expose fragment lengths, per-product FASTA downloads
+and text copying. Zero-product results explain why no product FASTA exists;
+failed extraction retains a product's coordinates/length and reports the error.
+
 ## Reproduce
 
 ```bash
