@@ -75,3 +75,13 @@ def test_manifest_records_schema_models_revision_and_reference_policy(
     assert manifest["thermo_genomes"][str(db)]["sha256"]
     assert manifest["reference_files"]["design_genome"]["sha256"]
     assert all(entry["sha256"] for entry in manifest["databases"][0]["files"])
+
+
+def test_assay_cli_accepts_strong_provenance_flag():
+    from primerblast_oss.cli import build_parser
+
+    args = build_parser().parse_args([
+        "assay", "--snp", "chr1:100", "--alt", "G",
+        "--genome", "genome.fa", "--db", "db", "--strong-provenance",
+    ])
+    assert args.strong_provenance is True
