@@ -513,7 +513,176 @@ def _classify_hit_list(raw_hits: int, priming_sites: int, unique_subjects: int,
         or priming_sites >= sp.high_copy_site_threshold
     )
     if at_limit or high_copy:
-        comple…1745 tokens truncated…tems()
+        completeness = SEARCH_REPEAT_LIMITED
+    elif near_limit:
+        completeness = SEARCH_POSSIBLY_TRUNCATED
+    else:
+        completeness = SEARCH_COMPLETE
+    return near_limit, high_copy, completeness
+
+
+def _row_snippet(line: str, limit: int = 120) -> str:
+    """Short, truncated preview of a BLAST output row for error messages.
+
+    The full raw row is never embedded in results (it can be huge); the
+    snippet keeps the offending row identifiable.
+    """
+    stripped = line.strip()
+    return stripped[:limit] + ("..." if len(stripped) > limit else "")
+
+
+def _priming_sites_from_output(
+    primer: str, primer_id: str, output: str, sp: SpecParams, genome=None,
+) -> Tuple[List[PrimingSite], PrimerHitStats]:
+    """Parse one primer's BLAST rows into priming sites and completeness stats."""
+    sites: List[PrimingSite] = []
+    raw_hits = 0
+    subjects = set()
+    malformed_rows = 0
+    malformed_reason: Optional[str] = None
+    realigned_sites = 0
+    realignment_failures = 0
+    seen_sites = set()
+    lines = output.splitlines()
+    progress.report('realign', 0, len(lines), primer=primer_id)
+    for row_index, line in enumerate(lines, 1):
+        if row_index % 250 == 0:
+            progress.report('realign', row_index - 1, len(lines), primer=primer_id)
+        if not line.strip():
+            continue
+        raw_hits += 1
+        fields = line.split("\t")
+        if len(fields) < 16:
+            malformed_rows += 1
+            if malformed_reason is None:
+                malformed_reason = "row has %d of 16 expected fields: %s" % (
+                    len(fields), _row_snippet(line))
+            continue
+        try:
+            if genome is not None:
+                site, resolved = _realign_hit_to_site(
+                    fields, primer_id, primer, sp, genome)
+                if not resolved:
+                    realignment_failures += 1
+            else:
+                site = _hit_to_site(fields, primer_id, sp)
+        except ValueError as error:
+            malformed_rows += 1
+            if malformed_reason is None:
+                malformed_reason = "non-numeric field (%s): %s" % (
+                    error, _row_snippet(line))
+            continue
+        subjects.add(fields[1])
+        if site is not None:
+            identity = _site_identity(site)
+            if identity not in seen_sites:
+                seen_sites.add(identity)
+                sites.append(site)
+                if genome is not None:
+                    realigned_sites += 1
+
+    progress.report('realign', len(lines), len(lines), primer=primer_id)
+    near_limit, high_copy, completeness = _classify_hit_list(
+        raw_hits, len(sites), len(subjects), sp)
+    if (malformed_rows or realignment_failures) and (
+            _SEARCH_SEVERITY.get(completeness, 0)
+            < _SEARCH_SEVERITY[SEARCH_POSSIBLY_TRUNCATED]):
+        completeness = SEARCH_POSSIBLY_TRUNCATED
+    stats = PrimerHitStats(
+        primer=primer_id,
+        raw_blast_hits=raw_hits,
+        priming_sites=len(sites),
+        unique_subjects=len(subjects),
+        near_target_limit=near_limit,
+        high_copy=high_copy,
+        at_target_limit=len(subjects) >= max(1, int(sp.max_target_seqs)),
+        completeness=completeness,
+        malformed_rows=malformed_rows,
+        malformed_row_reason=malformed_reason,
+        realignment_attempted=genome is not None,
+        realigned_sites=realigned_sites,
+        realignment_failures=realignment_failures,
+    )
+    return sites, stats
+
+
+def priming_sites_with_stats(
+    primer: str, primer_id: str, db: str, sp: SpecParams, blastn: str,
+    genome=None,
+) -> Tuple[List[PrimingSite], PrimerHitStats]:
+    output = _run_blast(primer, db, sp, blastn)
+    return _priming_sites_from_output(primer, primer_id, output, sp, genome)
+
+def priming_sites(primer: str, primer_id: str, db: str, sp: SpecParams,
+                  blastn: str, genome=None) -> List[PrimingSite]:
+    sites, _stats = priming_sites_with_stats(
+        primer, primer_id, db, sp, blastn, genome)
+    return sites
+
+
+def screen_primers(primers: Dict[str, str], db: str, sp: SpecParams,
+                   blastn: str, genome=None) -> List[PrimingSite]:
+    sites, _stats = screen_primers_with_stats(
+        primers, db, sp, blastn, genome)
+    return sites
+
+
+def screen_primers_with_stats(
+    primers: Dict[str, str], db: str, sp: SpecParams, blastn: str, genome=None
+) -> Tuple[List[PrimingSite], Dict[str, PrimerHitStats]]:
+    """Screen a primer pool with one BLAST invocation per database."""
+    if not primers:
+        return [], {}
+
+    progress.report('blast', database=db, primer=None)
+    output, id_to_name = _run_blast_batch(primers, db, sp, blastn)
+    rows_by_name: Dict[str, List[str]] = {name: [] for name in primers}
+    for line in output.splitlines():
+        if not line.strip():
+            continue
+        query_id = line.split("\t", 1)[0]
+        name = id_to_name.get(query_id)
+        if name is None:
+            raise BlastError(
+                "BLAST returned an unknown query id %r in batched output" % query_id)
+        rows_by_name[name].append(line)
+
+    sites: List[PrimingSite] = []
+    stats: Dict[str, PrimerHitStats] = {}
+    for name, sequence in primers.items():
+        primer_sites, primer_stats = _priming_sites_from_output(
+            sequence, name, "\n".join(rows_by_name[name]), sp, genome)
+        sites.extend(primer_sites)
+        stats[name] = primer_stats
+    return sites, stats
+
+
+def _search_metadata(hit_stats: Dict[str, PrimerHitStats], sp: SpecParams) -> Dict:
+    per_primer = {name: stats.completeness for name, stats in hit_stats.items()}
+    overall = combine_search_completeness(list(per_primer.values()))
+    return {
+        "search_completeness": overall,
+        "search_complete": overall == SEARCH_COMPLETE,
+        "primer_search_completeness": per_primer,
+        "raw_hits_per_primer": {name: stats.raw_blast_hits for name, stats in hit_stats.items()},
+        "unique_subjects_per_primer": {
+            name: stats.unique_subjects for name, stats in hit_stats.items()
+        },
+        "malformed_rows_per_primer": {
+            name: stats.malformed_rows for name, stats in hit_stats.items()
+        },
+        "malformed_row_reason_per_primer": {
+            name: stats.malformed_row_reason for name, stats in hit_stats.items()
+        },
+        "full_length_realignment": {
+            "attempted": {
+                name: stats.realignment_attempted for name, stats in hit_stats.items()
+            },
+            "accepted_sites": {
+                name: stats.realigned_sites for name, stats in hit_stats.items()
+            },
+            "unresolved_candidates": {
+                name: stats.realignment_failures for name, stats in hit_stats.items()
             },
         },
         "near_blast_limit": [
