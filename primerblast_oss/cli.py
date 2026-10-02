@@ -901,6 +901,12 @@ def _cmd_assay(arguments) -> int:
         },
         arguments.db,
         template_info=result["target"],
+        reference_files={
+            "design_genome": arguments.genome,
+            "gff3": arguments.gff3,
+            "vcf": arguments.vcf,
+        },
+        strong_hashes=arguments.strong_provenance,
     )
     if arguments.virtual_gel:
         from .gel import best_analysis_from_assay, virtual_gel_svg
@@ -1154,6 +1160,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="design-reference FASTA (.fai indexed); associated with first --db")
     assay.add_argument("--gff3")
     assay.add_argument("--vcf")
+    assay.add_argument(
+        "--strong-provenance", action="store_true",
+        help="stream full SHA-256 for referenced FASTA/GFF3/VCF and BLAST index files")
     assay.add_argument("--flank", type=int, default=200)
     assay.add_argument("--product-size", default="100-800")
     assay.add_argument("--num-return", type=int, default=10)
