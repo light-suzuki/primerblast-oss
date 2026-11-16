@@ -9,7 +9,7 @@ Runs fully offline against local BLAST+ databases (including unpublished
 genomes), and can screen against several databases at once.
 """
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 from .api import (
     API_VERSION,

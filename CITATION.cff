@@ -7,8 +7,8 @@ abstract: >-
   tiling, in-silico PCR, SNP-under-primer detection, amplicon conservation,
   CAPS/dCAPS marker design, and experimenter risk scoring.
 type: software
-version: 0.2.0
-date-released: "2026-07-08"
+version: 0.3.0
+date-released: "2026-11-16"
 license: MIT
 repository-code: "https://github.com/light-suzuki/primerblast-oss"
 keywords:
