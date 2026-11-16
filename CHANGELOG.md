@@ -6,6 +6,11 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-16
+
+Changes since the 2026-07-08 release (the `v0.1.0` tag already contained the
+`0.2.0` content listed below).
+
 ### Added
 - Versioned provenance schema and scientific-model identifiers for specificity, gel, risk and restriction logic; optional `--strong-provenance` streams complete reference and BLAST-index files through SHA-256 without making full hashing the interactive default.
 - Fixed `benchmarks/release_acceptance.py` plus a pull-request Actions workflow covering real Primer3/BLAST PCR checks, full-primer indel realignment, incomplete-search handling, CAPS digest geometry, and gel-separated versus co-migrating off-target patterns.
@@ -59,6 +64,11 @@ All notable changes to this project are documented here. The format follows
   order oligos without changing specificity evaluation.
 
 ### Changed / Fixed
+- NCBI nucleotide ID wrappers (`ref|acc|locus`, `gb|`, `emb|`, `dbj|`) and bare
+  accessions now resolve to an unambiguous indexed FASTA key during full-length
+  realignment; ambiguous aliases fail closed. A source-integrity test rejects
+  truncated Python sources containing U+2026. CI test job pinned to
+  `ubuntu-24.04` so Python 3.8 remains available.
 - Reuse a thread-isolated FASTA handle during PCR checks and a bounded cache
   for identical primer/window alignments, preserving locus and completeness evidence.
 - Product extraction uses the resolved matching genome, including references
