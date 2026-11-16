@@ -72,6 +72,16 @@ identity (`db`) plus the parameters used (`blast_limits`).
 | BED output | 0-based half-open (converted at the boundary) |
 | FASTA / VCF / GFF3 positions | 1-based inclusive |
 
+With an associated indexed FASTA, accepted full-length realignment sites and
+products use its exact sequence keys. NCBI nucleotide ID wrappers
+(`ref|accession|locus`, `gb|accession|locus`, `emb|accession|locus`,
+`dbj|accession|locus`, including an empty locus) can resolve to an unambiguous
+FASTA accession, and conversely a bare accession can resolve to a wrapped key.
+Exact keys take priority; accession versions and case are preserved. Ambiguous
+aliases, unknown wrappers and unresolved identifiers keep search evidence
+incomplete. Chromosome-prefix, version-stripping and nested GI-ID guesses are
+not applied. Without an associated FASTA, BLAST subject identifiers are unchanged.
+
 ## Error hierarchy
 
 `primerblast_oss.errors`:

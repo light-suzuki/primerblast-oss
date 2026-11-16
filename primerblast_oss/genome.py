@@ -9,12 +9,24 @@ from __future__ import annotations
 from dataclasses import dataclass
 from functools import lru_cache
 from contextlib import contextmanager
+import re
 import threading
 from pathlib import Path
-from typing import Dict, Tuple
+from typing import Dict, Optional, Tuple
 
 _COMP = str.maketrans("ACGTNacgtnRYSWKMBDHVryswkmbdhv",
                       "TGCANtgcanYRSWMKVHDByrswmkvhdb")
+_ACCESSION_WRAPPER = re.compile(r"(?:ref|gb|emb|dbj)\|([^|\s]+)\|[^|\s]*")
+
+
+def _accession_key(name: str) -> str:
+    """Unwrap only complete NCBI nucleotide accession deflines.
+
+    Keep accession versions and case. Do not guess local/GI identifiers,
+    chromosome prefixes, or identifiers nested inside another wrapper.
+    """
+    match = _ACCESSION_WRAPPER.fullmatch(name)
+    return match.group(1) if match else name
 
 
 def revcomp(seq: str) -> str:
@@ -57,6 +69,10 @@ class Genome:
         stat = Path(self.fai_path).stat()
         self.index: Dict[str, _FaiEntry] = dict(_load_index(
             str(Path(self.fai_path).resolve()), stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns))
+        self._aliases: Dict[str, Optional[str]] = {}
+        for name in self.index:
+            alias = _accession_key(name)
+            self._aliases[alias] = None if alias in self._aliases else name
         self._reader = threading.local()
 
     @contextmanager
@@ -74,10 +90,30 @@ class Genome:
             del self._reader.handle
 
     def __contains__(self, name: str) -> bool:
-        return name in self.index
+        try:
+            self.resolve_name(name)
+            return True
+        except KeyError:
+            return False
+
+    def resolve_name(self, name: str) -> str:
+        """Return an exact FASTA key or one unambiguous accession alias.
+
+        Exact keys always win. Aliases shared by multiple indexed records are
+        unresolved even if one of those records is a bare accession.
+        """
+        if name in self.index:
+            return name
+        alias = _accession_key(name)
+        if alias not in self._aliases:
+            raise KeyError(f"sequence '{name}' not in {self.fai_path}")
+        resolved = self._aliases[alias]
+        if resolved is None:
+            raise KeyError(f"Ambiguous sequence alias '{name}' in {self.fai_path}")
+        return resolved
 
     def length(self, name: str) -> int:
-        return self.index[name].length
+        return self.index[self.resolve_name(name)].length
 
     def chroms(self):
         return list(self.index.keys())
@@ -85,9 +121,7 @@ class Genome:
     def fetch(self, name: str, start: int, end: int, strand: str = "+") -> str:
         """Fetch bases [start, end] (1-based inclusive). strand '-' returns the
         reverse complement, so the result always reads 5'->3' on that strand."""
-        if name not in self.index:
-            raise KeyError(f"sequence '{name}' not in {self.fai_path}")
-        e = self.index[name]
+        e = self.index[self.resolve_name(name)]
         start = max(1, start)
         end = min(e.length, end)
         if end < start:
